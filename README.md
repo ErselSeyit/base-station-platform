@@ -2,6 +2,42 @@
 
 A comprehensive microservices-based platform for managing and monitoring base station operations, built with Java 17, Spring Boot, and modern cloud-native technologies.
 
+## 📖 About
+
+The Base Station Operations & Maintenance Platform is an enterprise-grade microservices application designed to manage and monitor telecommunications base stations. This platform demonstrates modern software engineering practices including microservices architecture, service discovery, API gateway patterns, and containerization.
+
+### Key Features
+
+- **Microservices Architecture**: Modular design with independent, scalable services
+- **Service Discovery**: Automatic service registration and discovery using Eureka
+- **API Gateway**: Centralized entry point for all client requests
+- **Multi-Database Support**: PostgreSQL for relational data, MongoDB for time-series metrics
+- **RESTful APIs**: Well-designed REST endpoints with proper HTTP methods
+- **Containerization**: Fully containerized with Docker and Docker Compose
+- **Health Monitoring**: Built-in health checks and actuator endpoints
+- **Asynchronous Processing**: Non-blocking notification processing
+- **Comprehensive Testing**: Unit tests with JUnit and Mockito
+
+### Use Cases
+
+- **Base Station Management**: Create, update, and manage base station information
+- **Real-time Monitoring**: Collect and analyze metrics (CPU, memory, power, temperature)
+- **Alert Management**: Generate and manage notifications for critical events
+- **Geographic Search**: Find base stations by location with radius-based queries
+- **Operational Insights**: Track station status, power consumption, and performance metrics
+
+### Architecture Highlights
+
+- **Spring Boot 3.2.0**: Modern Java framework with auto-configuration
+- **Spring Cloud 2023.0.0**: Cloud-native patterns and service mesh capabilities
+- **Eureka Server**: Netflix service discovery for microservices
+- **Spring Cloud Gateway**: Reactive API gateway with routing and filtering
+- **JPA/Hibernate**: Object-relational mapping for PostgreSQL
+- **Spring Data MongoDB**: NoSQL database integration
+- **Docker Compose**: Multi-container orchestration for local development
+
+This project serves as a demonstration of enterprise Java development skills, showcasing best practices in microservices design, API development, database integration, and DevOps tooling.
+
 ## 🚀 Quick Start
 
 Start all services with one command:
