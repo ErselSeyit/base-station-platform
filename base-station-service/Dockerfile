@@ -6,7 +6,7 @@ COPY base-station-service/pom.xml ./base-station-service/
 COPY monitoring-service/pom.xml ./monitoring-service/
 COPY notification-service/pom.xml ./notification-service/
 COPY api-gateway/pom.xml ./api-gateway/
-RUN mvn dependency:go-offline -B -N
+RUN mvn dependency:go-offline -B
 COPY base-station-service ./base-station-service
 RUN mvn clean package -DskipTests -pl base-station-service -am
 
