@@ -10,7 +10,7 @@
     <version>1.0.0</version>
     <packaging>pom</packaging>
 
-    <name>Base Station Operations &amp; Maintenance Platform</name>
+    <name>Base Station Operations and Maintenance Platform</name>
     <description>Microservices-based platform for base station operations and maintenance</description>
 
     <modules>
