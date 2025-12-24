@@ -2,25 +2,20 @@
 
 A comprehensive microservices-based platform for managing and monitoring base station operations, built with Java 17, Spring Boot, and modern cloud-native technologies.
 
-## 🚀 Quick Start (One-Click Run)
+## 🚀 Quick Start
 
-### Windows
-```bash
-start.bat
-```
+Start all services with one command:
 
-### Linux/Mac
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-### Docker Compose (Universal)
 ```bash
 docker-compose up -d
 ```
 
 **That's it!** All services will start automatically. Wait 30-60 seconds for initialization.
+
+To stop all services:
+```bash
+docker-compose down
+```
 
 ## 📋 Table of Contents
 
@@ -357,9 +352,8 @@ lsof -i :8080
 
 ## 📚 Additional Documentation
 
-- [Quick Start Guide](QUICKSTART.md) - Detailed quick start instructions
 - [API Documentation](docs/API.md) - Complete API reference
-- [Architecture Details](docs/ARCHITECTURE.md) - Deep dive into system design
+- [Docker Guide](docs/DOCKER.md) - Docker setup and usage
 - [Development Guide](docs/DEVELOPMENT.md) - Development setup and guidelines
 
 ## 🛠️ Technology Stack
