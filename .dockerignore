@@ -1,0 +1,14 @@
+**/.git
+**/.gitignore
+**/.mvn
+**/mvnw
+**/mvnw.cmd
+**/target
+**/.idea
+**/.vscode
+**/*.iml
+**/README.md
+**/.dockerignore
+**/docker-compose.yml
+**/.github
+
