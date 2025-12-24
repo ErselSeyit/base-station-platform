@@ -1,12 +1,12 @@
 # Base Station Operations & Maintenance Platform
 
-**Enterprise microservices platform for base station operations and maintenance** - A showcase project demonstrating advanced Java and Spring Boot microservices architecture, service discovery, API gateway patterns, and cloud-native development skills.
+**Advanced microservices platform for base station operations and maintenance** - A showcase project demonstrating advanced Java and Spring Boot microservices architecture, service discovery, API gateway patterns, and cloud-native development skills.
 
 A comprehensive microservices-based platform for managing and monitoring base station operations, built with Java 17, Spring Boot, and modern cloud-native technologies.
 
 ## 📖 About
 
-The Base Station Operations & Maintenance Platform is an enterprise-grade microservices application designed to manage and monitor telecommunications base stations. This platform demonstrates modern software engineering practices including microservices architecture, service discovery, API gateway patterns, and containerization.
+The Base Station Operations & Maintenance Platform is an advanced microservices application designed to manage and monitor telecommunications base stations. This platform demonstrates modern software engineering practices including microservices architecture, service discovery, API gateway patterns, and containerization.
 
 ### Key Features
 
@@ -38,7 +38,7 @@ The Base Station Operations & Maintenance Platform is an enterprise-grade micros
 - **Spring Data MongoDB**: NoSQL database integration
 - **Docker Compose**: Multi-container orchestration for local development
 
-This project serves as a demonstration of enterprise Java development skills, showcasing best practices in microservices design, API development, database integration, and DevOps tooling.
+This project serves as a demonstration of advanced Java development skills, showcasing best practices in microservices design, API development, database integration, and DevOps tooling.
 
 ## 🚀 Quick Start
 
@@ -409,7 +409,7 @@ lsof -i :8080
 
 ## 📝 About the Project
 
-This project is a comprehensive demonstration of modern microservices architecture and enterprise Java development. It showcases:
+This project is a comprehensive demonstration of modern microservices architecture and advanced Java development. It showcases:
 
 - **Microservices Design Patterns**: Service discovery, API gateway, circuit breakers
 - **Database Integration**: Both SQL (PostgreSQL) and NoSQL (MongoDB) databases

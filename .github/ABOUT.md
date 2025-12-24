@@ -5,7 +5,7 @@ Use this content for the GitHub repository "About" section (visible in the sideb
 ## Repository Description
 
 ```
-Enterprise microservices platform for base station operations and maintenance - A showcase project demonstrating advanced Java and Spring Boot microservices architecture, service discovery, API gateway patterns, and cloud-native development skills.
+Advanced microservices platform for base station operations and maintenance - A showcase project demonstrating advanced Java and Spring Boot microservices architecture, service discovery, API gateway patterns, and cloud-native development skills.
 ```
 
 ## Topics/Tags
@@ -31,7 +31,7 @@ telecommunications
 base-station
 monitoring
 notifications
-enterprise-java
+advanced-java
 cloud-native
 ```
 
