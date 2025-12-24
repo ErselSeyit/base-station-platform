@@ -46,11 +46,23 @@ Thumbs.db
 application-local.yml
 application-dev.yml
 
-# Environment variables
+# Environment variables and secrets
 .env
+.env.*
+*.env
 .env.local
 .env.*.local
-*.env
+.env.production
+.env.staging
+.env.development
+secrets/
+*.secret
+*.key
+*.pem
+*.p12
+*.jks
+credentials.*
+config/secrets.*
 
 # Docker
 *.log
