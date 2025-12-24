@@ -14,6 +14,7 @@ services:
       - postgres-basestation-data:/var/lib/postgresql/data
     networks:
       - basestation-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -33,6 +34,7 @@ services:
       - postgres-notification-data:/var/lib/postgresql/data
     networks:
       - basestation-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -50,6 +52,7 @@ services:
       - mongodb-data:/data/db
     networks:
       - basestation-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -65,11 +68,13 @@ services:
       - "8761:8761"
     networks:
       - basestation-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
   base-station-service:
     build:
@@ -90,6 +95,7 @@ services:
         condition: service_started
     networks:
       - basestation-network
+    restart: unless-stopped
 
   monitoring-service:
     build:
@@ -110,6 +116,7 @@ services:
         condition: service_started
     networks:
       - basestation-network
+    restart: unless-stopped
 
   notification-service:
     build:
@@ -130,6 +137,7 @@ services:
         condition: service_started
     networks:
       - basestation-network
+    restart: unless-stopped
 
   api-gateway:
     build:
@@ -147,6 +155,7 @@ services:
       - eureka-server
     networks:
       - basestation-network
+    restart: unless-stopped
 
 volumes:
   postgres-basestation-data:

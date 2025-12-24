@@ -9,6 +9,21 @@ Before starting, ensure you have:
 
 ## Quick Start with Docker Compose
 
+### Option 1: One-Click Start (Recommended)
+
+**Windows:**
+```bash
+start.bat
+```
+
+**Linux/Mac:**
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+### Option 2: Manual Start
+
 ### 1. Start All Services
 ```bash
 docker-compose up -d
