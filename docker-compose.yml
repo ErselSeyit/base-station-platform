@@ -5,9 +5,9 @@ services:
     image: postgres:15-alpine
     container_name: postgres-basestation
     environment:
-      POSTGRES_DB: basestationdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_BASESTATION_DB:-basestationdb}
+      POSTGRES_USER: ${POSTGRES_BASESTATION_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -25,9 +25,9 @@ services:
     image: postgres:15-alpine
     container_name: postgres-notification
     environment:
-      POSTGRES_DB: notificationdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_NOTIFICATION_DB:-notificationdb}
+      POSTGRES_USER: ${POSTGRES_NOTIFICATION_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_NOTIFICATION_PASSWORD:-postgres}
     ports:
       - "5433:5432"
     volumes:
@@ -82,9 +82,9 @@ services:
       dockerfile: base-station-service/Dockerfile
     container_name: base-station-service
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-basestation:5432/basestationdb
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-basestation:5432/${POSTGRES_BASESTATION_DB:-basestationdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_BASESTATION_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     ports:
       - "8081:8081"
@@ -124,9 +124,9 @@ services:
       dockerfile: notification-service/Dockerfile
     container_name: notification-service
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-notification:5432/notificationdb
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-notification:5432/${POSTGRES_NOTIFICATION_DB:-notificationdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_NOTIFICATION_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_NOTIFICATION_PASSWORD:-postgres}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     ports:
       - "8083:8083"
