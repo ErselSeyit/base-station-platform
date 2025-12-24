@@ -405,13 +405,33 @@ lsof -i :8080
 - **JUnit 5**: Testing Framework
 - **Mockito**: Mocking Framework
 
+## 📝 About the Project
+
+This project is a comprehensive demonstration of modern microservices architecture and enterprise Java development. It showcases:
+
+- **Microservices Design Patterns**: Service discovery, API gateway, circuit breakers
+- **Database Integration**: Both SQL (PostgreSQL) and NoSQL (MongoDB) databases
+- **Cloud-Native Technologies**: Containerization, orchestration, and service mesh
+- **Best Practices**: Clean code, testing, documentation, and CI/CD
+
+Built as a portfolio project to demonstrate proficiency in:
+- Java 17 and Spring Boot ecosystem
+- Microservices architecture and design
+- RESTful API development
+- Database design and integration
+- Docker and containerization
+- DevOps and CI/CD practices
+
 ## 📝 License
 
 This project is part of a portfolio demonstration.
 
 ## 👤 Author
 
-Ersel Seyit
+**Ersel Seyit**
+
+- GitHub: [@ErselSeyit](https://github.com/ErselSeyit)
+- Email: erselseyit@gmail.com
 
 ## 🔗 Links
 
