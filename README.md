@@ -1,5 +1,7 @@
 # Base Station Operations & Maintenance Platform
 
+**Enterprise microservices platform for base station operations and maintenance** - A showcase project demonstrating advanced Java and Spring Boot microservices architecture, service discovery, API gateway patterns, and cloud-native development skills.
+
 A comprehensive microservices-based platform for managing and monitoring base station operations, built with Java 17, Spring Boot, and modern cloud-native technologies.
 
 ## 📖 About
