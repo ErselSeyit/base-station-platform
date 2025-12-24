@@ -438,8 +438,6 @@ This project is part of a portfolio demonstration.
 ## 🔗 Links
 
 - **Repository**: https://github.com/ErselSeyit/base-station-platform
-- **Eureka Dashboard**: http://localhost:8761
-- **API Gateway**: http://localhost:8080
 
 ---
 
