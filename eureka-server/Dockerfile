@@ -2,7 +2,11 @@ FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY pom.xml .
 COPY eureka-server/pom.xml ./eureka-server/
-RUN mvn dependency:go-offline -B
+COPY base-station-service/pom.xml ./base-station-service/
+COPY monitoring-service/pom.xml ./monitoring-service/
+COPY notification-service/pom.xml ./notification-service/
+COPY api-gateway/pom.xml ./api-gateway/
+RUN mvn dependency:go-offline -B -N
 COPY eureka-server ./eureka-server
 RUN mvn clean package -DskipTests -pl eureka-server -am
 
