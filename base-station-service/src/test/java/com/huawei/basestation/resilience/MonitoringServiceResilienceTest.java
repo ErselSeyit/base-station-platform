@@ -1,6 +1,10 @@
 package com.huawei.basestation.resilience;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -27,8 +31,8 @@ import com.huawei.basestation.client.MonitoringServiceClient;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
-        classes = {com.huawei.basestation.test.TestApplication.class})
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, classes = {
+        com.huawei.basestation.test.TestApplication.class })
 @DisplayName("Monitoring Service Resilience Tests")
 class MonitoringServiceResilienceTest {
 
@@ -44,7 +48,7 @@ class MonitoringServiceResilienceTest {
     static void configureProperties(DynamicPropertyRegistry registry) {
         wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
         wireMockServer.start();
-        
+
         registry.add("monitoring.service.url", wireMockServer::baseUrl);
         registry.add("eureka.client.enabled", () -> "false");
         registry.add("spring.cache.type", () -> "none");
@@ -60,17 +64,17 @@ class MonitoringServiceResilienceTest {
             wireMockServer.start();
         }
         wireMockServer.resetAll();
-        
+
         await().atMost(Duration.ofSeconds(2))
                 .pollInterval(Duration.ofMillis(50))
                 .until(() -> wireMockServer.isRunning() && wireMockServer.port() > 0);
-        
+
         CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("monitoringService");
         cb.reset();
         if (cb.getState() != CircuitBreaker.State.CLOSED) {
             cb.transitionToClosedState();
         }
-        
+
         Thread.sleep(500);
     }
 
@@ -91,7 +95,7 @@ class MonitoringServiceResilienceTest {
             CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("monitoringService");
             cb.reset();
             assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
-            
+
             wireMockServer.stubFor(get(urlPathMatching("/api/v1/metrics/station/.*/latest"))
                     .willReturn(aResponse()
                             .withStatus(200)
@@ -105,7 +109,7 @@ class MonitoringServiceResilienceTest {
             Thread.sleep(2000);
 
             Map<String, Object> result = client.getLatestMetricsSync(1L);
-            
+
             if (result.containsKey("status")) {
                 await().atMost(Duration.ofSeconds(3))
                         .pollInterval(Duration.ofMillis(500))
@@ -159,7 +163,7 @@ class MonitoringServiceResilienceTest {
                             .withBody("Internal Server Error")));
 
             CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("monitoringService");
-            
+
             assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
 
             IntStream.range(0, 10).forEach(i -> {
@@ -170,8 +174,7 @@ class MonitoringServiceResilienceTest {
             });
 
             await().atMost(Duration.ofSeconds(5))
-                    .untilAsserted(() -> 
-                            assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN));
+                    .untilAsserted(() -> assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN));
         }
 
         @Test
@@ -184,7 +187,7 @@ class MonitoringServiceResilienceTest {
 
             assertThat(result).containsEntry("status", "unavailable");
             assertThat(result).containsEntry("stationId", 1L);
-            
+
             wireMockServer.verify(0, getRequestedFor(urlPathMatching("/api/v1/metrics/.*")));
         }
 
@@ -193,13 +196,13 @@ class MonitoringServiceResilienceTest {
         void serviceRecovery_ClosesCircuit() throws Exception {
             CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("monitoringService");
             circuitBreaker.reset();
-            
+
             circuitBreaker.transitionToOpenState();
             assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
 
             circuitBreaker.transitionToHalfOpenState();
             assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.HALF_OPEN);
-            
+
             wireMockServer.stubFor(get(urlPathMatching("/api/v1/metrics/station/.*/latest"))
                     .willReturn(aResponse()
                             .withStatus(200)
@@ -226,9 +229,8 @@ class MonitoringServiceResilienceTest {
 
             await().atMost(Duration.ofSeconds(10))
                     .pollInterval(Duration.ofMillis(500))
-                    .untilAsserted(() -> 
-                            assertThat(circuitBreaker.getState())
-                                    .isEqualTo(CircuitBreaker.State.CLOSED));
+                    .untilAsserted(() -> assertThat(circuitBreaker.getState())
+                            .isEqualTo(CircuitBreaker.State.CLOSED));
         }
     }
 
@@ -272,7 +274,7 @@ class MonitoringServiceResilienceTest {
             CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("monitoringService");
             cb.reset();
             assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
-            
+
             wireMockServer.stubFor(get(urlEqualTo("/actuator/health"))
                     .willReturn(aResponse()
                             .withStatus(200)
@@ -287,7 +289,9 @@ class MonitoringServiceResilienceTest {
                 wireMockServer.verify(getRequestedFor(urlEqualTo("/actuator/health")));
             } catch (AssertionError e) {
                 CircuitBreaker.State state = cb.getState();
-                throw new AssertionError("WireMock verification failed. Circuit breaker state: " + state + ", Health result: " + healthy, e);
+                throw new AssertionError(
+                        "WireMock verification failed. Circuit breaker state: " + state + ", Health result: " + healthy,
+                        e);
             }
 
             assertThat(healthy).isTrue();
