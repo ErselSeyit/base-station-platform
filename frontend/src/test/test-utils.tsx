@@ -2,11 +2,7 @@ import { ReactElement } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
-import { ThemeProvider } from '@mui/material/styles'
-import CssBaseline from '@mui/material/CssBaseline'
-import { createTheme } from '@mui/material/styles'
-
-const theme = createTheme()
+import { ThemeContextProvider } from '../contexts/ThemeContext'
 
 // eslint-disable-next-line react-refresh/only-export-components
 const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
@@ -22,10 +18,9 @@ const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
+        <ThemeContextProvider>
           {children}
-        </ThemeProvider>
+        </ThemeContextProvider>
       </BrowserRouter>
     </QueryClientProvider>
   )
