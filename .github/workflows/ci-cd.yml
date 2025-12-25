@@ -129,8 +129,10 @@ jobs:
         java-version: '21'
         distribution: 'temurin'
         cache: maven
+        cache-dependency-path: pom.xml
     
     - name: Run SonarQube Scan
+      if: ${{ secrets.SONAR_TOKEN != '' }}
       uses: sonarsource/sonarcloud-github-action@master
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
