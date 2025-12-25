@@ -27,7 +27,7 @@ The Base Station Operations & Maintenance Platform is an advanced microservices 
 - **Observability**: Prometheus metrics, Grafana dashboards, Zipkin tracing
 - **Comprehensive Testing**: Unit, integration tests with Testcontainers
 
-### 🎯 Technical Highlights (Senior-Level Features)
+### 🎯 Technical Highlights
 
 | Feature | Description | Why It Matters |
 |---------|-------------|----------------|
