@@ -1,13 +1,21 @@
 package com.huawei.basestation.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Objects;
+
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,6 +25,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -42,11 +51,21 @@ import com.huawei.basestation.repository.BaseStationRepository;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @Testcontainers
+@DisabledIf("dockerNotAvailable")
 @DisplayName("Base Station API Integration Tests")
 class BaseStationIntegrationTest {
 
+    static boolean dockerNotAvailable() {
+        try {
+            return !DockerClientFactory.instance().isDockerAvailable();
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
     @Container
     @ServiceConnection
+    @SuppressWarnings("resource")
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
@@ -59,6 +78,13 @@ class BaseStationIntegrationTest {
         // Disable Redis for tests
         registry.add("spring.data.redis.host", () -> "localhost");
         registry.add("spring.cache.type", () -> "none");
+    }
+
+    @AfterAll
+    static void tearDown() {
+        if (postgres != null && postgres.isRunning()) {
+            postgres.stop();
+        }
     }
 
     @Autowired
@@ -85,8 +111,8 @@ class BaseStationIntegrationTest {
             BaseStationDTO station = createStationDTO("BS-001", 40.7128, -74.0060);
 
             MvcResult result = mockMvc.perform(post("/api/v1/stations")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(station)))
+                    .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(station))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.stationName").value("BS-001"))
                     .andExpect(jsonPath("$.status").value("ACTIVE"))
@@ -105,15 +131,15 @@ class BaseStationIntegrationTest {
             // Create first station
             BaseStationDTO station1 = createStationDTO("BS-DUPLICATE", 40.0, -74.0);
             mockMvc.perform(post("/api/v1/stations")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(station1)))
+                    .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(station1))))
                     .andExpect(status().isCreated());
 
             // Try to create another with same name
             BaseStationDTO station2 = createStationDTO("BS-DUPLICATE", 41.0, -75.0);
             mockMvc.perform(post("/api/v1/stations")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(station2)))
+                    .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(station2))))
                     .andExpect(status().isBadRequest());
         }
 
@@ -123,8 +149,8 @@ class BaseStationIntegrationTest {
             // Create a station first
             BaseStationDTO station = createStationDTO("BS-GET-TEST", 40.7128, -74.0060);
             MvcResult createResult = mockMvc.perform(post("/api/v1/stations")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(station)))
+                    .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(station))))
                     .andExpect(status().isCreated())
                     .andReturn();
 
@@ -151,8 +177,8 @@ class BaseStationIntegrationTest {
             // Create station
             BaseStationDTO station = createStationDTO("BS-UPDATE-TEST", 40.0, -74.0);
             MvcResult createResult = mockMvc.perform(post("/api/v1/stations")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(station)))
+                    .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(station))))
                     .andExpect(status().isCreated())
                     .andReturn();
 
@@ -165,8 +191,8 @@ class BaseStationIntegrationTest {
             station.setPowerConsumption(2500.0);
 
             mockMvc.perform(put("/api/v1/stations/" + id)
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(station)))
+                    .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(station))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.stationName").value("BS-UPDATED"))
                     .andExpect(jsonPath("$.status").value("MAINTENANCE"))
@@ -184,8 +210,8 @@ class BaseStationIntegrationTest {
             // Create station
             BaseStationDTO station = createStationDTO("BS-DELETE-TEST", 40.0, -74.0);
             MvcResult createResult = mockMvc.perform(post("/api/v1/stations")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(station)))
+                    .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(station))))
                     .andExpect(status().isCreated())
                     .andReturn();
 
@@ -212,8 +238,8 @@ class BaseStationIntegrationTest {
             // Missing all required fields
 
             mockMvc.perform(post("/api/v1/stations")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(invalidStation)))
+                    .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(invalidStation))))
                     .andExpect(status().isBadRequest());
         }
 
@@ -224,8 +250,8 @@ class BaseStationIntegrationTest {
             station.setPowerConsumption(-100.0);
 
             mockMvc.perform(post("/api/v1/stations")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(station)))
+                    .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(station))))
                     .andExpect(status().isBadRequest());
         }
     }
@@ -238,16 +264,16 @@ class BaseStationIntegrationTest {
         @DisplayName("Should find stations within bounding box")
         void findStationsInArea_ReturnsMatchingStations() throws Exception {
             // Create stations at different locations
-            createAndSaveStation("BS-NYC", 40.7128, -74.0060);      // NYC
-            createAndSaveStation("BS-BOSTON", 42.3601, -71.0589);   // Boston
-            createAndSaveStation("BS-LA", 34.0522, -118.2437);      // LA (outside area)
+            createAndSaveStation("BS-NYC", 40.7128, -74.0060); // NYC
+            createAndSaveStation("BS-BOSTON", 42.3601, -71.0589); // Boston
+            createAndSaveStation("BS-LA", 34.0522, -118.2437); // LA (outside area)
 
             // Search for stations in Northeast US
             mockMvc.perform(get("/api/v1/stations/search/area")
-                            .param("minLat", "40.0")
-                            .param("maxLat", "43.0")
-                            .param("minLon", "-75.0")
-                            .param("maxLon", "-70.0"))
+                    .param("minLat", "40.0")
+                    .param("maxLat", "43.0")
+                    .param("minLon", "-75.0")
+                    .param("maxLon", "-70.0"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(2))
                     .andExpect(jsonPath("$[?(@.stationName == 'BS-NYC')]").exists())
@@ -263,32 +289,32 @@ class BaseStationIntegrationTest {
             double centerLon = -73.9855;
 
             // Create stations at known distances from Times Square
-            createAndSaveStation("BS-TIMES-SQ", 40.7580, -73.9855);     // 0 km (at center)
+            createAndSaveStation("BS-TIMES-SQ", 40.7580, -73.9855); // 0 km (at center)
             createAndSaveStation("BS-CENTRAL-PARK", 40.7829, -73.9654); // ~3 km north
-            createAndSaveStation("BS-BROOKLYN", 40.6782, -73.9442);     // ~10 km south
-            createAndSaveStation("BS-NEWARK", 40.7357, -74.1724);       // ~17 km west
+            createAndSaveStation("BS-BROOKLYN", 40.6782, -73.9442); // ~10 km south
+            createAndSaveStation("BS-NEWARK", 40.7357, -74.1724); // ~17 km west
 
             // Search within 5km radius
             mockMvc.perform(get("/api/v1/stations/search/nearby")
-                            .param("lat", String.valueOf(centerLat))
-                            .param("lon", String.valueOf(centerLon))
-                            .param("radiusKm", "5"))
+                    .param("lat", String.valueOf(centerLat))
+                    .param("lon", String.valueOf(centerLon))
+                    .param("radiusKm", "5"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(2))
-                    .andExpect(jsonPath("$[0].stationName").value("BS-TIMES-SQ"))  // Closest first
+                    .andExpect(jsonPath("$[0].stationName").value("BS-TIMES-SQ")) // Closest first
                     .andExpect(jsonPath("$[1].stationName").value("BS-CENTRAL-PARK"));
         }
 
         @Test
         @DisplayName("Should return empty list when no stations in radius")
         void findStationsNearby_NoResults_ReturnsEmptyList() throws Exception {
-            createAndSaveStation("BS-TOKYO", 35.6762, 139.6503);  // Tokyo
+            createAndSaveStation("BS-TOKYO", 35.6762, 139.6503); // Tokyo
 
             // Search near NYC (no stations there)
             mockMvc.perform(get("/api/v1/stations/search/nearby")
-                            .param("lat", "40.7128")
-                            .param("lon", "-74.0060")
-                            .param("radiusKm", "100"))
+                    .param("lat", "40.7128")
+                    .param("lon", "-74.0060")
+                    .param("radiusKm", "100"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(0));
         }
@@ -306,12 +332,12 @@ class BaseStationIntegrationTest {
             createAndSaveStation("BS-MAINTENANCE", 42.0, -74.0, StationStatus.MAINTENANCE);
 
             mockMvc.perform(get("/api/v1/stations")
-                            .param("status", "ACTIVE"))
+                    .param("status", "ACTIVE"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(2));
 
             mockMvc.perform(get("/api/v1/stations")
-                            .param("status", "MAINTENANCE"))
+                    .param("status", "MAINTENANCE"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(1));
         }
@@ -323,7 +349,7 @@ class BaseStationIntegrationTest {
             createAndSaveStation("BS-MICRO", 41.0, -74.0, StationType.MICRO_CELL);
 
             mockMvc.perform(get("/api/v1/stations")
-                            .param("type", "MACRO_CELL"))
+                    .param("type", "MACRO_CELL"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(1))
                     .andExpect(jsonPath("$[0].stationName").value("BS-MACRO"));
@@ -354,8 +380,8 @@ class BaseStationIntegrationTest {
         BaseStationDTO dto = createStationDTO(name, lat, lon);
         dto.setStatus(status);
         mockMvc.perform(post("/api/v1/stations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
                 .andExpect(status().isCreated());
     }
 
@@ -363,8 +389,8 @@ class BaseStationIntegrationTest {
         BaseStationDTO dto = createStationDTO(name, lat, lon);
         dto.setStationType(type);
         mockMvc.perform(post("/api/v1/stations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
                 .andExpect(status().isCreated());
     }
 }
