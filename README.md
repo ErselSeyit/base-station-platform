@@ -1,5 +1,12 @@
 # Base Station Operations & Maintenance Platform
 
+[![CI/CD Pipeline](https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml)
+[![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.0-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Helm-326CE5?style=flat&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+
 **Advanced microservices platform for base station operations and maintenance** - A showcase project demonstrating advanced Java and Spring Boot microservices architecture, service discovery, API gateway patterns, and cloud-native development skills.
 
 A comprehensive microservices-based platform for managing and monitoring base station operations, built with Java 17, Spring Boot, and modern cloud-native technologies.
@@ -12,13 +19,45 @@ The Base Station Operations & Maintenance Platform is an advanced microservices 
 
 - **Microservices Architecture**: Modular design with independent, scalable services
 - **Service Discovery**: Automatic service registration and discovery using Eureka
-- **API Gateway**: Centralized entry point for all client requests
+- **API Gateway**: Centralized entry point with JWT authentication
 - **Multi-Database Support**: PostgreSQL for relational data, MongoDB for time-series metrics
-- **RESTful APIs**: Well-designed REST endpoints with proper HTTP methods
-- **Containerization**: Fully containerized with Docker and Docker Compose
-- **Health Monitoring**: Built-in health checks and actuator endpoints
-- **Asynchronous Processing**: Non-blocking notification processing
-- **Comprehensive Testing**: Unit tests with JUnit and Mockito
+- **RESTful APIs**: Well-designed REST endpoints with OpenAPI/Swagger documentation
+- **Containerization**: Fully containerized with Docker, Compose, and Kubernetes/Helm
+- **CI/CD Pipeline**: GitHub Actions for automated testing and Docker image builds
+- **Observability**: Prometheus metrics, Grafana dashboards, Zipkin tracing
+- **Comprehensive Testing**: Unit, integration tests with Testcontainers
+
+### 🎯 Technical Highlights (Senior-Level Features)
+
+| Feature | Description | Why It Matters |
+|---------|-------------|----------------|
+| **Real-time WebSocket Streaming** | Live metric updates pushed to dashboards | Shows reactive/event-driven architecture skills |
+| **Alerting Rules Engine** | Configurable threshold-based alerting with multiple operators | Demonstrates domain modeling and strategy pattern |
+| **Geospatial Queries** | Haversine formula for "stations near point" search | Shows advanced SQL and algorithm knowledge |
+| **Correlation ID Tracing** | Request tracking across service boundaries via MDC | Production-ready distributed tracing |
+| **Immutable Domain Objects** | AlertRule with builder pattern and `withX` methods | Demonstrates clean code and DDD principles |
+| **Circuit Breakers** | Resilience4j for fault tolerance | Shows understanding of distributed systems |
+| **Structured JSON Logging** | Logstash-format logs for production environments | Ready for log aggregation (ELK/Splunk) |
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         REAL-TIME ARCHITECTURE                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   Metric Ingestion          Alerting Engine         WebSocket Push      │
+│   ┌──────────────┐         ┌──────────────┐        ┌──────────────┐     │
+│   │   POST       │────────▶│  Evaluate    │───────▶│  Broadcast   │     │
+│   │   /metrics   │         │  Rules       │        │  to Clients  │     │
+│   └──────────────┘         └──────────────┘        └──────────────┘     │
+│          │                        │                        │            │
+│          ▼                        ▼                        ▼            │
+│   ┌──────────────┐         ┌──────────────┐        ┌──────────────┐     │
+│   │   MongoDB    │         │  Trigger     │        │  Dashboard   │     │
+│   │   (persist)  │         │  Alerts      │        │  (real-time) │     │
+│   └──────────────┘         └──────────────┘        └──────────────┘     │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Use Cases
 
@@ -224,14 +263,14 @@ PUT http://localhost:8080/api/v1/notifications/{id}/read
 
 ## 📦 Prerequisites
 
-- **Java**: 17 or higher
+- **Java**: 21 or higher
 - **Maven**: 3.9+ 
 - **Docker**: 20.10+
 - **Docker Compose**: 2.0+
 
 ### Verify Installation
 ```bash
-java -version    # Should show Java 17+
+java -version    # Should show Java 21+
 mvn -version     # Should show Maven 3.9+
 docker --version # Should show Docker 20.10+
 docker-compose --version # Should show Docker Compose 2.0+
@@ -394,18 +433,79 @@ lsof -i :8080
 - [Docker Guide](docs/DOCKER.md) - Docker setup and usage
 - [Development Guide](docs/DEVELOPMENT.md) - Development setup and guidelines
 
+## 📚 API Documentation
+
+Once services are running, access the interactive API documentation:
+
+| Service | Swagger UI | OpenAPI Spec |
+|---------|------------|--------------|
+| Base Station | http://localhost:8084/swagger-ui.html | http://localhost:8084/v3/api-docs |
+| Monitoring | http://localhost:8085/swagger-ui.html | http://localhost:8085/v3/api-docs |
+
+### WebSocket Endpoint
+
+Connect to real-time metrics stream:
+```javascript
+const ws = new WebSocket('ws://localhost:8085/ws/metrics');
+ws.onmessage = (event) => {
+  const metric = JSON.parse(event.data);
+  console.log('Real-time metric:', metric);
+};
+```
+
+### Alerting Rules API
+
+```bash
+# List all alerting rules
+GET /api/v1/alerts/rules
+
+# Update threshold dynamically
+PUT /api/v1/alerts/rules/cpu-critical/threshold?threshold=95
+
+# Disable a rule
+PUT /api/v1/alerts/rules/cpu-critical/disable
+```
+
 ## 🛠️ Technology Stack
 
-- **Java**: 17
-- **Spring Boot**: 3.2.0
-- **Spring Cloud**: 2023.0.0
-- **Eureka**: Service Discovery
-- **PostgreSQL**: Relational Database
-- **MongoDB**: NoSQL Database
-- **Docker**: Containerization
-- **Maven**: Build Tool
-- **JUnit 5**: Testing Framework
-- **Mockito**: Mocking Framework
+### Backend
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Java | 17 | Language |
+| Spring Boot | 3.2.0 | Framework |
+| Spring Cloud | 2023.0.0 | Microservices patterns |
+| Spring Data JPA | - | PostgreSQL ORM |
+| Spring Data MongoDB | - | NoSQL integration |
+| Spring WebSocket | - | Real-time streaming |
+| Resilience4j | 2.1.0 | Circuit breakers |
+| SpringDoc OpenAPI | 2.3.0 | API documentation |
+
+### Infrastructure
+| Technology | Purpose |
+|------------|---------|
+| PostgreSQL 15 | Relational data |
+| MongoDB 7.0 | Time-series metrics |
+| Redis 7 | Caching |
+| RabbitMQ 3 | Message queue |
+| Netflix Eureka | Service discovery |
+
+### DevOps
+| Technology | Purpose |
+|------------|---------|
+| Docker & Compose | Containerization |
+| Kubernetes & Helm | Orchestration |
+| GitHub Actions | CI/CD pipeline |
+| Prometheus | Metrics collection |
+| Grafana | Dashboards |
+| Zipkin | Distributed tracing |
+
+### Testing
+| Technology | Purpose |
+|------------|---------|
+| JUnit 5 | Unit testing |
+| Mockito | Mocking |
+| Testcontainers | Integration testing |
+| Playwright | E2E testing (frontend) |
 
 ## 📝 About the Project
 
