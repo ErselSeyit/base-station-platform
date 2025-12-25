@@ -38,7 +38,8 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
  * 
  * Uses WireMock to simulate various failure scenarios.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        classes = {com.huawei.basestation.test.TestApplication.class})
 @DisplayName("Monitoring Service Resilience Tests")
 class MonitoringServiceResilienceTest {
 
@@ -68,17 +69,20 @@ class MonitoringServiceResilienceTest {
     }
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         wireMockServer.resetAll();
-        // Reset circuit breaker to closed state
         CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("monitoringService");
         cb.reset();
+        if (cb.getState() != CircuitBreaker.State.CLOSED) {
+            cb.transitionToClosedState();
+        }
+        Thread.sleep(100);
     }
 
     @AfterEach
     void tearDown() {
         if (wireMockServer != null && wireMockServer.isRunning()) {
-            wireMockServer.stop();
+            wireMockServer.resetAll();
         }
     }
 
@@ -89,20 +93,30 @@ class MonitoringServiceResilienceTest {
         @Test
         @DisplayName("Should return metrics when service responds normally")
         void successfulResponse() throws Exception {
-            // Given: Monitoring service returns valid response
+            CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("monitoringService");
+            cb.reset();
+            assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+            
             wireMockServer.stubFor(get(urlPathMatching("/api/v1/metrics/station/.*/latest"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody("{\"cpu\": 45.5, \"memory\": 62.3}")));
+                            .withBody("{\"cpu\":45.5,\"memory\":62.3}")));
 
-            // When
-            CompletableFuture<Map<String, Object>> future = client.getLatestMetrics(1L);
-            Map<String, Object> result = future.get(5, TimeUnit.SECONDS);
+            Thread.sleep(300);
 
-            // Then
+            Map<String, Object> result = client.getLatestMetricsSync(1L);
+
+            try {
+                wireMockServer.verify(getRequestedFor(urlPathMatching("/api/v1/metrics/station/.*/latest")));
+            } catch (AssertionError e) {
+                CircuitBreaker.State state = cb.getState();
+                throw new AssertionError("WireMock verification failed. Circuit breaker state: " + state + ", Result: " + result, e);
+            }
+
             assertThat(result).containsKeys("cpu", "memory");
             assertThat(result.get("cpu")).isEqualTo(45.5);
+            assertThat(result).doesNotContainKey("status");
         }
     }
 
@@ -113,19 +127,16 @@ class MonitoringServiceResilienceTest {
         @Test
         @DisplayName("Should trigger fallback when service is too slow")
         void slowService_TriggersFallback() throws Exception {
-            // Given: Monitoring service responds after 5 seconds (timeout is 2s)
             wireMockServer.stubFor(get(urlPathMatching("/api/v1/metrics/station/.*/latest"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
                             .withBody("{\"cpu\": 45.5}")
-                            .withFixedDelay(5000)));  // 5 second delay
+                            .withFixedDelay(5000)));
 
-            // When
             CompletableFuture<Map<String, Object>> future = client.getLatestMetrics(1L);
             Map<String, Object> result = future.get(10, TimeUnit.SECONDS);
 
-            // Then: Should get timeout fallback response
             assertThat(result).containsEntry("status", "timeout");
             assertThat(result).containsEntry("stationId", 1L);
         }
@@ -138,7 +149,6 @@ class MonitoringServiceResilienceTest {
         @Test
         @DisplayName("Should open circuit after repeated failures")
         void repeatedFailures_OpensCircuit() {
-            // Given: Monitoring service returns 500 errors
             wireMockServer.stubFor(get(urlPathMatching("/api/v1/metrics/station/.*/latest"))
                     .willReturn(aResponse()
                             .withStatus(500)
@@ -187,31 +197,33 @@ class MonitoringServiceResilienceTest {
         void serviceRecovery_ClosesCircuit() throws Exception {
             CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("monitoringService");
             
-            // Given: Circuit is open
             circuitBreaker.transitionToOpenState();
             assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
 
-            // Transition to half-open
             circuitBreaker.transitionToHalfOpenState();
+            assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.HALF_OPEN);
             
-            // Given: Service is now healthy
             wireMockServer.stubFor(get(urlPathMatching("/api/v1/metrics/station/.*/latest"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
                             .withBody("{\"cpu\": 45.5, \"memory\": 62.3}")));
 
-            // When: Make successful requests
-            IntStream.range(0, 3).forEach(i -> {
+            for (int i = 0; i < 5; i++) {
                 try {
-                    client.getLatestMetricsSync(1L);
-                } catch (Exception ignored) {}
-            });
+                    Map<String, Object> result = client.getLatestMetricsSync(1L);
+                    assertThat(result).containsKey("cpu");
+                    Thread.sleep(100);
+                } catch (Exception e) {
+                    // Ignore exceptions - circuit breaker may reject calls
+                }
+            }
 
-            // Then: Circuit should close
             await().atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(200))
                     .untilAsserted(() -> 
-                            assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED));
+                            assertThat(circuitBreaker.getState())
+                                    .isEqualTo(CircuitBreaker.State.CLOSED));
         }
     }
 
@@ -225,29 +237,23 @@ class MonitoringServiceResilienceTest {
             // Given: Stop WireMock to simulate service down
             wireMockServer.stop();
 
-            // When
             Map<String, Object> result = client.getLatestMetricsSync(1L);
 
-            // Then: Should get fallback response
             assertThat(result).containsEntry("status", "unavailable");
 
-            // Restart for other tests
             wireMockServer.start();
         }
 
         @Test
         @DisplayName("Should handle 503 Service Unavailable gracefully")
         void serviceUnavailable503_UsesFallback() throws Exception {
-            // Given: Service returns 503
             wireMockServer.stubFor(get(urlPathMatching("/api/v1/metrics/station/.*/latest"))
                     .willReturn(aResponse()
                             .withStatus(503)
                             .withBody("Service Unavailable")));
 
-            // When
             Map<String, Object> result = client.getLatestMetricsSync(1L);
 
-            // Then: Should get fallback response
             assertThat(result).containsEntry("status", "unavailable");
         }
     }
@@ -258,17 +264,29 @@ class MonitoringServiceResilienceTest {
 
         @Test
         @DisplayName("Should return true when service is healthy")
-        void healthyService_ReturnsTrue() {
-            // Given
+        void healthyService_ReturnsTrue() throws Exception {
+            // Ensure circuit breaker is closed
+            CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("monitoringService");
+            cb.reset();
+            assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+            
             wireMockServer.stubFor(get(urlEqualTo("/actuator/health"))
                     .willReturn(aResponse()
                             .withStatus(200)
-                            .withBody("{\"status\": \"UP\"}")));
+                            .withHeader("Content-Type", "application/json")
+                            .withBody("{\"status\":\"UP\"}")));
 
-            // When
+            Thread.sleep(300);
+
             boolean healthy = client.isMonitoringServiceHealthy();
 
-            // Then
+            try {
+                wireMockServer.verify(getRequestedFor(urlEqualTo("/actuator/health")));
+            } catch (AssertionError e) {
+                CircuitBreaker.State state = cb.getState();
+                throw new AssertionError("WireMock verification failed. Circuit breaker state: " + state + ", Health result: " + healthy, e);
+            }
+
             assertThat(healthy).isTrue();
         }
 
