@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +25,6 @@ import com.huawei.monitoring.model.MetricType;
  * - Nested test organization
  * - Behavior-driven naming
  */
-@SuppressWarnings("null") // Suppress Eclipse null-analysis warnings
 class AlertingServiceTest {
 
     private AlertingService alertingService;
@@ -53,15 +53,17 @@ class AlertingServiceTest {
         @Test
         @DisplayName("Should allow adding custom alert rules")
         void canAddCustomRule() {
-            AlertRule customRule = AlertRule.builder()
-                    .id("custom-rule")
-                    .name("Custom Rule")
-                    .metricType(MetricType.POWER_CONSUMPTION)
-                    .operator(AlertRule.Operator.GREATER_THAN)
-                    .threshold(5000.0)
-                    .severity(AlertSeverity.WARNING)
-                    .message("High power consumption")
-                    .build();
+            AlertRule customRule = Objects.requireNonNull(
+                    AlertRule.builder()
+                            .id("custom-rule")
+                            .name("Custom Rule")
+                            .metricType(MetricType.POWER_CONSUMPTION)
+                            .operator(AlertRule.Operator.GREATER_THAN)
+                            .threshold(5000.0)
+                            .severity(AlertSeverity.WARNING)
+                            .message("High power consumption")
+                            .build(),
+                    "Built alert rule cannot be null");
 
             alertingService.addRule(customRule);
 
