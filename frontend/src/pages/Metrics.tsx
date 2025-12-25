@@ -155,7 +155,7 @@ export default function Metrics() {
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={4}>
           <FormControl fullWidth>
-            <InputLabel id="metrics-station-filter-label">
+            <InputLabel id="metrics-station-filter-label" htmlFor="metrics-station-native">
               Station
             </InputLabel>
             <Select
@@ -165,10 +165,7 @@ export default function Metrics() {
               value={selectedStation}
               onChange={(e) => setSelectedStation(e.target.value as number | 'all')}
               label="Station"
-              inputProps={{
-                id: 'metrics-station-filter',
-                name: 'stationFilter',
-              }}
+              inputProps={{ id: 'metrics-station-native', name: 'stationFilter' }}
             >
               <MenuItem value="all">All Stations</MenuItem>
               {stationsList.map((station: BaseStation) => (
@@ -181,7 +178,7 @@ export default function Metrics() {
         </Grid>
         <Grid item xs={12} md={4}>
           <FormControl fullWidth>
-            <InputLabel id="metrics-type-filter-label">
+            <InputLabel id="metrics-type-filter-label" htmlFor="metrics-type-native">
               Metric Type
             </InputLabel>
             <Select
@@ -191,10 +188,7 @@ export default function Metrics() {
               value={metricType}
               onChange={(e) => setMetricType(e.target.value as MetricType | 'all')}
               label="Metric Type"
-              inputProps={{
-                id: 'metrics-type-filter',
-                name: 'metricTypeFilter',
-              }}
+              inputProps={{ id: 'metrics-type-native', name: 'metricTypeFilter' }}
             >
               <MenuItem value="all">All Metrics</MenuItem>
               {Object.values(MetricType).map((type) => (
@@ -207,7 +201,7 @@ export default function Metrics() {
         </Grid>
         <Grid item xs={12} md={4}>
           <FormControl fullWidth>
-            <InputLabel id="metrics-time-range-label">
+            <InputLabel id="metrics-time-range-label" htmlFor="metrics-time-native">
               Time Range
             </InputLabel>
             <Select
@@ -217,10 +211,7 @@ export default function Metrics() {
               value={days}
               onChange={(e) => setDays(Number(e.target.value))}
               label="Time Range"
-              inputProps={{
-                id: 'metrics-time-range',
-                name: 'timeRange',
-              }}
+              inputProps={{ id: 'metrics-time-native', name: 'timeRange' }}
             >
               <MenuItem value={1}>Last 24 Hours</MenuItem>
               <MenuItem value={7}>Last 7 Days</MenuItem>

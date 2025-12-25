@@ -138,7 +138,18 @@ export default function Dashboard() {
 
       <Grid container spacing={3}>
         {statCards.map((card, index) => (
-          <Grid item xs={12} sm={6} md={4} key={index}>
+          <Grid 
+            item 
+            xs={12} 
+            sm={6} 
+            md={4} 
+            key={index}
+            sx={{
+              animation: 'fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              animationDelay: `${index * 0.1}s`,
+              opacity: 0,
+            }}
+          >
             <Card
               sx={{
                 height: '100%',
@@ -148,6 +159,7 @@ export default function Dashboard() {
                   ? `linear-gradient(135deg, ${card.color}20 0%, ${card.color}10 100%)`
                   : `linear-gradient(135deg, ${card.color}15 0%, ${card.color}05 100%)`,
                 borderLeft: `4px solid ${card.color}`,
+                cursor: 'pointer',
                 '&::before': {
                   content: '""',
                   position: 'absolute',
@@ -157,6 +169,18 @@ export default function Dashboard() {
                   height: '100px',
                   background: `radial-gradient(circle, ${card.color}20 0%, transparent 70%)`,
                   opacity: 0.5,
+                  transition: 'all 0.3s ease',
+                },
+                '&:hover::before': {
+                  width: '150px',
+                  height: '150px',
+                  opacity: 0.8,
+                },
+                '&:hover': {
+                  transform: 'translateY(-8px) scale(1.02)',
+                  boxShadow: mode === 'dark'
+                    ? `0 20px 40px ${card.color}30`
+                    : `0 20px 40px ${card.color}20`,
                 },
               }}
             >

@@ -64,30 +64,42 @@ const createAppTheme = (mode: ThemeMode): Theme => {
       },
     },
     typography: {
-      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+      fontFamily: '"Plus Jakarta Sans", "Roboto", "Helvetica", sans-serif',
       h1: {
+        fontFamily: '"Outfit", sans-serif',
+        fontWeight: 700,
+        letterSpacing: '-0.03em',
+      },
+      h2: {
+        fontFamily: '"Outfit", sans-serif',
         fontWeight: 700,
         letterSpacing: '-0.02em',
       },
-      h2: {
-        fontWeight: 700,
+      h3: {
+        fontFamily: '"Outfit", sans-serif',
+        fontWeight: 600,
         letterSpacing: '-0.01em',
       },
-      h3: {
-        fontWeight: 600,
-      },
       h4: {
+        fontFamily: '"Outfit", sans-serif',
         fontWeight: 600,
       },
       h5: {
+        fontFamily: '"Outfit", sans-serif',
         fontWeight: 600,
       },
       h6: {
+        fontFamily: '"Outfit", sans-serif',
         fontWeight: 600,
       },
       button: {
         fontWeight: 600,
         letterSpacing: '0.02em',
+      },
+      overline: {
+        fontFamily: '"JetBrains Mono", monospace',
+        fontWeight: 500,
+        letterSpacing: '0.1em',
       },
     },
     shape: {

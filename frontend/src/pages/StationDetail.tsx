@@ -186,7 +186,10 @@ export default function StationDetail() {
                     sx={{
                       p: 2,
                       mb: 2,
-                      backgroundColor: 'grey.50',
+                      backgroundColor: (theme) => 
+                        theme.palette.mode === 'dark' 
+                          ? 'rgba(255, 255, 255, 0.05)' 
+                          : 'grey.50',
                     }}
                   >
                     <Box display="flex" justifyContent="space-between" alignItems="center">
