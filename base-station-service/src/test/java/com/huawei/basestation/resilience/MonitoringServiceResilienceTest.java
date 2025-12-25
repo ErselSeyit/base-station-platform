@@ -48,8 +48,9 @@ class MonitoringServiceResilienceTest {
     static void configureProperties(DynamicPropertyRegistry registry) {
         wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
         wireMockServer.start();
-
-        registry.add("monitoring.service.url", wireMockServer::baseUrl);
+        
+        String baseUrl = wireMockServer.baseUrl();
+        registry.add("monitoring.service.url", () -> baseUrl);
         registry.add("eureka.client.enabled", () -> "false");
         registry.add("spring.cache.type", () -> "none");
         registry.add("spring.data.redis.host", () -> "localhost");
