@@ -216,13 +216,9 @@ class MonitoringServiceResilienceTest {
 
             Thread.sleep(200);
 
-            int successCount = 0;
             for (int i = 0; i < 10; i++) {
                 try {
-                    Map<String, Object> result = client.getLatestMetricsSync(1L);
-                    if (result.containsKey("cpu") && !result.containsKey("status")) {
-                        successCount++;
-                    }
+                    client.getLatestMetricsSync(1L);
                     Thread.sleep(100);
                 } catch (Exception e) {
                 }
