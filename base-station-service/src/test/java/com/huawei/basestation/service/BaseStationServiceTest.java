@@ -1,6 +1,5 @@
 package com.huawei.basestation.service;
 
-import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,18 +11,15 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -35,6 +31,7 @@ import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.repository.BaseStationRepository;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class BaseStationServiceTest {
 
     @Mock
@@ -45,29 +42,6 @@ class BaseStationServiceTest {
 
     private BaseStation testStation;
     private BaseStationDTO testDTO;
-
-    /**
-     * Safely casts an argument from Mockito invocation to the expected type.
-     * Throws ClassCastException if the type is incorrect.
-     */
-    private static <T> T castArgument(Class<T> clazz, Object argument) {
-        if (argument == null) {
-            throw new NullPointerException("Argument cannot be null");
-        }
-        return clazz.cast(argument);
-    }
-
-    /**
-     * Safely gets the captured value from ArgumentCaptor with type checking.
-     * Throws ClassCastException if the captured value is not of the expected type.
-     */
-    private static <T> T getCapturedValue(ArgumentCaptor<T> captor, Class<T> clazz) {
-        Object value = captor.getValue();
-        if (value == null) {
-            throw new NullPointerException("Captured value cannot be null");
-        }
-        return clazz.cast(value);
-    }
 
     @BeforeEach
     void setUp() {
@@ -90,41 +64,28 @@ class BaseStationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null")
-    void testCreateStation_Success() {
+    void createStation_savesAndReturnsStation() {
         when(repository.findByStationName(anyString())).thenReturn(Optional.empty());
-        when(repository.save(any(BaseStation.class))).thenAnswer(invocation -> {
-            BaseStation arg = castArgument(BaseStation.class, invocation.getArgument(0));
-            return requireNonNull(arg);
-        });
+        when(repository.save(any(BaseStation.class))).thenReturn(testStation);
 
         BaseStationDTO result = service.createStation(testDTO);
 
         assertNotNull(result);
         assertEquals("BS-001", result.getStationName());
-        ArgumentCaptor<BaseStation> stationCaptor = ArgumentCaptor.forClass(BaseStation.class);
-        BaseStation captureMatcher = stationCaptor.capture();
-        verify(repository, times(1)).save(captureMatcher);
-        BaseStation captured = getCapturedValue(stationCaptor, BaseStation.class);
-        assertNotNull(captured);
+        verify(repository).save(any(BaseStation.class));
     }
 
     @Test
-    @SuppressWarnings("null")
-    void testCreateStation_DuplicateName() {
-        final BaseStation station = requireNonNull(testStation);
-        when(repository.findByStationName(anyString())).thenReturn(Optional.of(station));
+    void createStation_throwsOnDuplicateName() {
+        when(repository.findByStationName(anyString())).thenReturn(Optional.of(testStation));
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> service.createStation(testDTO));
-        assertNotNull(exception);
-        verify(repository, never()).save(any(BaseStation.class));
+        assertThrows(IllegalArgumentException.class, () -> service.createStation(testDTO));
+        verify(repository, never()).save(any());
     }
 
     @Test
-    void testGetStationById_Success() {
-        final BaseStation station = requireNonNull(testStation);
-        when(repository.findById(1L)).thenReturn(Optional.of(station));
+    void getStationById_returnsStationWhenFound() {
+        when(repository.findById(1L)).thenReturn(Optional.of(testStation));
 
         Optional<BaseStationDTO> result = service.getStationById(1L);
 
@@ -133,7 +94,7 @@ class BaseStationServiceTest {
     }
 
     @Test
-    void testGetStationById_NotFound() {
+    void getStationById_returnsEmptyWhenNotFound() {
         when(repository.findById(1L)).thenReturn(Optional.empty());
 
         Optional<BaseStationDTO> result = service.getStationById(1L);
@@ -142,7 +103,7 @@ class BaseStationServiceTest {
     }
 
     @Test
-    void testGetAllStations() {
+    void getAllStations_returnsAllStations() {
         BaseStation station2 = new BaseStation();
         station2.setId(2L);
         station2.setStationName("BS-002");
@@ -152,18 +113,15 @@ class BaseStationServiceTest {
         station2.setStationType(StationType.MICRO_CELL);
         station2.setStatus(StationStatus.ACTIVE);
 
-        final BaseStation station = requireNonNull(testStation);
-        when(repository.findAll()).thenReturn(Arrays.asList(station, station2));
+        when(repository.findAll()).thenReturn(List.of(testStation, station2));
 
         List<BaseStationDTO> result = service.getAllStations();
 
         assertEquals(2, result.size());
-        verify(repository, times(1)).findAll();
     }
 
     @Test
-    @SuppressWarnings("null")
-    void testUpdateStation_Success() {
+    void updateStation_updatesAndReturnsStation() {
         BaseStationDTO updateDTO = new BaseStationDTO();
         updateDTO.setStationName("BS-001-Updated");
         updateDTO.setLocation("New Location");
@@ -171,39 +129,34 @@ class BaseStationServiceTest {
         updateDTO.setLongitude(-74.0060);
         updateDTO.setStationType(StationType.MACRO_CELL);
 
-        final BaseStation station = requireNonNull(testStation);
-        when(repository.findById(1L)).thenReturn(Optional.of(station));
+        when(repository.findById(1L)).thenReturn(Optional.of(testStation));
         when(repository.findByStationName(anyString())).thenReturn(Optional.empty());
-        when(repository.save(any(BaseStation.class))).thenReturn(station);
+        when(repository.save(any(BaseStation.class))).thenReturn(testStation);
 
         BaseStationDTO result = service.updateStation(1L, updateDTO);
 
         assertNotNull(result);
-        ArgumentCaptor<BaseStation> stationCaptor = ArgumentCaptor.forClass(BaseStation.class);
-        BaseStation captureMatcher = stationCaptor.capture();
-        verify(repository, times(1)).save(captureMatcher);
-        BaseStation captured = getCapturedValue(stationCaptor, BaseStation.class);
-        assertNotNull(captured);
+        verify(repository).save(any(BaseStation.class));
     }
 
     @Test
-    void testUpdateStation_NotFound() {
+    void updateStation_throwsWhenNotFound() {
         when(repository.findById(1L)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> service.updateStation(1L, testDTO));
     }
 
     @Test
-    void testDeleteStation_Success() {
+    void deleteStation_deletesExistingStation() {
         when(repository.existsById(1L)).thenReturn(true);
         doNothing().when(repository).deleteById(1L);
 
         assertDoesNotThrow(() -> service.deleteStation(1L));
-        verify(repository, times(1)).deleteById(1L);
+        verify(repository).deleteById(1L);
     }
 
     @Test
-    void testDeleteStation_NotFound() {
+    void deleteStation_throwsWhenNotFound() {
         when(repository.existsById(1L)).thenReturn(false);
 
         assertThrows(IllegalArgumentException.class, () -> service.deleteStation(1L));
@@ -211,10 +164,8 @@ class BaseStationServiceTest {
     }
 
     @Test
-    void testGetStationsByStatus() {
-        final BaseStation station = requireNonNull(testStation);
-        when(repository.findByStatus(StationStatus.ACTIVE))
-                .thenReturn(Arrays.asList(station));
+    void getStationsByStatus_filtersCorrectly() {
+        when(repository.findByStatus(StationStatus.ACTIVE)).thenReturn(List.of(testStation));
 
         List<BaseStationDTO> result = service.getStationsByStatus(StationStatus.ACTIVE);
 

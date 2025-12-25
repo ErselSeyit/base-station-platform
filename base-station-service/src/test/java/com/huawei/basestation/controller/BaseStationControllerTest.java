@@ -1,6 +1,5 @@
 package com.huawei.basestation.controller;
 
-import static java.util.Objects.requireNonNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -11,7 +10,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,6 +27,7 @@ import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.service.BaseStationService;
 
 @WebMvcTest(BaseStationController.class)
+@SuppressWarnings("null")
 class BaseStationControllerTest {
 
     @Autowired
@@ -41,25 +40,23 @@ class BaseStationControllerTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void testCreateStation_Success() throws Exception {
+    void createStation_returnsCreatedStation() throws Exception {
         BaseStationDTO dto = createTestDTO();
         BaseStationDTO created = createTestDTO();
         created.setId(1L);
 
         when(service.createStation(any(BaseStationDTO.class))).thenReturn(created);
 
-        final String jsonContent = requireNonNull(toJson(dto));
-        final MediaType contentType = requireNonNull(MediaType.APPLICATION_JSON);
         mockMvc.perform(post("/api/v1/stations")
-                .contentType(contentType)
-                .content(jsonContent))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.stationName").value("BS-001"));
     }
 
     @Test
-    void testGetStationById_Success() throws Exception {
+    void getStationById_returnsStationWhenFound() throws Exception {
         BaseStationDTO dto = createTestDTO();
         dto.setId(1L);
 
@@ -72,7 +69,7 @@ class BaseStationControllerTest {
     }
 
     @Test
-    void testGetStationById_NotFound() throws Exception {
+    void getStationById_returns404WhenNotFound() throws Exception {
         when(service.getStationById(1L)).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/v1/stations/1"))
@@ -80,15 +77,14 @@ class BaseStationControllerTest {
     }
 
     @Test
-    void testGetAllStations() throws Exception {
+    void getAllStations_returnsAllStations() throws Exception {
         BaseStationDTO dto1 = createTestDTO();
         dto1.setId(1L);
         BaseStationDTO dto2 = createTestDTO();
         dto2.setId(2L);
         dto2.setStationName("BS-002");
 
-        List<BaseStationDTO> stations = Arrays.asList(dto1, dto2);
-        when(service.getAllStations()).thenReturn(stations);
+        when(service.getAllStations()).thenReturn(List.of(dto1, dto2));
 
         mockMvc.perform(get("/api/v1/stations"))
                 .andExpect(status().isOk())
@@ -96,24 +92,22 @@ class BaseStationControllerTest {
     }
 
     @Test
-    void testUpdateStation_Success() throws Exception {
+    void updateStation_returnsUpdatedStation() throws Exception {
         BaseStationDTO dto = createTestDTO();
         dto.setId(1L);
         dto.setStationName("BS-001-Updated");
 
         when(service.updateStation(eq(1L), any(BaseStationDTO.class))).thenReturn(dto);
 
-        final String jsonContent = requireNonNull(toJson(dto));
-        final MediaType contentType = requireNonNull(MediaType.APPLICATION_JSON);
         mockMvc.perform(put("/api/v1/stations/1")
-                .contentType(contentType)
-                .content(jsonContent))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.stationName").value("BS-001-Updated"));
     }
 
     @Test
-    void testDeleteStation_Success() throws Exception {
+    void deleteStation_returns204() throws Exception {
         mockMvc.perform(delete("/api/v1/stations/1"))
                 .andExpect(status().isNoContent());
     }
@@ -127,19 +121,5 @@ class BaseStationControllerTest {
         dto.setStationType(StationType.MACRO_CELL);
         dto.setStatus(StationStatus.ACTIVE);
         return dto;
-    }
-
-    /**
-     * Converts an object to JSON string, ensuring non-null result.
-     * This method wraps ObjectMapper.writeValueAsString to satisfy null-safety
-     * requirements.
-     *
-     * @param obj the object to serialize
-     * @return non-null JSON string representation
-     * @throws Exception if serialization fails
-     */
-    private String toJson(Object obj) throws Exception {
-        String result = objectMapper.writeValueAsString(obj);
-        return requireNonNull(result, "ObjectMapper.writeValueAsString returned null");
     }
 }
