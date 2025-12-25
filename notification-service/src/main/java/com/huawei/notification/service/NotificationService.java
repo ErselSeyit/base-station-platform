@@ -2,6 +2,7 @@ package com.huawei.notification.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
@@ -17,7 +18,6 @@ import com.huawei.notification.repository.NotificationRepository;
 
 @Service
 @Transactional
-@SuppressWarnings("null")
 public class NotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
@@ -34,13 +34,15 @@ public class NotificationService {
 
     @Async("notificationExecutor")
     public CompletableFuture<Void> sendNotificationAsync(Long notificationId) {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                sendNotification(notificationId);
-            } catch (Exception e) {
-                log.error("Error sending notification {}", notificationId, e);
-            }
-        });
+        return Objects.requireNonNull(
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        sendNotification(notificationId);
+                    } catch (Exception e) {
+                        log.error("Error sending notification {}", notificationId, e);
+                    }
+                }),
+                "CompletableFuture cannot be null");
     }
 
     public void sendNotification(Long notificationId) {
@@ -58,9 +60,9 @@ public class NotificationService {
             log.info("Notification {} sent successfully", notificationId);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            markAsFailed(notification, e);
+            markAsFailed(Objects.requireNonNull(notification, "Notification cannot be null"), e);
         } catch (Exception e) {
-            markAsFailed(notification, e);
+            markAsFailed(Objects.requireNonNull(notification, "Notification cannot be null"), e);
         }
     }
 
@@ -77,7 +79,8 @@ public class NotificationService {
 
         List<CompletableFuture<Void>> futures = pending.stream()
                 .filter(n -> n.getId() != null)
-                .map(n -> sendNotificationAsync(n.getId()))
+                .map(n -> sendNotificationAsync(
+                        Objects.requireNonNull(n.getId(), "Notification ID cannot be null")))
                 .toList();
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
