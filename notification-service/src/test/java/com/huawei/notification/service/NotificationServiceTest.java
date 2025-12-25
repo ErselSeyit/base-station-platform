@@ -23,7 +23,6 @@ import com.huawei.notification.model.NotificationType;
 import com.huawei.notification.repository.NotificationRepository;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings("null")
 class NotificationServiceTest {
 
     @Mock
@@ -33,6 +32,7 @@ class NotificationServiceTest {
     private NotificationService service;
 
     @Test
+    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
     void createNotification_savesAndReturnsNotification() {
         Notification notification = new Notification();
         notification.setId(1L);
@@ -90,6 +90,7 @@ class NotificationServiceTest {
     }
 
     @Test
+    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
     void sendNotification_updatesStatus() {
         Notification notification = new Notification();
         notification.setId(1L);
