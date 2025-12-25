@@ -2,6 +2,7 @@ package com.huawei.monitoring.controller;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -22,7 +23,6 @@ import com.huawei.monitoring.service.AlertingService;
  */
 @RestController
 @RequestMapping("/api/v1/alerts/rules")
-@SuppressWarnings("null") // Suppress false positives for Spring's @PathVariable null analysis
 public class AlertRuleController {
 
     private final AlertingService alertingService;
@@ -38,30 +38,34 @@ public class AlertRuleController {
 
     @GetMapping("/{ruleId}")
     public ResponseEntity<AlertRule> getRule(@PathVariable String ruleId) {
-        return alertingService.getRule(ruleId)
+        return alertingService.getRule(Objects.requireNonNull(ruleId, "Rule ID cannot be null"))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PutMapping("/{ruleId}/enable")
     public ResponseEntity<Map<String, String>> enableRule(@PathVariable String ruleId) {
-        alertingService.enableRule(ruleId);
-        return ResponseEntity.ok(Map.of("status", "enabled", "ruleId", ruleId));
+        String validatedRuleId = Objects.requireNonNull(ruleId, "Rule ID cannot be null");
+        alertingService.enableRule(validatedRuleId);
+        return ResponseEntity.ok(Map.of("status", "enabled", "ruleId", validatedRuleId));
     }
 
     @PutMapping("/{ruleId}/disable")
     public ResponseEntity<Map<String, String>> disableRule(@PathVariable String ruleId) {
-        alertingService.disableRule(ruleId);
-        return ResponseEntity.ok(Map.of("status", "disabled", "ruleId", ruleId));
+        String validatedRuleId = Objects.requireNonNull(ruleId, "Rule ID cannot be null");
+        alertingService.disableRule(validatedRuleId);
+        return ResponseEntity.ok(Map.of("status", "disabled", "ruleId", validatedRuleId));
     }
 
     @PutMapping("/{ruleId}/threshold")
     public ResponseEntity<AlertRule> updateThreshold(
             @PathVariable String ruleId,
             @RequestParam Double threshold) {
-        return alertingService.getRule(ruleId)
+        return alertingService.getRule(Objects.requireNonNull(ruleId, "Rule ID cannot be null"))
                 .map(rule -> {
-                    AlertRule updated = rule.withThreshold(threshold);
+                    AlertRule updated = Objects.requireNonNull(
+                            rule.withThreshold(threshold),
+                            "Updated rule cannot be null");
                     alertingService.addRule(updated);
                     return ResponseEntity.ok(updated);
                 })
@@ -70,7 +74,7 @@ public class AlertRuleController {
 
     @DeleteMapping("/{ruleId}")
     public ResponseEntity<Void> deleteRule(@PathVariable String ruleId) {
-        alertingService.removeRule(ruleId);
+        alertingService.removeRule(Objects.requireNonNull(ruleId, "Rule ID cannot be null"));
         return ResponseEntity.noContent().build();
     }
 }

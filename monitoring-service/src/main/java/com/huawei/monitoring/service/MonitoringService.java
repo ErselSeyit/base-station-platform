@@ -2,6 +2,7 @@ package com.huawei.monitoring.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +15,6 @@ import com.huawei.monitoring.repository.MetricDataRepository;
 import com.huawei.monitoring.websocket.MetricsWebSocketHandler;
 
 @Service
-@SuppressWarnings("null")
 public class MonitoringService {
 
     private static final Logger log = LoggerFactory.getLogger(MonitoringService.class);
@@ -53,33 +53,43 @@ public class MonitoringService {
     }
 
     public List<MetricDataDTO> getMetricsByStation(Long stationId) {
-        return repository.findByStationId(stationId).stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findByStationId(stationId).stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Metrics list cannot be null");
     }
 
     public List<MetricDataDTO> getMetricsByStationAndType(Long stationId, MetricType metricType) {
-        return repository.findByStationIdAndMetricType(stationId, metricType).stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findByStationIdAndMetricType(stationId, metricType).stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Metrics list cannot be null");
     }
 
     public List<MetricDataDTO> getMetricsByTimeRange(LocalDateTime start, LocalDateTime end) {
-        return repository.findByTimestampBetween(start, end).stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findByTimestampBetween(start, end).stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Metrics list cannot be null");
     }
 
     public List<MetricDataDTO> getMetricsByStationAndTimeRange(Long stationId, LocalDateTime start, LocalDateTime end) {
-        return repository.findMetricsByStationAndTimeRange(stationId, start, end).stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findMetricsByStationAndTimeRange(stationId, start, end).stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Metrics list cannot be null");
     }
 
     public List<MetricDataDTO> getMetricsAboveThreshold(MetricType metricType, Double threshold) {
-        return repository.findMetricsAboveThreshold(metricType, threshold).stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findMetricsAboveThreshold(metricType, threshold).stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Metrics list cannot be null");
     }
 
     private MetricData convertToEntity(MetricDataDTO dto) {

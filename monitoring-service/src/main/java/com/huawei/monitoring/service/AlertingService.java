@@ -2,6 +2,7 @@ package com.huawei.monitoring.service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,7 +16,8 @@ import com.huawei.monitoring.model.AlertSeverity;
 import com.huawei.monitoring.model.MetricType;
 
 /**
- * Alerting rules engine that evaluates incoming metrics against configurable thresholds.
+ * Alerting rules engine that evaluates incoming metrics against configurable
+ * thresholds.
  * 
  * This demonstrates:
  * - Domain-driven design (AlertRule as a value object)
@@ -24,7 +26,6 @@ import com.huawei.monitoring.model.MetricType;
  * - Event-driven architecture (would integrate with notification service)
  */
 @Service
-@SuppressWarnings("null") // Suppress Eclipse null-analysis warnings for Spring-managed beans
 public class AlertingService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertingService.class);
@@ -37,55 +38,65 @@ public class AlertingService {
     }
 
     private void initializeDefaultRules() {
-        addRule(AlertRule.builder()
-                .id("cpu-critical")
-                .name("CPU Critical")
-                .metricType(MetricType.CPU_USAGE)
-                .operator(AlertRule.Operator.GREATER_THAN)
-                .threshold(90.0)
-                .severity(AlertSeverity.CRITICAL)
-                .message("CPU usage exceeded 90%")
-                .build());
+        addRule(Objects.requireNonNull(
+                AlertRule.builder()
+                        .id("cpu-critical")
+                        .name("CPU Critical")
+                        .metricType(MetricType.CPU_USAGE)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(90.0)
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("CPU usage exceeded 90%")
+                        .build(),
+                "Built alert rule cannot be null"));
 
-        addRule(AlertRule.builder()
-                .id("cpu-warning")
-                .name("CPU Warning")
-                .metricType(MetricType.CPU_USAGE)
-                .operator(AlertRule.Operator.GREATER_THAN)
-                .threshold(75.0)
-                .severity(AlertSeverity.WARNING)
-                .message("CPU usage exceeded 75%")
-                .build());
+        addRule(Objects.requireNonNull(
+                AlertRule.builder()
+                        .id("cpu-warning")
+                        .name("CPU Warning")
+                        .metricType(MetricType.CPU_USAGE)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(75.0)
+                        .severity(AlertSeverity.WARNING)
+                        .message("CPU usage exceeded 75%")
+                        .build(),
+                "Built alert rule cannot be null"));
 
-        addRule(AlertRule.builder()
-                .id("memory-critical")
-                .name("Memory Critical")
-                .metricType(MetricType.MEMORY_USAGE)
-                .operator(AlertRule.Operator.GREATER_THAN)
-                .threshold(95.0)
-                .severity(AlertSeverity.CRITICAL)
-                .message("Memory usage exceeded 95%")
-                .build());
+        addRule(Objects.requireNonNull(
+                AlertRule.builder()
+                        .id("memory-critical")
+                        .name("Memory Critical")
+                        .metricType(MetricType.MEMORY_USAGE)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(95.0)
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("Memory usage exceeded 95%")
+                        .build(),
+                "Built alert rule cannot be null"));
 
-        addRule(AlertRule.builder()
-                .id("temperature-critical")
-                .name("Temperature Critical")
-                .metricType(MetricType.TEMPERATURE)
-                .operator(AlertRule.Operator.GREATER_THAN)
-                .threshold(80.0)
-                .severity(AlertSeverity.CRITICAL)
-                .message("Temperature exceeded safe threshold")
-                .build());
+        addRule(Objects.requireNonNull(
+                AlertRule.builder()
+                        .id("temperature-critical")
+                        .name("Temperature Critical")
+                        .metricType(MetricType.TEMPERATURE)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(80.0)
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("Temperature exceeded safe threshold")
+                        .build(),
+                "Built alert rule cannot be null"));
 
-        addRule(AlertRule.builder()
-                .id("signal-weak")
-                .name("Weak Signal")
-                .metricType(MetricType.SIGNAL_STRENGTH)
-                .operator(AlertRule.Operator.LESS_THAN)
-                .threshold(-100.0)
-                .severity(AlertSeverity.WARNING)
-                .message("Signal strength below acceptable level")
-                .build());
+        addRule(Objects.requireNonNull(
+                AlertRule.builder()
+                        .id("signal-weak")
+                        .name("Weak Signal")
+                        .metricType(MetricType.SIGNAL_STRENGTH)
+                        .operator(AlertRule.Operator.LESS_THAN)
+                        .threshold(-100.0)
+                        .severity(AlertSeverity.WARNING)
+                        .message("Signal strength below acceptable level")
+                        .build(),
+                "Built alert rule cannot be null"));
     }
 
     /**
@@ -97,17 +108,19 @@ public class AlertingService {
      */
     public List<AlertRule> evaluateMetric(MetricDataDTO metric) {
         if (metric.getMetricType() == null || metric.getValue() == null) {
-            return List.of();
+            return Objects.requireNonNull(List.of(), "Empty list cannot be null");
         }
 
         List<AlertRule> triggeredRules = rules.values().stream()
                 .filter(rule -> rule.getMetricType() == metric.getMetricType())
                 .filter(AlertRule::isEnabled)
-                .filter(rule -> evaluateRule(rule, metric.getValue()))
+                .filter(rule -> evaluateRule(Objects.requireNonNull(rule, "Rule cannot be null"),
+                        Objects.requireNonNull(metric.getValue(), "Metric value cannot be null")))
                 .toList();
 
-        triggeredRules.forEach(rule -> triggerAlert(rule, metric));
-        
+        triggeredRules.forEach(rule -> triggerAlert(
+                Objects.requireNonNull(rule, "Triggered rule cannot be null"), metric));
+
         return triggeredRules;
     }
 
@@ -131,7 +144,8 @@ public class AlertingService {
                 rule.getThreshold());
 
         // In production: send to notification service via RabbitMQ
-        // rabbitTemplate.convertAndSend("alerts.exchange", "alert.triggered", alertEvent);
+        // rabbitTemplate.convertAndSend("alerts.exchange", "alert.triggered",
+        // alertEvent);
     }
 
     // ========================================
@@ -165,11 +179,14 @@ public class AlertingService {
     }
 
     public List<AlertRule> getAllRules() {
-        return List.copyOf(rules.values());
+        return Objects.requireNonNull(
+                List.copyOf(rules.values()),
+                "Rule list cannot be null");
     }
 
     public Optional<AlertRule> getRule(String ruleId) {
-        return Optional.ofNullable(rules.get(ruleId));
+        return Objects.requireNonNull(
+                Optional.ofNullable(rules.get(ruleId)),
+                "Optional cannot be null");
     }
 }
-
