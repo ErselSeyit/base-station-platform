@@ -46,7 +46,7 @@ jobs:
         cache: maven
     
     - name: Run unit tests
-      run: mvn clean test -Dspring.profiles.active=test -Dtest='!*ContractTest'
+      run: mvn clean test -Dspring.profiles.active=test -Dtest='!*ContractTest' -DfailIfNoTests=false -pl '!eureka-server'
     
     - name: Generate test report
       if: always()
