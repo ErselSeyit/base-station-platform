@@ -11,23 +11,35 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.huawei.basestation.config.TestConfig;
 import com.huawei.basestation.dto.BaseStationDTO;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.service.BaseStationService;
 
-@WebMvcTest(BaseStationController.class)
-@SuppressWarnings("null")
+@SpringBootTest(webEnvironment = WebEnvironment.MOCK, classes = { BaseStationController.class, TestConfig.class })
+@AutoConfigureMockMvc
+@TestPropertySource(properties = {
+        "spring.data.jpa.repositories.enabled=false",
+        "spring.jpa.hibernate.ddl-auto=none",
+        "spring.datasource.url=jdbc:h2:mem:testdb",
+        "eureka.client.enabled=false",
+        "spring.cache.type=none"
+})
 class BaseStationControllerTest {
 
     @Autowired
@@ -40,16 +52,18 @@ class BaseStationControllerTest {
     private ObjectMapper objectMapper;
 
     @Test
+    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
     void createStation_returnsCreatedStation() throws Exception {
         BaseStationDTO dto = createTestDTO();
         BaseStationDTO created = createTestDTO();
         created.setId(1L);
 
-        when(service.createStation(any(BaseStationDTO.class))).thenReturn(created);
+        when(service.createStation(any(BaseStationDTO.class)))
+                .thenReturn(Objects.requireNonNull(created));
 
         mockMvc.perform(post("/api/v1/stations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(dto)))
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.stationName").value("BS-001"));
@@ -92,16 +106,18 @@ class BaseStationControllerTest {
     }
 
     @Test
+    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
     void updateStation_returnsUpdatedStation() throws Exception {
         BaseStationDTO dto = createTestDTO();
         dto.setId(1L);
         dto.setStationName("BS-001-Updated");
 
-        when(service.updateStation(eq(1L), any(BaseStationDTO.class))).thenReturn(dto);
+        when(service.updateStation(eq(1L), any(BaseStationDTO.class)))
+                .thenReturn(Objects.requireNonNull(dto));
 
         mockMvc.perform(put("/api/v1/stations/1")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(dto)))
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.stationName").value("BS-001-Updated"));
     }
