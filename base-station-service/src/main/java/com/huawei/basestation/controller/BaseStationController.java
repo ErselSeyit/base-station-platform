@@ -39,8 +39,8 @@ public class BaseStationController {
 
     @GetMapping
     public ResponseEntity<List<BaseStationDTO>> getAllStations(
-            @RequestParam(required = false) StationStatus status,
-            @RequestParam(required = false) StationType type) {
+            @RequestParam(name = "status", required = false) StationStatus status,
+            @RequestParam(name = "type", required = false) StationType type) {
         
         if (status != null) {
             return ResponseEntity.ok(service.getStationsByStatus(status));
@@ -85,7 +85,7 @@ public class BaseStationController {
 
     @GetMapping("/stats/count")
     public ResponseEntity<Map<String, Long>> getStationCountByStatus(
-            @RequestParam StationStatus status) {
+            @RequestParam(name = "status") StationStatus status) {
         Long count = service.getStationCountByStatus(status);
         return ResponseEntity.ok(Map.of("count", count));
     }

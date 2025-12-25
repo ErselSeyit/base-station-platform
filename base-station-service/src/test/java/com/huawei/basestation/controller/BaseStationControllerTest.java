@@ -1,10 +1,20 @@
 package com.huawei.basestation.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.huawei.basestation.dto.BaseStationDTO;
-import com.huawei.basestation.model.StationStatus;
-import com.huawei.basestation.model.StationType;
-import com.huawei.basestation.service.BaseStationService;
+import static java.util.Objects.requireNonNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -12,15 +22,11 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.huawei.basestation.dto.BaseStationDTO;
+import com.huawei.basestation.model.StationStatus;
+import com.huawei.basestation.model.StationType;
+import com.huawei.basestation.service.BaseStationService;
 
 @WebMvcTest(BaseStationController.class)
 class BaseStationControllerTest {
@@ -42,9 +48,11 @@ class BaseStationControllerTest {
 
         when(service.createStation(any(BaseStationDTO.class))).thenReturn(created);
 
+        final String jsonContent = requireNonNull(toJson(dto));
+        final MediaType contentType = requireNonNull(MediaType.APPLICATION_JSON);
         mockMvc.perform(post("/api/v1/stations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(dto)))
+                .contentType(contentType)
+                .content(jsonContent))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.stationName").value("BS-001"));
@@ -95,9 +103,11 @@ class BaseStationControllerTest {
 
         when(service.updateStation(eq(1L), any(BaseStationDTO.class))).thenReturn(dto);
 
+        final String jsonContent = requireNonNull(toJson(dto));
+        final MediaType contentType = requireNonNull(MediaType.APPLICATION_JSON);
         mockMvc.perform(put("/api/v1/stations/1")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(dto)))
+                .contentType(contentType)
+                .content(jsonContent))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.stationName").value("BS-001-Updated"));
     }
@@ -118,5 +128,18 @@ class BaseStationControllerTest {
         dto.setStatus(StationStatus.ACTIVE);
         return dto;
     }
-}
 
+    /**
+     * Converts an object to JSON string, ensuring non-null result.
+     * This method wraps ObjectMapper.writeValueAsString to satisfy null-safety
+     * requirements.
+     *
+     * @param obj the object to serialize
+     * @return non-null JSON string representation
+     * @throws Exception if serialization fails
+     */
+    private String toJson(Object obj) throws Exception {
+        String result = objectMapper.writeValueAsString(obj);
+        return requireNonNull(result, "ObjectMapper.writeValueAsString returned null");
+    }
+}

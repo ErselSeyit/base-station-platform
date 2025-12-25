@@ -1,23 +1,30 @@
 package com.huawei.monitoring.service;
 
-import com.huawei.monitoring.dto.MetricDataDTO;
-import com.huawei.monitoring.model.MetricData;
-import com.huawei.monitoring.model.MetricType;
-import com.huawei.monitoring.repository.MetricDataRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import static java.util.Objects.requireNonNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.huawei.monitoring.dto.MetricDataDTO;
+import com.huawei.monitoring.model.MetricData;
+import com.huawei.monitoring.model.MetricType;
+import com.huawei.monitoring.repository.MetricDataRepository;
 
 @ExtendWith(MockitoExtension.class)
 class MonitoringServiceTest {
@@ -51,15 +58,31 @@ class MonitoringServiceTest {
     }
 
     @Test
+    @SuppressWarnings("null")
     void testRecordMetric_Success() {
-        when(repository.save(any(MetricData.class))).thenReturn(testMetric);
+        // Arrange
+        MetricData metric = requireNonNull(testMetric);
 
+        when(repository.save(any(MetricData.class)))
+                .thenReturn(metric);
+
+        // Act
         MetricDataDTO result = service.recordMetric(testDTO);
 
+        // Assert result
         assertNotNull(result);
         assertEquals(1L, result.getStationId());
         assertEquals(MetricType.CPU_USAGE, result.getMetricType());
-        verify(repository, times(1)).save(any(MetricData.class));
+
+        // Capture argument
+        ArgumentCaptor<MetricData> metricCaptor = ArgumentCaptor.forClass(MetricData.class);
+
+        verify(repository, times(1)).save(metricCaptor.capture());
+
+        MetricData captured = metricCaptor.getValue();
+
+        assertEquals(1L, captured.getStationId());
+        assertEquals(MetricType.CPU_USAGE, captured.getMetricType());
     }
 
     @Test
@@ -70,7 +93,8 @@ class MonitoringServiceTest {
         metric2.setMetricType(MetricType.MEMORY_USAGE);
         metric2.setValue(60.0);
 
-        when(repository.findByStationId(1L)).thenReturn(Arrays.asList(testMetric, metric2));
+        final MetricData metric = requireNonNull(testMetric);
+        when(repository.findByStationId(1L)).thenReturn(Arrays.asList(metric, metric2));
 
         List<MetricDataDTO> result = service.getMetricsByStation(1L);
 
@@ -80,8 +104,9 @@ class MonitoringServiceTest {
 
     @Test
     void testGetMetricsByStationAndType() {
+        final MetricData metric = requireNonNull(testMetric);
         when(repository.findByStationIdAndMetricType(1L, MetricType.CPU_USAGE))
-                .thenReturn(Arrays.asList(testMetric));
+                .thenReturn(Arrays.asList(metric));
 
         List<MetricDataDTO> result = service.getMetricsByStationAndType(1L, MetricType.CPU_USAGE);
 
@@ -91,8 +116,9 @@ class MonitoringServiceTest {
 
     @Test
     void testGetMetricsAboveThreshold() {
+        final MetricData metric = requireNonNull(testMetric);
         when(repository.findMetricsAboveThreshold(MetricType.CPU_USAGE, 70.0))
-                .thenReturn(Arrays.asList(testMetric));
+                .thenReturn(Arrays.asList(metric));
 
         List<MetricDataDTO> result = service.getMetricsAboveThreshold(MetricType.CPU_USAGE, 70.0);
 
@@ -100,4 +126,3 @@ class MonitoringServiceTest {
         assertTrue(result.get(0).getValue() > 70.0);
     }
 }
-

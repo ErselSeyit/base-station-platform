@@ -1,17 +1,19 @@
 package com.huawei.basestation.service;
 
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.huawei.basestation.dto.BaseStationDTO;
 import com.huawei.basestation.model.BaseStation;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.repository.BaseStationRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -24,19 +26,21 @@ public class BaseStationService {
         this.repository = repository;
     }
 
+    @SuppressWarnings("null")
     public BaseStationDTO createStation(BaseStationDTO dto) {
         if (repository.findByStationName(dto.getStationName()).isPresent()) {
             throw new IllegalArgumentException("Station with name " + dto.getStationName() + " already exists");
         }
 
         BaseStation station = convertToEntity(dto);
+
         BaseStation saved = repository.save(station);
         return convertToDTO(saved);
     }
 
     @Transactional(readOnly = true)
     public Optional<BaseStationDTO> getStationById(Long id) {
-        return repository.findById(id).map(this::convertToDTO);
+        return repository.findById(Objects.requireNonNull(id)).map(this::convertToDTO);
     }
 
     @Transactional(readOnly = true)
@@ -61,7 +65,7 @@ public class BaseStationService {
     }
 
     public BaseStationDTO updateStation(Long id, BaseStationDTO dto) {
-        BaseStation station = repository.findById(id)
+        BaseStation station = repository.findById(Objects.requireNonNull(id))
                 .orElseThrow(() -> new IllegalArgumentException("Station not found with id: " + id));
 
         // Check if name is being changed and if new name already exists
@@ -85,6 +89,9 @@ public class BaseStationService {
     }
 
     public void deleteStation(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Station id cannot be null");
+        }
         if (!repository.existsById(id)) {
             throw new IllegalArgumentException("Station not found with id: " + id);
         }
@@ -132,4 +139,3 @@ public class BaseStationService {
         return dto;
     }
 }
-

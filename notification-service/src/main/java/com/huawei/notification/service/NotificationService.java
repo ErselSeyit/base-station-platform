@@ -1,5 +1,7 @@
 package com.huawei.notification.service;
 
+import java.util.Objects;
+
 import com.huawei.notification.model.Notification;
 import com.huawei.notification.model.NotificationStatus;
 import com.huawei.notification.model.NotificationType;
@@ -49,7 +51,7 @@ public class NotificationService {
     }
 
     public void sendNotification(Long notificationId) {
-        Notification notification = repository.findById(notificationId)
+        Notification notification = repository.findById(Objects.requireNonNull(notificationId))
                 .orElseThrow(() -> new IllegalArgumentException("Notification not found: " + notificationId));
 
         try {

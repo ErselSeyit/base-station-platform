@@ -1,24 +1,38 @@
 package com.huawei.basestation.service;
 
-import com.huawei.basestation.dto.BaseStationDTO;
-import com.huawei.basestation.model.BaseStation;
-import com.huawei.basestation.model.StationStatus;
-import com.huawei.basestation.model.StationType;
-import com.huawei.basestation.repository.BaseStationRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import static java.util.Objects.requireNonNull;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.huawei.basestation.dto.BaseStationDTO;
+import com.huawei.basestation.model.BaseStation;
+import com.huawei.basestation.model.StationStatus;
+import com.huawei.basestation.model.StationType;
+import com.huawei.basestation.repository.BaseStationRepository;
 
 @ExtendWith(MockitoExtension.class)
 class BaseStationServiceTest {
@@ -31,6 +45,29 @@ class BaseStationServiceTest {
 
     private BaseStation testStation;
     private BaseStationDTO testDTO;
+
+    /**
+     * Safely casts an argument from Mockito invocation to the expected type.
+     * Throws ClassCastException if the type is incorrect.
+     */
+    private static <T> T castArgument(Class<T> clazz, Object argument) {
+        if (argument == null) {
+            throw new NullPointerException("Argument cannot be null");
+        }
+        return clazz.cast(argument);
+    }
+
+    /**
+     * Safely gets the captured value from ArgumentCaptor with type checking.
+     * Throws ClassCastException if the captured value is not of the expected type.
+     */
+    private static <T> T getCapturedValue(ArgumentCaptor<T> captor, Class<T> clazz) {
+        Object value = captor.getValue();
+        if (value == null) {
+            throw new NullPointerException("Captured value cannot be null");
+        }
+        return clazz.cast(value);
+    }
 
     @BeforeEach
     void setUp() {
@@ -53,28 +90,41 @@ class BaseStationServiceTest {
     }
 
     @Test
+    @SuppressWarnings("null")
     void testCreateStation_Success() {
         when(repository.findByStationName(anyString())).thenReturn(Optional.empty());
-        when(repository.save(any(BaseStation.class))).thenReturn(testStation);
+        when(repository.save(any(BaseStation.class))).thenAnswer(invocation -> {
+            BaseStation arg = castArgument(BaseStation.class, invocation.getArgument(0));
+            return requireNonNull(arg);
+        });
 
         BaseStationDTO result = service.createStation(testDTO);
 
         assertNotNull(result);
         assertEquals("BS-001", result.getStationName());
-        verify(repository, times(1)).save(any(BaseStation.class));
+        ArgumentCaptor<BaseStation> stationCaptor = ArgumentCaptor.forClass(BaseStation.class);
+        BaseStation captureMatcher = stationCaptor.capture();
+        verify(repository, times(1)).save(captureMatcher);
+        BaseStation captured = getCapturedValue(stationCaptor, BaseStation.class);
+        assertNotNull(captured);
     }
 
     @Test
+    @SuppressWarnings("null")
     void testCreateStation_DuplicateName() {
-        when(repository.findByStationName(anyString())).thenReturn(Optional.of(testStation));
+        final BaseStation station = requireNonNull(testStation);
+        when(repository.findByStationName(anyString())).thenReturn(Optional.of(station));
 
-        assertThrows(IllegalArgumentException.class, () -> service.createStation(testDTO));
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> service.createStation(testDTO));
+        assertNotNull(exception);
         verify(repository, never()).save(any(BaseStation.class));
     }
 
     @Test
     void testGetStationById_Success() {
-        when(repository.findById(1L)).thenReturn(Optional.of(testStation));
+        final BaseStation station = requireNonNull(testStation);
+        when(repository.findById(1L)).thenReturn(Optional.of(station));
 
         Optional<BaseStationDTO> result = service.getStationById(1L);
 
@@ -102,7 +152,8 @@ class BaseStationServiceTest {
         station2.setStationType(StationType.MICRO_CELL);
         station2.setStatus(StationStatus.ACTIVE);
 
-        when(repository.findAll()).thenReturn(Arrays.asList(testStation, station2));
+        final BaseStation station = requireNonNull(testStation);
+        when(repository.findAll()).thenReturn(Arrays.asList(station, station2));
 
         List<BaseStationDTO> result = service.getAllStations();
 
@@ -111,6 +162,7 @@ class BaseStationServiceTest {
     }
 
     @Test
+    @SuppressWarnings("null")
     void testUpdateStation_Success() {
         BaseStationDTO updateDTO = new BaseStationDTO();
         updateDTO.setStationName("BS-001-Updated");
@@ -119,14 +171,19 @@ class BaseStationServiceTest {
         updateDTO.setLongitude(-74.0060);
         updateDTO.setStationType(StationType.MACRO_CELL);
 
-        when(repository.findById(1L)).thenReturn(Optional.of(testStation));
+        final BaseStation station = requireNonNull(testStation);
+        when(repository.findById(1L)).thenReturn(Optional.of(station));
         when(repository.findByStationName(anyString())).thenReturn(Optional.empty());
-        when(repository.save(any(BaseStation.class))).thenReturn(testStation);
+        when(repository.save(any(BaseStation.class))).thenReturn(station);
 
         BaseStationDTO result = service.updateStation(1L, updateDTO);
 
         assertNotNull(result);
-        verify(repository, times(1)).save(any(BaseStation.class));
+        ArgumentCaptor<BaseStation> stationCaptor = ArgumentCaptor.forClass(BaseStation.class);
+        BaseStation captureMatcher = stationCaptor.capture();
+        verify(repository, times(1)).save(captureMatcher);
+        BaseStation captured = getCapturedValue(stationCaptor, BaseStation.class);
+        assertNotNull(captured);
     }
 
     @Test
@@ -155,8 +212,9 @@ class BaseStationServiceTest {
 
     @Test
     void testGetStationsByStatus() {
+        final BaseStation station = requireNonNull(testStation);
         when(repository.findByStatus(StationStatus.ACTIVE))
-                .thenReturn(Arrays.asList(testStation));
+                .thenReturn(Arrays.asList(station));
 
         List<BaseStationDTO> result = service.getStationsByStatus(StationStatus.ACTIVE);
 
@@ -164,4 +222,3 @@ class BaseStationServiceTest {
         assertEquals(StationStatus.ACTIVE, result.get(0).getStatus());
     }
 }
-
