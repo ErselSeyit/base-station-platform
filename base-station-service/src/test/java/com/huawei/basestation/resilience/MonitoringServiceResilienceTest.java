@@ -63,7 +63,7 @@ class MonitoringServiceResilienceTest {
         
         await().atMost(Duration.ofSeconds(2))
                 .pollInterval(Duration.ofMillis(50))
-                .until(() -> wireMockServer.isRunning());
+                .until(() -> wireMockServer.isRunning() && wireMockServer.port() > 0);
         
         CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("monitoringService");
         cb.reset();
@@ -71,7 +71,7 @@ class MonitoringServiceResilienceTest {
             cb.transitionToClosedState();
         }
         
-        Thread.sleep(200);
+        Thread.sleep(500);
     }
 
     @AfterEach
@@ -102,11 +102,14 @@ class MonitoringServiceResilienceTest {
                     .pollInterval(Duration.ofMillis(100))
                     .until(() -> wireMockServer.isRunning() && wireMockServer.port() > 0);
 
-            Thread.sleep(500);
+            Thread.sleep(1000);
 
             Map<String, Object> result = client.getLatestMetricsSync(1L);
             
             if (result.containsKey("status")) {
+                System.out.println("WireMock baseUrl: " + wireMockServer.baseUrl());
+                System.out.println("WireMock port: " + wireMockServer.port());
+                System.out.println("WireMock isRunning: " + wireMockServer.isRunning());
                 throw new AssertionError("Got fallback response instead of actual metrics. Result: " + result + 
                     ", Circuit breaker state: " + cb.getState() + 
                     ", WireMock baseUrl: " + wireMockServer.baseUrl());
