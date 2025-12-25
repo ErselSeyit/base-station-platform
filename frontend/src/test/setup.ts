@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { afterEach, beforeEach } from 'vitest'
+import { afterEach, beforeAll } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
 // Mock localStorage
@@ -19,10 +19,16 @@ const localStorageMock = (() => {
   }
 })()
 
-beforeEach(() => {
+beforeAll(() => {
   Object.defineProperty(window, 'localStorage', {
     value: localStorageMock,
     writable: true,
+    configurable: true,
+  })
+  Object.defineProperty(global, 'localStorage', {
+    value: localStorageMock,
+    writable: true,
+    configurable: true,
   })
   localStorageMock.clear()
 })
