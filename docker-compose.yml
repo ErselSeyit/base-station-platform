@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres-basestation:
     image: postgres:15-alpine
@@ -9,7 +7,7 @@ services:
       POSTGRES_USER: ${POSTGRES_BASESTATION_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres-basestation-data:/var/lib/postgresql/data
     networks:
@@ -29,7 +27,7 @@ services:
       POSTGRES_USER: ${POSTGRES_NOTIFICATION_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_NOTIFICATION_PASSWORD:-postgres}
     ports:
-      - "5433:5432"
+      - "5435:5432"
     volumes:
       - postgres-notification-data:/var/lib/postgresql/data
     networks:
@@ -47,7 +45,7 @@ services:
     environment:
       MONGO_INITDB_DATABASE: monitoringdb
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongodb-data:/data/db
     networks:
@@ -61,11 +59,11 @@ services:
 
   eureka-server:
     build:
-      context: ./eureka-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: eureka-server/Dockerfile
     container_name: eureka-server
     ports:
-      - "8761:8761"
+      - "8762:8761"
     networks:
       - basestation-network
     restart: unless-stopped
@@ -87,7 +85,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     ports:
-      - "8081:8081"
+      - "8084:8081"
     depends_on:
       postgres-basestation:
         condition: service_healthy
@@ -108,7 +106,7 @@ services:
       SPRING_DATA_MONGODB_DATABASE: monitoringdb
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     ports:
-      - "8082:8082"
+      - "8085:8082"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -129,7 +127,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_NOTIFICATION_PASSWORD:-postgres}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     ports:
-      - "8083:8083"
+      - "8086:8083"
     depends_on:
       postgres-notification:
         condition: service_healthy
@@ -156,6 +154,21 @@ services:
     networks:
       - basestation-network
     restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=http://api-gateway:8080/api/v1
 
 volumes:
   postgres-basestation-data:

@@ -8,11 +8,11 @@ COPY notification-service/pom.xml ./notification-service/
 COPY api-gateway/pom.xml ./api-gateway/
 RUN mvn dependency:go-offline -B
 COPY eureka-server ./eureka-server
-RUN mvn clean package -DskipTests -pl eureka-server -am
+RUN mvn clean package spring-boot:repackage -DskipTests -pl eureka-server -am
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
-COPY --from=build /app/eureka-server/target/*.jar app.jar
+COPY --from=build /app/eureka-server/target/eureka-server-*.jar app.jar
 EXPOSE 8761
 ENTRYPOINT ["java", "-jar", "app.jar"]
 

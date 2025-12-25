@@ -8,11 +8,11 @@ COPY notification-service/pom.xml ./notification-service/
 COPY api-gateway/pom.xml ./api-gateway/
 RUN mvn dependency:go-offline -B
 COPY monitoring-service ./monitoring-service
-RUN mvn clean package -DskipTests -pl monitoring-service -am
+RUN mvn clean package spring-boot:repackage -DskipTests -pl monitoring-service -am
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
-COPY --from=build /app/monitoring-service/target/*.jar app.jar
+COPY --from=build /app/monitoring-service/target/monitoring-service-*.jar app.jar
 EXPOSE 8082
 ENTRYPOINT ["java", "-jar", "app.jar"]
 

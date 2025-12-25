@@ -8,11 +8,11 @@ COPY notification-service/pom.xml ./notification-service/
 COPY api-gateway/pom.xml ./api-gateway/
 RUN mvn dependency:go-offline -B
 COPY api-gateway ./api-gateway
-RUN mvn clean package -DskipTests -pl api-gateway -am
+RUN mvn clean package spring-boot:repackage -DskipTests -pl api-gateway -am
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
-COPY --from=build /app/api-gateway/target/*.jar app.jar
+COPY --from=build /app/api-gateway/target/api-gateway-*.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
 
