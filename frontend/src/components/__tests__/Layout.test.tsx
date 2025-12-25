@@ -18,11 +18,11 @@ describe('Layout', () => {
     )
 
     expect(screen.getAllByText('Base Station O&M')[0]).toBeInTheDocument()
-    expect(screen.getByText('Dashboard')).toBeInTheDocument()
-    expect(screen.getByText('Stations')).toBeInTheDocument()
-    expect(screen.getByText('Map View')).toBeInTheDocument()
-    expect(screen.getByText('Alerts')).toBeInTheDocument()
-    expect(screen.getByText('Metrics')).toBeInTheDocument()
+    expect(screen.getAllByText('Dashboard')[0]).toBeInTheDocument()
+    expect(screen.getAllByText('Stations')[0]).toBeInTheDocument()
+    expect(screen.getAllByText('Map View')[0]).toBeInTheDocument()
+    expect(screen.getAllByText('Alerts')[0]).toBeInTheDocument()
+    expect(screen.getAllByText('Metrics')[0]).toBeInTheDocument()
   })
 
   it('renders children content', () => {
