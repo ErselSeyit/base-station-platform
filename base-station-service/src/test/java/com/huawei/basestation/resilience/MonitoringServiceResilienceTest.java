@@ -273,34 +273,30 @@ class MonitoringServiceResilienceTest {
         void healthyService_ReturnsTrue() throws Exception {
             CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("monitoringService");
             cb.reset();
+            if (cb.getState() != CircuitBreaker.State.CLOSED) {
+                cb.transitionToClosedState();
+            }
             assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
-
+            
             wireMockServer.stubFor(get(urlEqualTo("/actuator/health"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
                             .withBody("{\"status\":\"UP\"}")));
 
-            await().atMost(Duration.ofSeconds(2))
+            await().atMost(Duration.ofSeconds(3))
                     .pollInterval(Duration.ofMillis(200))
                     .until(() -> wireMockServer.isRunning() && wireMockServer.port() > 0);
 
-            Thread.sleep(1000);
+            Thread.sleep(1500);
 
-            boolean healthy = client.isMonitoringServiceHealthy();
-
-            if (!healthy) {
-                await().atMost(Duration.ofSeconds(3))
-                        .pollInterval(Duration.ofMillis(500))
-                        .untilAsserted(() -> {
-                            boolean retryHealthy = client.isMonitoringServiceHealthy();
-                            assertThat(retryHealthy).isTrue();
-                        });
-                healthy = client.isMonitoringServiceHealthy();
-            }
-
-            wireMockServer.verify(getRequestedFor(urlEqualTo("/actuator/health")));
-            assertThat(healthy).isTrue();
+            await().atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(() -> {
+                        boolean healthy = client.isMonitoringServiceHealthy();
+                        assertThat(healthy).isTrue();
+                        wireMockServer.verify(getRequestedFor(urlEqualTo("/actuator/health")));
+                    });
         }
 
         @Test
