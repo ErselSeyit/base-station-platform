@@ -6,6 +6,7 @@ COPY base-station-service/pom.xml ./base-station-service/
 COPY monitoring-service/pom.xml ./monitoring-service/
 COPY notification-service/pom.xml ./notification-service/
 COPY api-gateway/pom.xml ./api-gateway/
+COPY auth-service/pom.xml ./auth-service/
 RUN mvn dependency:go-offline -B
 COPY notification-service ./notification-service
 RUN mvn clean package spring-boot:repackage -DskipTests -pl notification-service -am
