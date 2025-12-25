@@ -1,4 +1,4 @@
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM maven:3.9.12-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY pom.xml .
 COPY eureka-server/pom.xml ./eureka-server/
@@ -11,7 +11,7 @@ RUN mvn dependency:go-offline -B
 COPY api-gateway ./api-gateway
 RUN mvn clean package spring-boot:repackage -DskipTests -pl api-gateway -am
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/api-gateway/target/api-gateway-*.jar app.jar
 EXPOSE 8080
