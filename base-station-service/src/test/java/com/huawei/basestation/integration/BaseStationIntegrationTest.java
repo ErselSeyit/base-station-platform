@@ -48,7 +48,13 @@ import com.huawei.basestation.repository.BaseStationRepository;
  * 
  * @see <a href="https://testcontainers.com/">Testcontainers</a>
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {IntegrationTestApplication.class},
+        properties = {
+                "eureka.client.enabled=false",
+                "spring.cache.type=none"
+        })
 @AutoConfigureMockMvc
 @Testcontainers
 @DisabledIf("dockerNotAvailable")
@@ -78,6 +84,7 @@ class BaseStationIntegrationTest {
         // Disable Redis for tests
         registry.add("spring.data.redis.host", () -> "localhost");
         registry.add("spring.cache.type", () -> "none");
+        registry.add("monitoring.service.url", () -> "http://localhost:8082");
     }
 
     @AfterAll

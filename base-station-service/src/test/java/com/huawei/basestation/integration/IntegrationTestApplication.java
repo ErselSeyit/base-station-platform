@@ -1,32 +1,29 @@
-package com.huawei.basestation.contract;
+package com.huawei.basestation.integration;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration;
-import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.cloud.netflix.eureka.EurekaClientAutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
-@SpringBootApplication(
-        exclude = {
-                RedisAutoConfiguration.class,
-                RedisRepositoriesAutoConfiguration.class,
-                EurekaClientAutoConfiguration.class
-        })
+@SpringBootApplication(exclude = {
+        RedisAutoConfiguration.class,
+        RedisRepositoriesAutoConfiguration.class,
+        EurekaClientAutoConfiguration.class
+})
 @ComponentScan(
         basePackages = "com.huawei.basestation",
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.ASSIGNABLE_TYPE,
                 classes = com.huawei.basestation.BaseStationServiceApplication.class
         ))
-@EntityScan("com.huawei.basestation.model")
-@EnableJpaRepositories("com.huawei.basestation.repository")
-public class ContractTestApplication {
+@EnableJpaAuditing
+public class IntegrationTestApplication {
     public static void main(String[] args) {
-        SpringApplication.run(ContractTestApplication.class, args);
+        SpringApplication.run(IntegrationTestApplication.class, args);
     }
 }
 

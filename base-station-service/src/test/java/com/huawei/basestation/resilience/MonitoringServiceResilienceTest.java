@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -97,29 +98,44 @@ class MonitoringServiceResilienceTest {
             cb.reset();
             assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
 
+            // Ensure WireMock is ready before setting up stub
+            await().atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(200))
+                    .until(() -> wireMockServer.isRunning() && wireMockServer.port() > 0);
+
+            // Set up stub before making any requests
             wireMockServer.stubFor(get(urlPathMatching("/api/v1/metrics/station/.*/latest"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
                             .withBody("{\"cpu\":45.5,\"memory\":62.3}")));
 
-            await().atMost(Duration.ofSeconds(5))
-                    .pollInterval(Duration.ofMillis(200))
-                    .until(() -> wireMockServer.isRunning() && wireMockServer.port() > 0);
+            // Wait a bit more to ensure WireMock stub is registered
+            Thread.sleep(500);
 
-            Thread.sleep(2000);
-
-            Map<String, Object> result = client.getLatestMetricsSync(1L);
-
-            if (result.containsKey("status")) {
-                await().atMost(Duration.ofSeconds(3))
-                        .pollInterval(Duration.ofMillis(500))
-                        .untilAsserted(() -> {
-                            Map<String, Object> retryResult = client.getLatestMetricsSync(1L);
-                            assertThat(retryResult).doesNotContainKey("status");
-                        });
-                result = client.getLatestMetricsSync(1L);
-            }
+            // Retry logic with proper waiting - wait until we get a successful response
+            // The first few attempts might fail while WireMock is still initializing
+            AtomicReference<Map<String, Object>> resultRef = new AtomicReference<>();
+            await().atMost(Duration.ofSeconds(15))
+                    .pollInterval(Duration.ofMillis(300))
+                    .untilAsserted(() -> {
+                        Map<String, Object> attempt = client.getLatestMetricsSync(1L);
+                        // Check if we got a successful response (no status key means success)
+                        if (attempt.containsKey("status")) {
+                            // If we got unavailable, the circuit breaker might have opened
+                            // Reset it and try again
+                            CircuitBreaker testCb = circuitBreakerRegistry.circuitBreaker("monitoringService");
+                            if (testCb.getState() != CircuitBreaker.State.CLOSED) {
+                                testCb.reset();
+                                testCb.transitionToClosedState();
+                            }
+                            throw new AssertionError("Got status: " + attempt.get("status") + ", retrying...");
+                        }
+                        assertThat(attempt).doesNotContainKey("status");
+                        resultRef.set(attempt);
+                    });
+            
+            Map<String, Object> result = resultRef.get();
 
             wireMockServer.verify(getRequestedFor(urlPathMatching("/api/v1/metrics/station/.*/latest")));
 

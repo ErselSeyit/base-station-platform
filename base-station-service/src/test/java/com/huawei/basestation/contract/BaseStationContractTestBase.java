@@ -38,6 +38,7 @@ public abstract class BaseStationContractTestBase {
         registry.add("spring.cache.type", () -> "none");
         registry.add("spring.data.redis.host", () -> "localhost");
         registry.add("spring.jpa.properties.hibernate.globally_quoted_identifiers", () -> "true");
+        registry.add("monitoring.service.url", () -> "http://localhost:8082");
     }
 
     @BeforeEach
