@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,13 +22,19 @@ import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.MetricData;
 import com.huawei.monitoring.model.MetricType;
 import com.huawei.monitoring.repository.MetricDataRepository;
+import com.huawei.monitoring.websocket.MetricsWebSocketHandler;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings("null")
 class MonitoringServiceTest {
 
     @Mock
     private MetricDataRepository repository;
+
+    @Mock
+    private MetricsWebSocketHandler webSocketHandler;
+
+    @Mock
+    private AlertingService alertingService;
 
     @InjectMocks
     private MonitoringService service;
@@ -55,8 +62,11 @@ class MonitoringServiceTest {
     }
 
     @Test
+    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
     void recordMetric_savesAndReturnsMetric() {
         when(repository.save(any(MetricData.class))).thenReturn(testMetric);
+        doNothing().when(webSocketHandler).broadcastMetric(any(MetricDataDTO.class));
+        when(alertingService.evaluateMetric(any(MetricDataDTO.class))).thenReturn(List.of());
 
         MetricDataDTO result = service.recordMetric(testDTO);
 
@@ -64,6 +74,8 @@ class MonitoringServiceTest {
         assertEquals(1L, result.getStationId());
         assertEquals(MetricType.CPU_USAGE, result.getMetricType());
         verify(repository).save(any(MetricData.class));
+        verify(webSocketHandler).broadcastMetric(any(MetricDataDTO.class));
+        verify(alertingService).evaluateMetric(any(MetricDataDTO.class));
     }
 
     @Test
