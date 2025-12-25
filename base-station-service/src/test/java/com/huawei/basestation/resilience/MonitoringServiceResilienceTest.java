@@ -48,7 +48,7 @@ class MonitoringServiceResilienceTest {
     static void configureProperties(DynamicPropertyRegistry registry) {
         wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
         wireMockServer.start();
-        
+
         String baseUrl = wireMockServer.baseUrl();
         registry.add("monitoring.service.url", () -> baseUrl);
         registry.add("eureka.client.enabled", () -> "false");
@@ -279,7 +279,7 @@ class MonitoringServiceResilienceTest {
                 cb.transitionToClosedState();
             }
             assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
-            
+
             wireMockServer.stubFor(get(urlEqualTo("/actuator/health"))
                     .willReturn(aResponse()
                             .withStatus(200)
