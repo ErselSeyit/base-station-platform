@@ -156,15 +156,21 @@ jobs:
         docker build -t eureka-server:latest -f eureka-server/Dockerfile .
         docker build -t frontend:latest -f frontend/Dockerfile ./frontend
     
+    - name: Save Docker images
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      run: |
+        mkdir -p docker-images
+        docker save base-station-service:latest -o docker-images/base-station-service.tar
+        docker save monitoring-service:latest -o docker-images/monitoring-service.tar
+        docker save notification-service:latest -o docker-images/notification-service.tar
+        docker save api-gateway:latest -o docker-images/api-gateway.tar
+        docker save eureka-server:latest -o docker-images/eureka-server.tar
+        docker save frontend:latest -o docker-images/frontend.tar
+    
     - name: Upload Docker images
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
         name: docker-images
-        path: |
-          base-station-service:latest
-          monitoring-service:latest
-          notification-service:latest
-          api-gateway:latest
-          eureka-server:latest
-          frontend:latest
+        path: docker-images/*.tar
+        retention-days: 7
