@@ -1,21 +1,21 @@
 package com.huawei.basestation.client;
 
-import java.time.Duration;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 
 /**
  * Client for calling the Monitoring Service with resilience patterns.
@@ -40,11 +40,12 @@ public class MonitoringServiceClient {
 
     public MonitoringServiceClient(
             RestClient.Builder restClientBuilder,
-            @Value("${monitoring.service.url:http://localhost:8082}") String monitoringServiceUrl) {
+            @Value("${monitoring.service.url:http://localhost:8082}") @NonNull String monitoringServiceUrl) {
+        this.monitoringServiceUrl = Objects.requireNonNull(monitoringServiceUrl,
+                "Monitoring service URL must not be null");
         this.restClient = restClientBuilder
-                .baseUrl(monitoringServiceUrl)
+                .baseUrl(this.monitoringServiceUrl)
                 .build();
-        this.monitoringServiceUrl = monitoringServiceUrl;
     }
 
     /**
@@ -60,18 +61,18 @@ public class MonitoringServiceClient {
     public CompletableFuture<Map<String, Object>> getLatestMetrics(Long stationId) {
         return CompletableFuture.supplyAsync(() -> {
             log.debug("Fetching metrics for station {} from {}", stationId, monitoringServiceUrl);
-            
+
             @SuppressWarnings("unchecked")
             Map<String, Object> metrics = restClient.get()
                     .uri("/api/v1/metrics/station/{stationId}/latest", stationId)
                     .retrieve()
                     .body(Map.class);
-            
+
             // Cache successful response for fallback
             if (metrics != null) {
                 cachedMetrics = metrics;
             }
-            
+
             return metrics != null ? metrics : Collections.emptyMap();
         });
     }
@@ -84,17 +85,17 @@ public class MonitoringServiceClient {
     @Retry(name = MONITORING_SERVICE)
     public Map<String, Object> getLatestMetricsSync(Long stationId) {
         log.debug("Fetching metrics synchronously for station {}", stationId);
-        
+
         @SuppressWarnings("unchecked")
         Map<String, Object> metrics = restClient.get()
                 .uri("/api/v1/metrics/station/{stationId}/latest", stationId)
                 .retrieve()
                 .body(Map.class);
-        
+
         if (metrics != null) {
             cachedMetrics = metrics;
         }
-        
+
         return metrics != null ? metrics : Collections.emptyMap();
     }
 
@@ -128,10 +129,9 @@ public class MonitoringServiceClient {
     private CompletableFuture<Map<String, Object>> getMetricsFallback(Long stationId, Throwable t) {
         log.warn("Circuit breaker fallback for station {}. Reason: {}", stationId, t.getMessage());
         return CompletableFuture.completedFuture(
-                cachedMetrics.isEmpty() 
+                cachedMetrics.isEmpty()
                         ? Map.of("status", "unavailable", "stationId", stationId)
-                        : cachedMetrics
-        );
+                        : cachedMetrics);
     }
 
     /**
@@ -141,8 +141,7 @@ public class MonitoringServiceClient {
     private CompletableFuture<Map<String, Object>> getMetricsTimeoutFallback(Long stationId, Throwable t) {
         log.warn("Timeout fallback for station {}. Service too slow.", stationId);
         return CompletableFuture.completedFuture(
-                Map.of("status", "timeout", "stationId", stationId, "message", "Service response too slow")
-        );
+                Map.of("status", "timeout", "stationId", stationId, "message", "Service response too slow"));
     }
 
     /**
@@ -163,4 +162,3 @@ public class MonitoringServiceClient {
         return false;
     }
 }
-
