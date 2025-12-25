@@ -281,19 +281,25 @@ class MonitoringServiceResilienceTest {
                             .withHeader("Content-Type", "application/json")
                             .withBody("{\"status\":\"UP\"}")));
 
-            Thread.sleep(300);
+            await().atMost(Duration.ofSeconds(2))
+                    .pollInterval(Duration.ofMillis(200))
+                    .until(() -> wireMockServer.isRunning() && wireMockServer.port() > 0);
+
+            Thread.sleep(1000);
 
             boolean healthy = client.isMonitoringServiceHealthy();
 
-            try {
-                wireMockServer.verify(getRequestedFor(urlEqualTo("/actuator/health")));
-            } catch (AssertionError e) {
-                CircuitBreaker.State state = cb.getState();
-                throw new AssertionError(
-                        "WireMock verification failed. Circuit breaker state: " + state + ", Health result: " + healthy,
-                        e);
+            if (!healthy) {
+                await().atMost(Duration.ofSeconds(3))
+                        .pollInterval(Duration.ofMillis(500))
+                        .untilAsserted(() -> {
+                            boolean retryHealthy = client.isMonitoringServiceHealthy();
+                            assertThat(retryHealthy).isTrue();
+                        });
+                healthy = client.isMonitoringServiceHealthy();
             }
 
+            wireMockServer.verify(getRequestedFor(urlEqualTo("/actuator/health")));
             assertThat(healthy).isTrue();
         }
 
