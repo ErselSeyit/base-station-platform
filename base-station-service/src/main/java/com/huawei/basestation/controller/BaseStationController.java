@@ -2,6 +2,7 @@ package com.huawei.basestation.controller;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +25,6 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/stations")
-@SuppressWarnings("null")
 public class BaseStationController {
 
     private final BaseStationService service;
@@ -35,12 +35,13 @@ public class BaseStationController {
 
     @PostMapping
     public ResponseEntity<BaseStationDTO> createStation(@Valid @RequestBody BaseStationDTO dto) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createStation(dto));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.createStation(Objects.requireNonNull(dto, "Station DTO cannot be null")));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<BaseStationDTO> getStationById(@PathVariable Long id) {
-        return service.getStationById(id)
+        return service.getStationById(Objects.requireNonNull(id, "Station ID cannot be null"))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -63,7 +64,9 @@ public class BaseStationController {
             @PathVariable Long id,
             @Valid @RequestBody BaseStationDTO dto) {
         try {
-            return ResponseEntity.ok(service.updateStation(id, dto));
+            return ResponseEntity.ok(service.updateStation(
+                    Objects.requireNonNull(id, "Station ID cannot be null"),
+                    Objects.requireNonNull(dto, "Station DTO cannot be null")));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }
@@ -72,7 +75,7 @@ public class BaseStationController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteStation(@PathVariable Long id) {
         try {
-            service.deleteStation(id);
+            service.deleteStation(Objects.requireNonNull(id, "Station ID cannot be null"));
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
@@ -85,12 +88,17 @@ public class BaseStationController {
             @RequestParam Double maxLat,
             @RequestParam Double minLon,
             @RequestParam Double maxLon) {
-        return ResponseEntity.ok(service.findStationsInArea(minLat, maxLat, minLon, maxLon));
+        return ResponseEntity.ok(service.findStationsInArea(
+                Objects.requireNonNull(minLat, "Minimum latitude cannot be null"),
+                Objects.requireNonNull(maxLat, "Maximum latitude cannot be null"),
+                Objects.requireNonNull(minLon, "Minimum longitude cannot be null"),
+                Objects.requireNonNull(maxLon, "Maximum longitude cannot be null")));
     }
 
     @GetMapping("/stats/count")
     public ResponseEntity<Map<String, Long>> getStationCountByStatus(@RequestParam StationStatus status) {
-        return ResponseEntity.ok(Map.of("count", service.getStationCountByStatus(status)));
+        return ResponseEntity.ok(Map.of("count",
+                service.getStationCountByStatus(Objects.requireNonNull(status, "Status cannot be null"))));
     }
 
     /**
@@ -103,6 +111,9 @@ public class BaseStationController {
             @RequestParam Double lat,
             @RequestParam Double lon,
             @RequestParam(defaultValue = "10") Double radiusKm) {
-        return ResponseEntity.ok(service.findStationsNearPoint(lat, lon, radiusKm));
+        return ResponseEntity.ok(service.findStationsNearPoint(
+                Objects.requireNonNull(lat, "Latitude cannot be null"),
+                Objects.requireNonNull(lon, "Longitude cannot be null"),
+                Objects.requireNonNull(radiusKm, "Radius cannot be null")));
     }
 }

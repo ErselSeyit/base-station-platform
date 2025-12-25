@@ -1,6 +1,7 @@
 package com.huawei.basestation.service;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -14,7 +15,6 @@ import com.huawei.basestation.repository.BaseStationRepository;
 
 @Service
 @Transactional
-@SuppressWarnings("null")
 public class BaseStationService {
 
     private final BaseStationRepository repository;
@@ -24,8 +24,9 @@ public class BaseStationService {
     }
 
     public BaseStationDTO createStation(BaseStationDTO dto) {
-        if (repository.findByStationName(dto.getStationName()).isPresent()) {
-            throw new IllegalArgumentException("Station with name " + dto.getStationName() + " already exists");
+        String stationName = Objects.requireNonNull(dto.getStationName(), "Station name cannot be null");
+        if (repository.findByStationName(stationName).isPresent()) {
+            throw new IllegalArgumentException("Station with name " + stationName + " already exists");
         }
         BaseStation station = convertToEntity(dto);
         return convertToDTO(repository.save(station));
@@ -33,37 +34,46 @@ public class BaseStationService {
 
     @Transactional(readOnly = true)
     public Optional<BaseStationDTO> getStationById(Long id) {
-        return repository.findById(id).map(this::convertToDTO);
+        return Objects.requireNonNull(
+                repository.findById(id).map(this::convertToDTO),
+                "Repository returned null Optional");
     }
 
     @Transactional(readOnly = true)
     public List<BaseStationDTO> getAllStations() {
-        return repository.findAll().stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findAll().stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Repository returned null list");
     }
 
     @Transactional(readOnly = true)
     public List<BaseStationDTO> getStationsByStatus(StationStatus status) {
-        return repository.findByStatus(status).stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findByStatus(status).stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Repository returned null list");
     }
 
     @Transactional(readOnly = true)
     public List<BaseStationDTO> getStationsByType(StationType type) {
-        return repository.findByStationType(type).stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findByStationType(type).stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Repository returned null list");
     }
 
     public BaseStationDTO updateStation(Long id, BaseStationDTO dto) {
         BaseStation station = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Station not found with id: " + id));
 
-        if (!station.getStationName().equals(dto.getStationName()) 
-                && repository.findByStationName(dto.getStationName()).isPresent()) {
-            throw new IllegalArgumentException("Station with name " + dto.getStationName() + " already exists");
+        String newStationName = Objects.requireNonNull(dto.getStationName(), "Station name cannot be null");
+        if (!station.getStationName().equals(newStationName)
+                && repository.findByStationName(newStationName).isPresent()) {
+            throw new IllegalArgumentException("Station with name " + newStationName + " already exists");
         }
 
         station.setStationName(dto.getStationName());
@@ -87,9 +97,11 @@ public class BaseStationService {
 
     @Transactional(readOnly = true)
     public List<BaseStationDTO> findStationsInArea(Double minLat, Double maxLat, Double minLon, Double maxLon) {
-        return repository.findStationsInArea(minLat, maxLat, minLon, maxLon).stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findStationsInArea(minLat, maxLat, minLon, maxLon).stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Repository returned null list");
     }
 
     @Transactional(readOnly = true)
@@ -103,9 +115,11 @@ public class BaseStationService {
      */
     @Transactional(readOnly = true)
     public List<BaseStationDTO> findStationsNearPoint(Double lat, Double lon, Double radiusKm) {
-        return repository.findStationsNearPoint(lat, lon, radiusKm).stream()
-                .map(this::convertToDTO)
-                .toList();
+        return Objects.requireNonNull(
+                repository.findStationsNearPoint(lat, lon, radiusKm).stream()
+                        .map(this::convertToDTO)
+                        .toList(),
+                "Repository returned null list");
     }
 
     private BaseStation convertToEntity(BaseStationDTO dto) {
