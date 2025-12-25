@@ -15,19 +15,8 @@ import com.huawei.basestation.service.BaseStationService;
 
 import io.restassured.RestAssured;
 
-/**
- * Base class for Spring Cloud Contract generated tests.
- * 
- * The contract plugin generates test classes that extend this base class.
- * This class sets up the test environment with:
- * - RestAssured configuration
- * - Test data seeding
- * - H2 in-memory database
- * 
- * Contract tests verify that the API implementation matches the contract
- * definitions, ensuring API compatibility between services.
- */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {ContractTestApplication.class})
 public abstract class BaseStationContractTestBase {
 
     @LocalServerPort
@@ -41,15 +30,14 @@ public abstract class BaseStationContractTestBase {
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        // Use H2 for contract tests
         registry.add("spring.datasource.url", () -> "jdbc:h2:mem:contractdb;DB_CLOSE_DELAY=-1");
         registry.add("spring.datasource.driver-class-name", () -> "org.h2.Driver");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.H2Dialect");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-        // Disable Eureka and Redis
         registry.add("eureka.client.enabled", () -> "false");
         registry.add("spring.cache.type", () -> "none");
         registry.add("spring.data.redis.host", () -> "localhost");
+        registry.add("spring.jpa.properties.hibernate.globally_quoted_identifiers", () -> "true");
     }
 
     @BeforeEach
@@ -57,17 +45,11 @@ public abstract class BaseStationContractTestBase {
         RestAssured.baseURI = "http://localhost";
         RestAssured.port = port;
         
-        // Clean and seed test data
         repository.deleteAll();
         seedTestData();
     }
 
-    /**
-     * Seeds the database with test data required by contracts.
-     * Each contract may reference specific station IDs or expect certain data patterns.
-     */
     private void seedTestData() {
-        // Create station with ID 1 (required by shouldReturnStationById contract)
         BaseStationDTO station1 = new BaseStationDTO();
         station1.setStationName("BS-001");
         station1.setLocation("Downtown NYC");
@@ -78,7 +60,6 @@ public abstract class BaseStationContractTestBase {
         station1.setPowerConsumption(1500.0);
         service.createStation(station1);
 
-        // Create additional stations for list/search contracts
         BaseStationDTO station2 = new BaseStationDTO();
         station2.setStationName("BS-002");
         station2.setLocation("Midtown NYC");
@@ -100,4 +81,3 @@ public abstract class BaseStationContractTestBase {
         service.createStation(station3);
     }
 }
-

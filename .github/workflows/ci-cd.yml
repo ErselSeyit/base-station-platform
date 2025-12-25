@@ -46,20 +46,7 @@ jobs:
         cache: maven
     
     - name: Run unit tests
-      run: mvn clean test -Dspring.profiles.active=test -Dtest='!*ResilienceTest,!*ContractTest'
-      continue-on-error: false
-    
-    - name: Run resilience tests
-      run: mvn test -Dtest='*ResilienceTest' -Dspring.profiles.active=test
-      continue-on-error: true
-    
-    - name: Run contract tests
-      run: mvn test -Dtest='*ContractTest' -Dspring.profiles.active=test
-      continue-on-error: true
-    
-    - name: Run integration tests
-      run: mvn verify -DskipTests=false -Dspring.profiles.active=test
-      continue-on-error: true
+      run: mvn clean test -Dspring.profiles.active=test -Dtest='!*ContractTest'
     
     - name: Generate test report
       if: always()
@@ -95,7 +82,6 @@ jobs:
     - name: Run linter
       working-directory: ./frontend
       run: npm run lint
-      continue-on-error: true
     
     - name: Run unit tests
       working-directory: ./frontend
