@@ -1,10 +1,16 @@
 import {
   Add as AddIcon,
+  CellTower as CellTowerIcon,
+  Close as CloseIcon,
+  MyLocation as CoordinatesIcon,
   Delete as DeleteIcon,
+  Description as DescriptionIcon,
   Edit as EditIcon,
   LocationOn as LocationIcon,
+  ElectricBolt as PowerIcon,
+  Settings as SettingsIcon,
   Visibility as ViewIcon,
-} from '@mui/icons-material'
+} from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -15,13 +21,10 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
-  FormControl,
+  Divider,
   IconButton,
-  InputLabel,
-  MenuItem,
-  Select,
-  SelectChangeEvent,
+  InputAdornment,
+  Slide,
   Table,
   TableBody,
   TableCell,
@@ -31,13 +34,22 @@ import {
   TextField,
   Tooltip,
   Typography,
-} from '@mui/material'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useTheme } from '../contexts/ThemeContext'
-import { stationApi } from '../services/api'
-import { BaseStation, StationStatus, StationType } from '../types'
+} from '@mui/material';
+import { TransitionProps } from '@mui/material/transitions';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../contexts/ThemeContext';
+import { stationApi } from '../services/api';
+import { BaseStation, StationStatus, StationType } from '../types';
+
+// Slide transition for dialog
+const Transition = React.forwardRef(function Transition(
+  props: TransitionProps & { children: React.ReactElement },
+  ref: React.Ref<unknown>,
+) {
+  return <Slide direction="up" ref={ref} {...props} />;
+});
 
 export default function Stations() {
   const navigate = useNavigate()
@@ -111,6 +123,9 @@ export default function Stations() {
       setFormData(station)
     } else {
       resetForm()
+    }
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
     }
     setOpenDialog(true)
   }
@@ -335,38 +350,143 @@ export default function Stations() {
         </CardContent>
       </Card>
 
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingStation ? 'Edit Station' : 'Create New Station'}
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2 }}>
-            <TextField
-              id="station-name"
-              name="stationName"
-              fullWidth
-              label="Station Name"
-              value={formData.stationName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, stationName: e.target.value })}
-              margin="normal"
-              required
-              inputProps={{
-                name: 'stationName',
+      <Dialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        TransitionComponent={Transition}
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            background: mode === 'dark'
+              ? 'linear-gradient(145deg, #1a1f3a 0%, #0f1425 100%)'
+              : 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
+            border: mode === 'dark'
+              ? '1px solid rgba(100, 181, 246, 0.2)'
+              : '1px solid rgba(0, 0, 0, 0.08)',
+            boxShadow: mode === 'dark'
+              ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+              : '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          },
+        }}
+      >
+        {/* Header with gradient */}
+        <Box
+          sx={{
+            background: mode === 'dark'
+              ? 'linear-gradient(135deg, rgba(100, 181, 246, 0.15) 0%, rgba(186, 104, 200, 0.15) 100%)'
+              : 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(156, 39, 176, 0.1) 100%)',
+            px: 3,
+            py: 2.5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Box display="flex" alignItems="center" gap={2}>
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: mode === 'dark'
+                  ? 'linear-gradient(135deg, #64b5f6 0%, #42a5f5 100%)'
+                  : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                boxShadow: mode === 'dark'
+                  ? '0 4px 14px rgba(100, 181, 246, 0.3)'
+                  : '0 4px 14px rgba(25, 118, 210, 0.3)',
               }}
-            />
+            >
+              <CellTowerIcon sx={{ color: 'white', fontSize: 28 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                {editingStation ? 'Edit Station' : 'New Station'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {editingStation ? 'Update station configuration' : 'Configure a new base station'}
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton
+            onClick={() => setOpenDialog(false)}
+            sx={{
+              color: 'text.secondary',
+              '&:hover': {
+                background: mode === 'dark'
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(0,0,0,0.05)',
+              },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
+
+        <DialogContent sx={{ px: 3, py: 3 }}>
+          <Box component="form" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} noValidate>
+            {/* Basic Information Section */}
+            <Box sx={{ mb: 3 }}>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <CellTowerIcon sx={{ color: 'primary.main', fontSize: 20 }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'primary.main' }}>
+                  Basic Information
+                </Typography>
+              </Box>
+              <TextField
+                id="station-name"
+                name="stationName"
+                fullWidth
+                label="Station Name"
+                placeholder="e.g., BS-NYC-001"
+                value={formData.stationName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, stationName: e.target.value })}
+                required
+                autoComplete="organization"
+                autoFocus
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <CellTowerIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ mb: 2 }}
+              />
             <TextField
               id="station-location"
               name="location"
               fullWidth
               label="Location"
+              placeholder="e.g., New York, NY, USA"
               value={formData.location}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, location: e.target.value })}
-              margin="normal"
               required
-              inputProps={{
-                name: 'location',
+              autoComplete="street-address"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LocationIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                  </InputAdornment>
+                ),
               }}
             />
+          </Box>
+
+          <Divider sx={{ my: 3, borderColor: mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }} />
+
+          {/* Coordinates Section */}
+          <Box sx={{ mb: 3 }}>
+            <Box display="flex" alignItems="center" gap={1} mb={2}>
+              <CoordinatesIcon sx={{ color: 'secondary.main', fontSize: 20 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'secondary.main' }}>
+                Coordinates
+              </Typography>
+            </Box>
             <Box display="flex" gap={2}>
               <TextField
                 id="station-latitude"
@@ -374,13 +494,17 @@ export default function Stations() {
                 fullWidth
                 label="Latitude"
                 type="number"
-                value={formData.latitude}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, latitude: parseFloat(e.target.value) })}
-                margin="normal"
+                placeholder="40.7128"
+                value={formData.latitude || ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, latitude: parseFloat(e.target.value) || 0 })}
                 required
+                autoComplete="off"
                 inputProps={{
-                  name: 'latitude',
+                  step: 'any',
+                  min: -90,
+                  max: 90,
                 }}
+                helperText="Range: -90 to 90"
               />
               <TextField
                 id="station-longitude"
@@ -388,101 +512,168 @@ export default function Stations() {
                 fullWidth
                 label="Longitude"
                 type="number"
-                value={formData.longitude}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, longitude: parseFloat(e.target.value) })}
-                margin="normal"
+                placeholder="-74.0060"
+                value={formData.longitude || ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, longitude: parseFloat(e.target.value) || 0 })}
                 required
+                autoComplete="off"
                 inputProps={{
-                  name: 'longitude',
+                  step: 'any',
+                  min: -180,
+                  max: 180,
                 }}
+                helperText="Range: -180 to 180"
               />
             </Box>
-            <FormControl fullWidth margin="normal">
-              <InputLabel id="station-type-label">
-                Station Type
-              </InputLabel>
-              <Select
-                id="station-type"
+          </Box>
+
+          <Divider sx={{ my: 3, borderColor: mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }} />
+
+          {/* Configuration Section */}
+          <Box sx={{ mb: 3 }}>
+            <Box display="flex" alignItems="center" gap={1} mb={2}>
+              <SettingsIcon sx={{ color: 'warning.main', fontSize: 20 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'warning.main' }}>
+                Configuration
+              </Typography>
+            </Box>
+            <Box display="flex" gap={2} mb={2}>
+              <TextField
+                id="station-type-select"
                 name="stationType"
-                labelId="station-type-label"
-                value={formData.stationType}
-                onChange={(e: SelectChangeEvent) => setFormData({ ...formData, stationType: e.target.value as StationType })}
+                fullWidth
+                select
                 label="Station Type"
-                inputProps={{
-                  id: 'station-type',
-                  name: 'stationType',
+                value={formData.stationType}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setFormData({ ...formData, stationType: e.target.value as StationType })
+                }
+                autoComplete="off"
+                SelectProps={{
+                  native: true,
                 }}
               >
                 {Object.values(StationType).map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
-                  </MenuItem>
+                  <option key={type} value={type}>
+                    {type.replace('_', ' ')}
+                  </option>
                 ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth margin="normal">
-              <InputLabel id="station-status-label">
-                Status
-              </InputLabel>
-              <Select
-                id="station-status"
+              </TextField>
+
+              <TextField
+                id="station-status-select"
                 name="status"
-                labelId="station-status-label"
-                value={formData.status}
-                onChange={(e: SelectChangeEvent) => setFormData({ ...formData, status: e.target.value as StationStatus })}
+                fullWidth
+                select
                 label="Status"
-                inputProps={{
-                  id: 'station-status',
-                  name: 'status',
+                value={formData.status}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setFormData({ ...formData, status: e.target.value as StationStatus })
+                }
+                autoComplete="off"
+                SelectProps={{
+                  native: true,
                 }}
               >
                 {Object.values(StationStatus).map((status) => (
-                  <MenuItem key={status} value={status}>
+                  <option key={status} value={status}>
                     {status}
-                  </MenuItem>
+                  </option>
                 ))}
-              </Select>
-            </FormControl>
+              </TextField>
+            </Box>
             <TextField
               id="station-power-consumption"
               name="powerConsumption"
               fullWidth
-              label="Power Consumption (kW)"
+              label="Power Consumption"
               type="number"
-              value={formData.powerConsumption}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, powerConsumption: parseFloat(e.target.value) })}
-              margin="normal"
+              placeholder="1500"
+              value={formData.powerConsumption || ''}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, powerConsumption: parseFloat(e.target.value) || 0 })}
+              autoComplete="off"
               inputProps={{
-                name: 'powerConsumption',
+                step: 'any',
+                min: 0,
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <PowerIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+                endAdornment: <InputAdornment position="end">kW</InputAdornment>,
               }}
             />
+          </Box>
+
+          <Divider sx={{ my: 3, borderColor: mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }} />
+
+          {/* Description Section */}
+          <Box>
+            <Box display="flex" alignItems="center" gap={1} mb={2}>
+              <DescriptionIcon sx={{ color: 'info.main', fontSize: 20 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'info.main' }}>
+                Additional Details
+              </Typography>
+            </Box>
             <TextField
               id="station-description"
               name="description"
               fullWidth
               label="Description"
+              placeholder="Enter station description, notes, or specifications..."
               value={formData.description || ''}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, description: e.target.value })}
-              margin="normal"
+              autoComplete="off"
               multiline
               rows={3}
-              inputProps={{
-                name: 'description',
-              }}
             />
           </Box>
+          </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+
+        <DialogActions sx={{ px: 3, py: 2.5, background: mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)' }}>
           <Button
+            onClick={() => setOpenDialog(false)}
+            sx={{
+              px: 3,
+              color: 'text.secondary',
+              '&:hover': { background: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
             onClick={handleSubmit}
             variant="contained"
-            disabled={createMutation.isPending || updateMutation.isPending}
+            disabled={createMutation.isPending || updateMutation.isPending || !formData.stationName || !formData.location}
+            sx={{
+              px: 4,
+              py: 1.2,
+              background: mode === 'dark'
+                ? 'linear-gradient(135deg, #64b5f6 0%, #42a5f5 100%)'
+                : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+              boxShadow: mode === 'dark'
+                ? '0 4px 14px rgba(100, 181, 246, 0.3)'
+                : '0 4px 14px rgba(25, 118, 210, 0.3)',
+              '&:hover': {
+                background: mode === 'dark'
+                  ? 'linear-gradient(135deg, #42a5f5 0%, #2196f3 100%)'
+                  : 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
+                boxShadow: mode === 'dark'
+                  ? '0 6px 20px rgba(100, 181, 246, 0.4)'
+                  : '0 6px 20px rgba(25, 118, 210, 0.4)',
+              },
+            }}
           >
             {createMutation.isPending || updateMutation.isPending ? (
-              <CircularProgress size={24} />
+              <CircularProgress size={24} sx={{ color: 'white' }} />
             ) : (
-              editingStation ? 'Update' : 'Create'
+              <>
+                {editingStation ? 'Update Station' : 'Create Station'}
+              </>
             )}
           </Button>
         </DialogActions>
