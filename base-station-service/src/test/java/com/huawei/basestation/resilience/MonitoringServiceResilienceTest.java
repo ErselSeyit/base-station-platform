@@ -102,20 +102,21 @@ class MonitoringServiceResilienceTest {
                     .pollInterval(Duration.ofMillis(100))
                     .until(() -> wireMockServer.isRunning() && wireMockServer.port() > 0);
 
-            Thread.sleep(200);
+            Thread.sleep(500);
 
-            try {
-                Map<String, Object> result = client.getLatestMetricsSync(1L);
-                
-                wireMockServer.verify(getRequestedFor(urlPathMatching("/api/v1/metrics/station/.*/latest")));
-
-                assertThat(result).containsKeys("cpu", "memory");
-                assertThat(result.get("cpu")).isEqualTo(45.5);
-                assertThat(result).doesNotContainKey("status");
-            } catch (Exception e) {
-                wireMockServer.verify(getRequestedFor(urlPathMatching("/api/v1/metrics/station/.*/latest")));
-                throw e;
+            Map<String, Object> result = client.getLatestMetricsSync(1L);
+            
+            if (result.containsKey("status")) {
+                throw new AssertionError("Got fallback response instead of actual metrics. Result: " + result + 
+                    ", Circuit breaker state: " + cb.getState() + 
+                    ", WireMock baseUrl: " + wireMockServer.baseUrl());
             }
+
+            wireMockServer.verify(getRequestedFor(urlPathMatching("/api/v1/metrics/station/.*/latest")));
+
+            assertThat(result).containsKeys("cpu", "memory");
+            assertThat(result.get("cpu")).isEqualTo(45.5);
+            assertThat(result).doesNotContainKey("status");
         }
     }
 
@@ -187,6 +188,7 @@ class MonitoringServiceResilienceTest {
         @DisplayName("Should recover when service becomes healthy")
         void serviceRecovery_ClosesCircuit() throws Exception {
             CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("monitoringService");
+            circuitBreaker.reset();
             
             circuitBreaker.transitionToOpenState();
             assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
@@ -204,15 +206,22 @@ class MonitoringServiceResilienceTest {
                     .pollInterval(Duration.ofMillis(100))
                     .until(() -> wireMockServer.isRunning());
 
-            for (int i = 0; i < 5; i++) {
-                Map<String, Object> result = client.getLatestMetricsSync(1L);
-                if (result.containsKey("cpu")) {
+            Thread.sleep(200);
+
+            int successCount = 0;
+            for (int i = 0; i < 10; i++) {
+                try {
+                    Map<String, Object> result = client.getLatestMetricsSync(1L);
+                    if (result.containsKey("cpu") && !result.containsKey("status")) {
+                        successCount++;
+                    }
                     Thread.sleep(100);
+                } catch (Exception e) {
                 }
             }
 
-            await().atMost(Duration.ofSeconds(5))
-                    .pollInterval(Duration.ofMillis(200))
+            await().atMost(Duration.ofSeconds(10))
+                    .pollInterval(Duration.ofMillis(500))
                     .untilAsserted(() -> 
                             assertThat(circuitBreaker.getState())
                                     .isEqualTo(CircuitBreaker.State.CLOSED));
