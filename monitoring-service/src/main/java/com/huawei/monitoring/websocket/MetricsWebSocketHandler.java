@@ -1,10 +1,12 @@
 package com.huawei.monitoring.websocket;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -21,11 +23,10 @@ import com.huawei.monitoring.dto.MetricDataDTO;
  * This enables dashboards to display real-time data without polling.
  */
 @Component
-@SuppressWarnings("null")
 public class MetricsWebSocketHandler extends TextWebSocketHandler {
 
     private static final Logger log = LoggerFactory.getLogger(MetricsWebSocketHandler.class);
-    
+
     private final CopyOnWriteArraySet<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
     private final ObjectMapper objectMapper;
 
@@ -34,19 +35,19 @@ public class MetricsWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
+    public void afterConnectionEstablished(@NonNull WebSocketSession session) {
         sessions.add(session);
         log.info("WebSocket connected: {} (total: {})", session.getId(), sessions.size());
     }
 
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
         sessions.remove(session);
         log.info("WebSocket disconnected: {} (total: {})", session.getId(), sessions.size());
     }
 
     @Override
-    public void handleTransportError(WebSocketSession session, Throwable exception) {
+    public void handleTransportError(@NonNull WebSocketSession session, @NonNull Throwable exception) {
         log.error("WebSocket error for session {}: {}", session.getId(), exception.getMessage());
         sessions.remove(session);
     }
@@ -61,9 +62,11 @@ public class MetricsWebSocketHandler extends TextWebSocketHandler {
         }
 
         try {
-            String json = objectMapper.writeValueAsString(metric);
+            String json = Objects.requireNonNull(
+                    objectMapper.writeValueAsString(metric),
+                    "JSON serialization cannot return null");
             TextMessage message = new TextMessage(json);
-            
+
             for (WebSocketSession session : sessions) {
                 if (session.isOpen()) {
                     try {
@@ -83,4 +86,3 @@ public class MetricsWebSocketHandler extends TextWebSocketHandler {
         return sessions.size();
     }
 }
-

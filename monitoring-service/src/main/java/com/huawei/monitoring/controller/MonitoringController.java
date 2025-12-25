@@ -3,6 +3,7 @@ package com.huawei.monitoring.controller;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +26,10 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/metrics")
-@SuppressWarnings("null")
 public class MonitoringController {
 
     private static final Logger log = LoggerFactory.getLogger(MonitoringController.class);
-    
+
     private final MonitoringService service;
 
     public MonitoringController(MonitoringService service) {
@@ -38,7 +38,8 @@ public class MonitoringController {
 
     @PostMapping
     public ResponseEntity<MetricDataDTO> recordMetric(@Valid @RequestBody MetricDataDTO dto) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.recordMetric(dto));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.recordMetric(Objects.requireNonNull(dto, "Metric DTO cannot be null")));
     }
 
     @GetMapping
@@ -53,11 +54,14 @@ public class MonitoringController {
                 return ResponseEntity.ok(service.getMetricsByTimeRange(start, end));
             }
             if (start != null) {
-                return ResponseEntity.ok(service.getMetricsByTimeRange(start, LocalDateTime.now()));
+                return ResponseEntity.ok(service.getMetricsByTimeRange(start,
+                        Objects.requireNonNull(LocalDateTime.now(), "Current time cannot be null")));
             }
             // Default: last 24 hours
-            LocalDateTime now = LocalDateTime.now();
-            return ResponseEntity.ok(service.getMetricsByTimeRange(now.minusDays(1), now));
+            LocalDateTime now = Objects.requireNonNull(LocalDateTime.now(), "Current time cannot be null");
+            return ResponseEntity.ok(service.getMetricsByTimeRange(
+                    Objects.requireNonNull(now.minusDays(1), "Start time cannot be null"),
+                    now));
         } catch (Exception e) {
             log.error("Error fetching metrics", e);
             return ResponseEntity.ok(List.of());
@@ -66,21 +70,26 @@ public class MonitoringController {
 
     @GetMapping("/station/{stationId}")
     public ResponseEntity<List<MetricDataDTO>> getMetricsByStation(@PathVariable Long stationId) {
-        return ResponseEntity.ok(service.getMetricsByStation(stationId));
+        return ResponseEntity.ok(service.getMetricsByStation(
+                Objects.requireNonNull(stationId, "Station ID cannot be null")));
     }
 
     @GetMapping("/station/{stationId}/type/{metricType}")
     public ResponseEntity<List<MetricDataDTO>> getMetricsByStationAndType(
             @PathVariable Long stationId,
             @PathVariable MetricType metricType) {
-        return ResponseEntity.ok(service.getMetricsByStationAndType(stationId, metricType));
+        return ResponseEntity.ok(service.getMetricsByStationAndType(
+                Objects.requireNonNull(stationId, "Station ID cannot be null"),
+                Objects.requireNonNull(metricType, "Metric type cannot be null")));
     }
 
     @GetMapping("/time-range")
     public ResponseEntity<List<MetricDataDTO>> getMetricsByTimeRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
-        return ResponseEntity.ok(service.getMetricsByTimeRange(start, end));
+        return ResponseEntity.ok(service.getMetricsByTimeRange(
+                Objects.requireNonNull(start, "Start time cannot be null"),
+                Objects.requireNonNull(end, "End time cannot be null")));
     }
 
     @GetMapping("/station/{stationId}/time-range")
@@ -88,14 +97,19 @@ public class MonitoringController {
             @PathVariable Long stationId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
-        return ResponseEntity.ok(service.getMetricsByStationAndTimeRange(stationId, start, end));
+        return ResponseEntity.ok(service.getMetricsByStationAndTimeRange(
+                Objects.requireNonNull(stationId, "Station ID cannot be null"),
+                Objects.requireNonNull(start, "Start time cannot be null"),
+                Objects.requireNonNull(end, "End time cannot be null")));
     }
 
     @GetMapping("/threshold")
     public ResponseEntity<List<MetricDataDTO>> getMetricsAboveThreshold(
             @RequestParam MetricType metricType,
             @RequestParam Double threshold) {
-        return ResponseEntity.ok(service.getMetricsAboveThreshold(metricType, threshold));
+        return ResponseEntity.ok(service.getMetricsAboveThreshold(
+                Objects.requireNonNull(metricType, "Metric type cannot be null"),
+                Objects.requireNonNull(threshold, "Threshold cannot be null")));
     }
 
     private LocalDateTime parseDateTime(String dateTimeStr) {
