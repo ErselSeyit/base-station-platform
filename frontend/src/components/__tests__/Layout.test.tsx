@@ -17,7 +17,7 @@ describe('Layout', () => {
       </Layout>
     )
 
-    expect(screen.getByText('Base Station O&M')).toBeInTheDocument()
+    expect(screen.getAllByText('Base Station O&M')[0]).toBeInTheDocument()
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
     expect(screen.getByText('Stations')).toBeInTheDocument()
     expect(screen.getByText('Map View')).toBeInTheDocument()
