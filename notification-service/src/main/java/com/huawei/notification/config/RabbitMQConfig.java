@@ -1,5 +1,7 @@
 package com.huawei.notification.config;
 
+import java.util.Objects;
+
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -8,7 +10,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@SuppressWarnings("null")
 public class RabbitMQConfig {
 
     public static final String NOTIFICATION_QUEUE = "notification.queue";
@@ -25,8 +26,10 @@ public class RabbitMQConfig {
 
     @Bean
     public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
-        RabbitTemplate template = new RabbitTemplate(connectionFactory);
-        template.setMessageConverter(messageConverter());
+        RabbitTemplate template = new RabbitTemplate(
+                Objects.requireNonNull(connectionFactory, "ConnectionFactory cannot be null"));
+        template.setMessageConverter(
+                Objects.requireNonNull(messageConverter(), "Message converter cannot be null"));
         return template;
     }
 }

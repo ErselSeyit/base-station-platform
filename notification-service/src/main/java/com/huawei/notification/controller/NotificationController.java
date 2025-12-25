@@ -2,6 +2,7 @@ package com.huawei.notification.controller;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,6 @@ import com.huawei.notification.service.NotificationService;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
-@SuppressWarnings("null")
 public class NotificationController {
 
     private final NotificationService service;
@@ -34,13 +34,16 @@ public class NotificationController {
             @RequestParam String message,
             @RequestParam NotificationType type) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(service.createNotification(stationId, message, type));
+                .body(service.createNotification(
+                        Objects.requireNonNull(stationId, "Station ID cannot be null"),
+                        Objects.requireNonNull(message, "Message cannot be null"),
+                        Objects.requireNonNull(type, "Notification type cannot be null")));
     }
 
     @PostMapping("/{id}/send")
     public ResponseEntity<Map<String, String>> sendNotification(@PathVariable Long id) {
         try {
-            service.sendNotification(id);
+            service.sendNotification(Objects.requireNonNull(id, "Notification ID cannot be null"));
             return ResponseEntity.ok(Map.of("status", "sent", "message", "Notification sent successfully"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -56,7 +59,8 @@ public class NotificationController {
 
     @GetMapping("/station/{stationId}")
     public ResponseEntity<List<Notification>> getNotificationsByStation(@PathVariable Long stationId) {
-        return ResponseEntity.ok(service.getNotificationsByStation(stationId));
+        return ResponseEntity.ok(service.getNotificationsByStation(
+                Objects.requireNonNull(stationId, "Station ID cannot be null")));
     }
 
     @GetMapping
