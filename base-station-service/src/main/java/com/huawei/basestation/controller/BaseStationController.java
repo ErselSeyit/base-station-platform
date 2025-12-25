@@ -1,33 +1,41 @@
 package com.huawei.basestation.controller;
 
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.huawei.basestation.dto.BaseStationDTO;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.service.BaseStationService;
-import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Map;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/stations")
+@SuppressWarnings("null")
 public class BaseStationController {
 
     private final BaseStationService service;
 
-    @Autowired
     public BaseStationController(BaseStationService service) {
         this.service = service;
     }
 
     @PostMapping
     public ResponseEntity<BaseStationDTO> createStation(@Valid @RequestBody BaseStationDTO dto) {
-        BaseStationDTO created = service.createStation(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createStation(dto));
     }
 
     @GetMapping("/{id}")
@@ -39,9 +47,8 @@ public class BaseStationController {
 
     @GetMapping
     public ResponseEntity<List<BaseStationDTO>> getAllStations(
-            @RequestParam(name = "status", required = false) StationStatus status,
-            @RequestParam(name = "type", required = false) StationType type) {
-        
+            @RequestParam(required = false) StationStatus status,
+            @RequestParam(required = false) StationType type) {
         if (status != null) {
             return ResponseEntity.ok(service.getStationsByStatus(status));
         }
@@ -56,8 +63,7 @@ public class BaseStationController {
             @PathVariable Long id,
             @Valid @RequestBody BaseStationDTO dto) {
         try {
-            BaseStationDTO updated = service.updateStation(id, dto);
-            return ResponseEntity.ok(updated);
+            return ResponseEntity.ok(service.updateStation(id, dto));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }
@@ -79,15 +85,24 @@ public class BaseStationController {
             @RequestParam Double maxLat,
             @RequestParam Double minLon,
             @RequestParam Double maxLon) {
-        List<BaseStationDTO> stations = service.findStationsInArea(minLat, maxLat, minLon, maxLon);
-        return ResponseEntity.ok(stations);
+        return ResponseEntity.ok(service.findStationsInArea(minLat, maxLat, minLon, maxLon));
     }
 
     @GetMapping("/stats/count")
-    public ResponseEntity<Map<String, Long>> getStationCountByStatus(
-            @RequestParam(name = "status") StationStatus status) {
-        Long count = service.getStationCountByStatus(status);
-        return ResponseEntity.ok(Map.of("count", count));
+    public ResponseEntity<Map<String, Long>> getStationCountByStatus(@RequestParam StationStatus status) {
+        return ResponseEntity.ok(Map.of("count", service.getStationCountByStatus(status)));
+    }
+
+    /**
+     * Find stations within a radius of a point (Haversine distance).
+     * 
+     * Example: /api/v1/stations/search/nearby?lat=40.7128&lon=-74.0060&radiusKm=5
+     */
+    @GetMapping("/search/nearby")
+    public ResponseEntity<List<BaseStationDTO>> findStationsNearby(
+            @RequestParam Double lat,
+            @RequestParam Double lon,
+            @RequestParam(defaultValue = "10") Double radiusKm) {
+        return ResponseEntity.ok(service.findStationsNearPoint(lat, lon, radiusKm));
     }
 }
-

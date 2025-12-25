@@ -1,76 +1,65 @@
 package com.huawei.monitoring.controller;
 
-import com.huawei.monitoring.dto.MetricDataDTO;
-import com.huawei.monitoring.model.MetricType;
-import com.huawei.monitoring.service.MonitoringService;
-import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.huawei.monitoring.dto.MetricDataDTO;
+import com.huawei.monitoring.model.MetricType;
+import com.huawei.monitoring.service.MonitoringService;
+
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/api/v1/metrics")
+@SuppressWarnings("null")
 public class MonitoringController {
 
+    private static final Logger log = LoggerFactory.getLogger(MonitoringController.class);
+    
     private final MonitoringService service;
 
-    @Autowired
     public MonitoringController(MonitoringService service) {
         this.service = service;
     }
 
     @PostMapping
     public ResponseEntity<MetricDataDTO> recordMetric(@Valid @RequestBody MetricDataDTO dto) {
-        MetricDataDTO created = service.recordMetric(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.recordMetric(dto));
     }
 
     @GetMapping
     public ResponseEntity<List<MetricDataDTO>> getAllMetrics(
-            @RequestParam(name = "startTime", required = false) String startTimeStr,
-            @RequestParam(name = "endTime", required = false) String endTimeStr) {
+            @RequestParam(required = false) String startTime,
+            @RequestParam(required = false) String endTime) {
         try {
-            LocalDateTime startTime = null;
-            LocalDateTime endTime = null;
-            
-            if (startTimeStr != null && !startTimeStr.isEmpty()) {
-                // Handle ISO 8601 format with or without 'Z' (UTC indicator)
-                if (startTimeStr.endsWith("Z")) {
-                    startTime = ZonedDateTime.parse(startTimeStr).toLocalDateTime();
-                } else {
-                    startTime = LocalDateTime.parse(startTimeStr);
-                }
+            LocalDateTime start = parseDateTime(startTime);
+            LocalDateTime end = parseDateTime(endTime);
+
+            if (start != null && end != null) {
+                return ResponseEntity.ok(service.getMetricsByTimeRange(start, end));
             }
-            if (endTimeStr != null && !endTimeStr.isEmpty()) {
-                // Handle ISO 8601 format with or without 'Z' (UTC indicator)
-                if (endTimeStr.endsWith("Z")) {
-                    endTime = ZonedDateTime.parse(endTimeStr).toLocalDateTime();
-                } else {
-                    endTime = LocalDateTime.parse(endTimeStr);
-                }
+            if (start != null) {
+                return ResponseEntity.ok(service.getMetricsByTimeRange(start, LocalDateTime.now()));
             }
-            
-            if (startTime != null && endTime != null) {
-                return ResponseEntity.ok(service.getMetricsByTimeRange(startTime, endTime));
-            } else if (startTime != null) {
-                // If only startTime is provided, use current time as endTime
-                return ResponseEntity.ok(service.getMetricsByTimeRange(startTime, LocalDateTime.now()));
-            } else {
-                // If no parameters, return recent metrics from last 24 hours
-                return ResponseEntity.ok(service.getMetricsByTimeRange(
-                    LocalDateTime.now().minusDays(1), 
-                    LocalDateTime.now()
-                ));
-            }
+            // Default: last 24 hours
+            LocalDateTime now = LocalDateTime.now();
+            return ResponseEntity.ok(service.getMetricsByTimeRange(now.minusDays(1), now));
         } catch (Exception e) {
-            // Log error and return empty list to prevent frontend errors
-            e.printStackTrace();
+            log.error("Error fetching metrics", e);
             return ResponseEntity.ok(List.of());
         }
     }
@@ -108,5 +97,14 @@ public class MonitoringController {
             @RequestParam Double threshold) {
         return ResponseEntity.ok(service.getMetricsAboveThreshold(metricType, threshold));
     }
-}
 
+    private LocalDateTime parseDateTime(String dateTimeStr) {
+        if (dateTimeStr == null || dateTimeStr.isEmpty()) {
+            return null;
+        }
+        if (dateTimeStr.endsWith("Z")) {
+            return ZonedDateTime.parse(dateTimeStr).toLocalDateTime();
+        }
+        return LocalDateTime.parse(dateTimeStr);
+    }
+}
