@@ -1,42 +1,35 @@
 package com.huawei.notification.service;
 
-import java.util.Objects;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.huawei.notification.model.Notification;
 import com.huawei.notification.model.NotificationStatus;
 import com.huawei.notification.model.NotificationType;
 import com.huawei.notification.repository.NotificationRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 @Service
 @Transactional
+@SuppressWarnings("null")
 public class NotificationService {
 
-    private static final Logger logger = LoggerFactory.getLogger(NotificationService.class);
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
+    
     private final NotificationRepository repository;
-    private final ExecutorService executorService;
 
-    @Autowired
     public NotificationService(NotificationRepository repository) {
         this.repository = repository;
-        // Thread pool for concurrent notification processing
-        this.executorService = Executors.newFixedThreadPool(10);
     }
 
     public Notification createNotification(Long stationId, String message, NotificationType type) {
-        Notification notification = new Notification(stationId, message, type);
-        return repository.save(notification);
+        return repository.save(new Notification(stationId, message, type));
     }
 
     @Async("notificationExecutor")
@@ -45,43 +38,48 @@ public class NotificationService {
             try {
                 sendNotification(notificationId);
             } catch (Exception e) {
-                logger.error("Error sending notification {}", notificationId, e);
+                log.error("Error sending notification {}", notificationId, e);
             }
-        }, executorService);
+        });
     }
 
     public void sendNotification(Long notificationId) {
-        Notification notification = repository.findById(Objects.requireNonNull(notificationId))
+        Notification notification = repository.findById(notificationId)
                 .orElseThrow(() -> new IllegalArgumentException("Notification not found: " + notificationId));
 
         try {
-            // Simulate notification sending (email, SMS, push notification, etc.)
-            logger.info("Sending notification {} to station {}", notificationId, notification.getStationId());
+            log.info("Sending notification {} to station {}", notificationId, notification.getStationId());
             Thread.sleep(100); // Simulate network delay
 
             notification.setStatus(NotificationStatus.SENT);
             notification.setSentAt(LocalDateTime.now());
             repository.save(notification);
 
-            logger.info("Notification {} sent successfully", notificationId);
+            log.info("Notification {} sent successfully", notificationId);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            markAsFailed(notification, e);
         } catch (Exception e) {
-            logger.error("Failed to send notification {}", notificationId, e);
-            notification.setStatus(NotificationStatus.FAILED);
-            repository.save(notification);
-            throw new RuntimeException("Failed to send notification", e);
+            markAsFailed(notification, e);
         }
     }
 
-    public void processPendingNotifications() {
-        List<Notification> pendingNotifications = repository.findByStatus(NotificationStatus.PENDING);
-        logger.info("Processing {} pending notifications", pendingNotifications.size());
+    private void markAsFailed(Notification notification, Exception e) {
+        log.error("Failed to send notification {}", notification.getId(), e);
+        notification.setStatus(NotificationStatus.FAILED);
+        repository.save(notification);
+        throw new RuntimeException("Failed to send notification", e);
+    }
 
-        // Process notifications concurrently using thread pool
-        List<CompletableFuture<Void>> futures = pendingNotifications.stream()
-                .map(notification -> sendNotificationAsync(notification.getId()))
+    public void processPendingNotifications() {
+        List<Notification> pending = repository.findByStatus(NotificationStatus.PENDING);
+        log.info("Processing {} pending notifications", pending.size());
+
+        List<CompletableFuture<Void>> futures = pending.stream()
+                .filter(n -> n.getId() != null)
+                .map(n -> sendNotificationAsync(n.getId()))
                 .toList();
 
-        // Wait for all notifications to be processed
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
     }
 
@@ -100,4 +98,3 @@ public class NotificationService {
         return repository.findAll();
     }
 }
-
