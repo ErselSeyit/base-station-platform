@@ -9,7 +9,7 @@
 
 **Advanced microservices platform for base station operations and maintenance** - A showcase project demonstrating advanced Java and Spring Boot microservices architecture, service discovery, API gateway patterns, and cloud-native development skills.
 
-A comprehensive microservices-based platform for managing and monitoring base station operations, built with Java 17, Spring Boot, and modern cloud-native technologies.
+A comprehensive microservices-based platform for managing and monitoring base station operations, built with Java 21, Spring Boot 3.2.0, and modern cloud-native technologies.
 
 ## 📖 About
 
@@ -380,6 +380,58 @@ mvn test -pl base-station-service
 mvn verify
 ```
 
+### Test Architecture
+
+The project uses a comprehensive testing strategy with test-specific application configurations:
+
+- **Unit Tests**: Fast, isolated tests using mocks
+- **Integration Tests**: Full application context with Testcontainers for PostgreSQL
+- **Contract Tests**: Spring Cloud Contract for API contract verification
+- **Resilience Tests**: Circuit breaker and timeout testing with WireMock
+
+#### Test Application Classes
+
+To avoid conflicts with production configurations, test-specific application classes are used:
+
+- `ContractTestApplication`: For Spring Cloud Contract tests
+  - Excludes Redis and Eureka auto-configurations
+  - Uses H2 in-memory database
+  - Isolated component scanning to prevent conflicts
+
+- `IntegrationTestApplication`: For integration tests
+  - Excludes Redis and Eureka auto-configurations
+  - Uses Testcontainers PostgreSQL
+  - Full application context with all services
+
+- `TestApplication`: For resilience tests
+  - Minimal configuration for circuit breaker testing
+  - WireMock for external service mocking
+
+#### Test Configuration
+
+Tests automatically configure:
+- H2 in-memory database for contract tests
+- PostgreSQL via Testcontainers for integration tests
+- Disabled Eureka client registration
+- Disabled Redis caching
+- Mock monitoring service URLs
+
+### Running Specific Test Types
+
+```bash
+# Run only unit tests
+mvn test -Dtest='*Test' -DfailIfNoTests=false
+
+# Run only integration tests
+mvn test -Dtest='*IntegrationTest'
+
+# Run only contract tests
+mvn test -Dtest='*Contract*'
+
+# Run resilience tests
+mvn test -Dtest='*Resilience*'
+```
+
 ## 🚢 Deployment
 
 ### Build Docker Images
@@ -394,11 +446,27 @@ docker-compose build
 
 ### CI/CD
 
-The project includes GitHub Actions workflow (`.github/workflows/ci-cd.yml`) that:
-- Builds the project
-- Runs tests
-- Builds Docker images
-- (Optional) Deploys to production
+The project includes GitHub Actions workflows that:
+
+#### CI/CD Pipeline (`.github/workflows/ci-cd.yml`)
+- **Backend Tests**: Runs unit and integration tests with PostgreSQL and MongoDB services
+- **Frontend Tests**: Runs linting, unit tests, and E2E tests with Playwright
+- **Code Quality**: SonarQube analysis
+- **Docker Build**: Builds all service Docker images
+- **Artifact Upload**: Saves Docker images as artifacts for deployment
+
+#### CI Pipeline (`.github/workflows/ci.yml`)
+- **Build & Test**: Comprehensive test suite execution
+- **Security Scan**: Trivy vulnerability scanning
+- **Docker Build & Push**: Builds and pushes images to container registry
+- **Staging Deployment**: Automated deployment to staging environment
+
+#### Docker Image Artifacts
+
+Docker images are saved as tar files and uploaded as GitHub Actions artifacts:
+- Images are built for all services (base-station-service, monitoring-service, notification-service, api-gateway, eureka-server, frontend)
+- Artifacts are retained for 7 days
+- Images can be downloaded and loaded using `docker load`
 
 ## 🐛 Troubleshooting
 
@@ -471,7 +539,7 @@ PUT /api/v1/alerts/rules/cpu-critical/disable
 ### Backend
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Java | 17 | Language |
+| Java | 21 | Language |
 | Spring Boot | 3.2.0 | Framework |
 | Spring Cloud | 2023.0.0 | Microservices patterns |
 | Spring Data JPA | - | PostgreSQL ORM |
@@ -505,7 +573,39 @@ PUT /api/v1/alerts/rules/cpu-critical/disable
 | JUnit 5 | Unit testing |
 | Mockito | Mocking |
 | Testcontainers | Integration testing |
+| Spring Cloud Contract | API contract testing |
+| WireMock | Service mocking for resilience tests |
+| Awaitility | Async test assertions |
+| AssertJ | Fluent assertions |
 | Playwright | E2E testing (frontend) |
+| H2 Database | In-memory database for contract tests |
+
+## 📝 Recent Improvements
+
+### Test Infrastructure Enhancements (Latest)
+
+- **Fixed ApplicationContext Failures**: Resolved test context loading issues by:
+  - Creating test-specific application classes to avoid conflicts
+  - Excluding problematic auto-configurations (Redis, Eureka) in tests
+  - Using proper component scanning filters to prevent duplicate bean definitions
+  - Configuring test-specific datasource properties
+
+- **Improved CI/CD Pipeline**:
+  - Fixed Docker image artifact upload (images are now properly saved as tar files)
+  - Added artifact retention policies
+  - Enhanced test reporting and artifact management
+
+- **Enhanced Test Reliability**:
+  - Better WireMock configuration for resilience tests
+  - Improved retry logic and timing for async operations
+  - Proper test isolation with separate application contexts
+
+### Testing Improvements
+
+- **Test Application Classes**: Created dedicated test applications to prevent configuration conflicts
+- **Better Test Isolation**: Each test type uses its own application context
+- **Improved Error Handling**: Better diagnostics for test failures
+- **Enhanced Resilience Testing**: More robust circuit breaker and timeout testing
 
 ## 📝 About the Project
 
@@ -515,14 +615,16 @@ This project is a comprehensive demonstration of modern microservices architectu
 - **Database Integration**: Both SQL (PostgreSQL) and NoSQL (MongoDB) databases
 - **Cloud-Native Technologies**: Containerization, orchestration, and service mesh
 - **Best Practices**: Clean code, testing, documentation, and CI/CD
+- **Comprehensive Testing**: Multi-layered testing strategy with unit, integration, contract, and resilience tests
 
 Built as a portfolio project to demonstrate proficiency in:
-- Java 17 and Spring Boot ecosystem
+- Java 21 and Spring Boot 3.2.0 ecosystem
 - Microservices architecture and design
 - RESTful API development
 - Database design and integration
 - Docker and containerization
 - DevOps and CI/CD practices
+- Test-driven development and test infrastructure
 
 ## 📝 License
 
