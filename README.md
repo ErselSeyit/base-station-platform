@@ -551,10 +551,10 @@ PUT /api/v1/alerts/rules/cpu-critical/disable
 ### Infrastructure
 | Technology | Purpose |
 |------------|---------|
-| PostgreSQL 15 | Relational data |
-| MongoDB 7.0 | Time-series metrics |
-| Redis 7 | Caching |
-| RabbitMQ 3 | Message queue |
+| PostgreSQL 18 | Relational data |
+| MongoDB 8.2 | Time-series metrics |
+| Redis 8 | Caching |
+| RabbitMQ 4 | Message queue |
 | Netflix Eureka | Service discovery |
 
 ### DevOps
