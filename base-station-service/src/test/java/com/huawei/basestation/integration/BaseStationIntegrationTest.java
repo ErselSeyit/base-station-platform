@@ -71,8 +71,8 @@ class BaseStationIntegrationTest {
 
     @Container
     @ServiceConnection
-    @SuppressWarnings("resource")
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+    @SuppressWarnings("resource") // Testcontainers manages lifecycle via @Container annotation
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
             .withPassword("test");
@@ -89,8 +89,9 @@ class BaseStationIntegrationTest {
 
     @AfterAll
     static void tearDown() {
+        // Container is automatically closed by Testcontainers @Container lifecycle management
         if (postgres != null && postgres.isRunning()) {
-            postgres.stop();
+            postgres.close();
         }
     }
 

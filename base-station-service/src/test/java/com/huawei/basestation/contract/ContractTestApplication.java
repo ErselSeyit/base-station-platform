@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.cloud.netflix.eureka.EurekaClientAutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication(
@@ -24,6 +25,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         ))
 @EntityScan("com.huawei.basestation.model")
 @EnableJpaRepositories("com.huawei.basestation.repository")
+@EnableJpaAuditing
 public class ContractTestApplication {
     public static void main(String[] args) {
         SpringApplication.run(ContractTestApplication.class, args);

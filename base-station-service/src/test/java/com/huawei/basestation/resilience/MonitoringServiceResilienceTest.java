@@ -134,7 +134,7 @@ class MonitoringServiceResilienceTest {
                         assertThat(attempt).doesNotContainKey("status");
                         resultRef.set(attempt);
                     });
-            
+
             Map<String, Object> result = resultRef.get();
 
             wireMockServer.verify(getRequestedFor(urlPathMatching("/api/v1/metrics/station/.*/latest")));

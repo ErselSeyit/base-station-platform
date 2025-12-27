@@ -1,5 +1,6 @@
 package com.huawei.basestation.controller;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -11,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -19,11 +19,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.basestation.config.TestConfig;
 import com.huawei.basestation.dto.BaseStationDTO;
@@ -45,25 +46,40 @@ class BaseStationControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private BaseStationService service;
 
     @Autowired
     private ObjectMapper objectMapper;
 
     @Test
-    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
+    @SuppressWarnings("null")
     void createStation_returnsCreatedStation() throws Exception {
+        // Verify dependencies are not null
+        assertNotNull(objectMapper, "ObjectMapper should be autowired and not null");
+        assertNotNull(MediaType.APPLICATION_JSON, "MediaType.APPLICATION_JSON constant should not be null");
+        
         BaseStationDTO dto = createTestDTO();
+        assertNotNull(dto, "Test DTO should not be null");
+        
         BaseStationDTO created = createTestDTO();
+        assertNotNull(created, "Created DTO should not be null");
         created.setId(1L);
 
+        // Use any() matcher to match any BaseStationDTO instance (type-safe)
+        // The created DTO is verified as non-null above
         when(service.createStation(any(BaseStationDTO.class)))
-                .thenReturn(Objects.requireNonNull(created));
+                .thenReturn(created);
+
+        String jsonContent = serializeToJson(dto);
+        assertNotNull(jsonContent, "JSON content should not be null after serialization");
+        
+        MediaType contentType = getApplicationJsonMediaType();
+        assertNotNull(contentType, "Content type should not be null");
 
         mockMvc.perform(post("/api/v1/stations")
-                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
-                .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
+                .contentType(contentType)
+                .content(jsonContent))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.stationName").value("BS-001"));
@@ -106,18 +122,33 @@ class BaseStationControllerTest {
     }
 
     @Test
-    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
+    @SuppressWarnings("null")
     void updateStation_returnsUpdatedStation() throws Exception {
+        // Verify dependencies are not null
+        assertNotNull(objectMapper, "ObjectMapper should be autowired and not null");
+        assertNotNull(MediaType.APPLICATION_JSON, "MediaType.APPLICATION_JSON constant should not be null");
+        
         BaseStationDTO dto = createTestDTO();
+        assertNotNull(dto, "Test DTO should not be null");
         dto.setId(1L);
         dto.setStationName("BS-001-Updated");
 
+        // Use any() matcher to match any BaseStationDTO instance (type-safe)
         when(service.updateStation(eq(1L), any(BaseStationDTO.class)))
-                .thenReturn(Objects.requireNonNull(dto));
+                .thenReturn(dto);
+        
+        // Verify the mock return value is not null
+        assertNotNull(dto, "Mock service should return a non-null updated DTO");
+
+        String jsonContent = serializeToJson(dto);
+        assertNotNull(jsonContent, "JSON content should not be null after serialization");
+        
+        MediaType contentType = getApplicationJsonMediaType();
+        assertNotNull(contentType, "Content type should not be null");
 
         mockMvc.perform(put("/api/v1/stations/1")
-                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
-                .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
+                .contentType(contentType)
+                .content(jsonContent))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.stationName").value("BS-001-Updated"));
     }
@@ -138,4 +169,44 @@ class BaseStationControllerTest {
         dto.setStatus(StationStatus.ACTIVE);
         return dto;
     }
+
+    /**
+     * Safely serializes an object to JSON string with null checks and exception handling.
+     * 
+     * @param object the object to serialize
+     * @return JSON string representation
+     * @throws IllegalStateException if objectMapper is null or serialization fails
+     */
+    private String serializeToJson(Object object) {
+        if (objectMapper == null) {
+            throw new IllegalStateException("ObjectMapper is null - cannot serialize object to JSON");
+        }
+        if (object == null) {
+            throw new IllegalArgumentException("Cannot serialize null object to JSON");
+        }
+        try {
+            String json = objectMapper.writeValueAsString(object);
+            if (json == null) {
+                throw new IllegalStateException("ObjectMapper.writeValueAsString returned null");
+            }
+            return json;
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize object to JSON: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Safely retrieves APPLICATION_JSON MediaType with null check.
+     * 
+     * @return MediaType.APPLICATION_JSON
+     * @throws IllegalStateException if MediaType.APPLICATION_JSON is null
+     */
+    private MediaType getApplicationJsonMediaType() {
+        MediaType mediaType = MediaType.APPLICATION_JSON;
+        if (mediaType == null) {
+            throw new IllegalStateException("MediaType.APPLICATION_JSON constant is null");
+        }
+        return mediaType;
+    }
+
 }

@@ -63,8 +63,7 @@ class BaseStationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null") // Mockito's any() and anyString() matchers have false-positive null-safety
-                              // warnings
+    @SuppressWarnings("null")
     void createStation_savesAndReturnsStation() {
         when(repository.findByStationName(anyString())).thenReturn(Optional.empty());
         when(repository.save(any(BaseStation.class))).thenReturn(testStation);
@@ -77,8 +76,7 @@ class BaseStationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null") // Mockito's any() and anyString() matchers have false-positive null-safety
-                              // warnings
+    @SuppressWarnings("null")
     void createStation_throwsOnDuplicateName() {
         when(repository.findByStationName(anyString())).thenReturn(Optional.of(testStation));
 
@@ -124,8 +122,7 @@ class BaseStationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null") // Mockito's any() and anyString() matchers have false-positive null-safety
-                              // warnings
+    @SuppressWarnings("null")
     void updateStation_updatesAndReturnsStation() {
         BaseStationDTO updateDTO = new BaseStationDTO();
         updateDTO.setStationName("BS-001-Updated");
@@ -145,10 +142,10 @@ class BaseStationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null") // Mockito argument matcher has false-positive null-safety warning
     void updateStation_throwsWhenNotFound() {
         when(repository.findById(1L)).thenReturn(Optional.empty());
 
+        assertNotNull(testDTO);
         assertThrows(IllegalArgumentException.class, () -> service.updateStation(1L, testDTO));
     }
 

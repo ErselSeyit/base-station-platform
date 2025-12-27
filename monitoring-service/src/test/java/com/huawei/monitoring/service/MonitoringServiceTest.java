@@ -62,7 +62,7 @@ class MonitoringServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
+    @SuppressWarnings("null")
     void recordMetric_savesAndReturnsMetric() {
         when(repository.save(any(MetricData.class))).thenReturn(testMetric);
         doNothing().when(webSocketHandler).broadcastMetric(any(MetricDataDTO.class));

@@ -4,9 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import org.mockito.ArgumentMatchers;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +33,7 @@ class NotificationServiceTest {
     private NotificationService service;
 
     @Test
-    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
+    @SuppressWarnings("null")
     void createNotification_savesAndReturnsNotification() {
         Notification notification = new Notification();
         notification.setId(1L);
@@ -41,14 +42,14 @@ class NotificationServiceTest {
         notification.setType(NotificationType.ALERT);
         notification.setStatus(NotificationStatus.PENDING);
 
-        when(repository.save(any(Notification.class))).thenReturn(notification);
+        when(repository.save(ArgumentMatchers.<Notification>any())).thenReturn(notification);
 
         Notification result = service.createNotification(1L, "Test notification", NotificationType.ALERT);
 
         assertNotNull(result);
         assertEquals(1L, result.getStationId());
         assertEquals(NotificationType.ALERT, result.getType());
-        verify(repository).save(any(Notification.class));
+        verify(repository).save(ArgumentMatchers.<Notification>any());
     }
 
     @Test
@@ -90,7 +91,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null") // Mockito's any() argument matcher has false-positive null-safety warnings
+    @SuppressWarnings("null")
     void sendNotification_updatesStatus() {
         Notification notification = new Notification();
         notification.setId(1L);
@@ -100,10 +101,10 @@ class NotificationServiceTest {
         notification.setStatus(NotificationStatus.PENDING);
 
         when(repository.findById(1L)).thenReturn(Optional.of(notification));
-        when(repository.save(any(Notification.class))).thenReturn(notification);
+        when(repository.save(ArgumentMatchers.<Notification>any())).thenReturn(notification);
 
         assertDoesNotThrow(() -> service.sendNotification(1L));
-        verify(repository).save(any(Notification.class));
+        verify(repository).save(ArgumentMatchers.<Notification>any());
     }
 
     @Test

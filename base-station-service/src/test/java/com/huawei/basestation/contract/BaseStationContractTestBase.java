@@ -32,8 +32,11 @@ public abstract class BaseStationContractTestBase {
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", () -> "jdbc:h2:mem:contractdb;DB_CLOSE_DELAY=-1");
         registry.add("spring.datasource.driver-class-name", () -> "org.h2.Driver");
+        registry.add("spring.datasource.username", () -> "sa");
+        registry.add("spring.datasource.password", () -> "");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.H2Dialect");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        registry.add("spring.jpa.show-sql", () -> "false");
         registry.add("eureka.client.enabled", () -> "false");
         registry.add("spring.cache.type", () -> "none");
         registry.add("spring.data.redis.host", () -> "localhost");
