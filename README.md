@@ -636,22 +636,27 @@ Built as a portfolio project to demonstrate proficiency in:
 
 ## 🛠️ Post-Sprint Technical Debt & Roadmap
 
-Given the development timeline, the following items are prioritized for the next iteration:
+**✅ Completed Items:**
 
 **Service Communication:**
-- **Event-Driven Architecture**: Currently, Monitoring Service alerts are logged but not sent to Notification Service via RabbitMQ. The RabbitMQ infrastructure exists, but the event publishing is commented out. Next step: Implement RabbitMQ event publishing for alert notifications.
+- ✅ **Event-Driven Architecture**: Implemented RabbitMQ event publishing from Monitoring Service to Notification Service. Alert events are now automatically published when thresholds are exceeded and consumed by Notification Service to create notifications.
 
 **Performance Optimizations:**
-- **Virtual Threads**: While Java 21 supports virtual threads, they are not currently enabled (`spring.threads.virtual.enabled`). This would improve scalability for I/O-bound operations in future iterations.
+- ✅ **Virtual Threads**: Enabled virtual threads (`spring.threads.virtual.enabled=true`) across all services to improve scalability for I/O-bound operations.
+
+**Observability Enhancements:**
+- ✅ **Deep Health Checks**: Added custom `DatabaseConnectionPoolHealthIndicator` to base-station-service, notification-service, and auth-service. These provide detailed connection pool metrics including active, idle, total connections, and threads awaiting connections.
+
+**Testing:**
+- ✅ **E2E Test Coverage**: Expanded E2E tests with additional test suites for Stations and Metrics pages, improving end-to-end test coverage.
+
+**Future Roadmap:**
 
 **Service Mesh:**
 - **Istio Integration**: Transitioning from Eureka to Istio for better mTLS and traffic management would provide enhanced security and observability.
 
-**Observability Enhancements:**
-- **Deep Health Checks**: Expanding Actuator endpoints to include custom database connection pool metrics and more granular service health indicators.
-
-**Testing:**
-- Current test coverage includes unit, integration, contract, and resilience tests. Future iterations will focus on expanding E2E test coverage and performance testing.
+**Performance Testing:**
+- Future iterations will focus on adding performance/load testing to validate system behavior under stress.
 
 ## 📝 License
 

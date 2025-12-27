@@ -8,8 +8,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
+import com.huawei.monitoring.config.RabbitMQConfig;
+import com.huawei.monitoring.dto.AlertEvent;
 import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.AlertRule;
 import com.huawei.monitoring.model.AlertSeverity;
@@ -23,7 +26,7 @@ import com.huawei.monitoring.model.MetricType;
  * - Domain-driven design (AlertRule as a value object)
  * - Strategy pattern (different comparison operators)
  * - Thread-safe rule management
- * - Event-driven architecture (would integrate with notification service)
+ * - Event-driven architecture (integrates with notification service via RabbitMQ)
  */
 @Service
 public class AlertingService {
@@ -31,8 +34,10 @@ public class AlertingService {
     private static final Logger log = LoggerFactory.getLogger(AlertingService.class);
 
     private final Map<String, AlertRule> rules = new ConcurrentHashMap<>();
+    private final RabbitTemplate rabbitTemplate;
 
-    public AlertingService() {
+    public AlertingService(RabbitTemplate rabbitTemplate) {
+        this.rabbitTemplate = Objects.requireNonNull(rabbitTemplate, "RabbitTemplate cannot be null");
         // Initialize default rules - in production, these would be from DB/config
         initializeDefaultRules();
     }
@@ -143,9 +148,33 @@ public class AlertingService {
                 metric.getValue(),
                 rule.getThreshold());
 
-        // In production: send to notification service via RabbitMQ
-        // rabbitTemplate.convertAndSend("alerts.exchange", "alert.triggered",
-        // alertEvent);
+        // Send alert event to notification service via RabbitMQ
+        try {
+            AlertEvent alertEvent = new AlertEvent(
+                    rule.getId(),
+                    rule.getName(),
+                    metric.getStationId(),
+                    metric.getStationName(),
+                    metric.getMetricType(),
+                    metric.getValue(),
+                    rule.getThreshold(),
+                    rule.getSeverity(),
+                    rule.getMessage()
+            );
+            
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.ALERTS_EXCHANGE,
+                    RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY,
+                    alertEvent
+            );
+            
+            log.debug("Alert event published to RabbitMQ: ruleId={}, stationId={}", 
+                    rule.getId(), metric.getStationId());
+        } catch (Exception e) {
+            log.error("Failed to publish alert event to RabbitMQ: ruleId={}, stationId={}", 
+                    rule.getId(), metric.getStationId(), e);
+            // Continue execution even if RabbitMQ fails - alert is still logged
+        }
     }
 
     // ========================================

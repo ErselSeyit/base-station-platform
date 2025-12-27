@@ -1,6 +1,9 @@
 spring:
   application:
     name: api-gateway
+  threads:
+    virtual:
+      enabled: true
   data:
     redis:
       reactive:

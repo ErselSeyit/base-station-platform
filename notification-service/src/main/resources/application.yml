@@ -1,6 +1,9 @@
 spring:
   application:
     name: notification-service
+  threads:
+    virtual:
+      enabled: true
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/notificationdb}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -17,6 +20,11 @@ spring:
         core-size: 5
         max-size: 10
         queue-capacity: 100
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:admin}
+    password: ${SPRING_RABBITMQ_PASSWORD:admin}
 
 server:
   port: 8083
