@@ -428,7 +428,13 @@ export default function Stations() {
         </Box>
 
         <DialogContent sx={{ px: 3, py: 3 }}>
-          <Box component="form" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} noValidate>
+          <form 
+            id="station-form" 
+            name="stationForm" 
+            autoComplete="on"
+            onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} 
+            noValidate
+          >
             {/* Basic Information Section */}
             <Box sx={{ mb: 3 }}>
               <Box display="flex" alignItems="center" gap={1} mb={2}>
@@ -446,8 +452,13 @@ export default function Stations() {
                 value={formData.stationName}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, stationName: e.target.value })}
                 required
-                autoComplete="organization"
                 autoFocus
+                inputProps={{
+                  name: 'stationName',
+                  id: 'station-name',
+                  autoComplete: 'organization',
+                  'aria-label': 'Station Name',
+                }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -466,7 +477,12 @@ export default function Stations() {
               value={formData.location}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, location: e.target.value })}
               required
-              autoComplete="street-address"
+              inputProps={{
+                name: 'location',
+                id: 'station-location',
+                autoComplete: 'address-line1',
+                'aria-label': 'Location',
+              }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -498,8 +514,11 @@ export default function Stations() {
                 value={formData.latitude || ''}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, latitude: parseFloat(e.target.value) || 0 })}
                 required
-                autoComplete="off"
                 inputProps={{
+                  name: 'latitude',
+                  id: 'station-latitude',
+                  autoComplete: 'off',
+                  'aria-label': 'Latitude',
                   step: 'any',
                   min: -90,
                   max: 90,
@@ -516,8 +535,11 @@ export default function Stations() {
                 value={formData.longitude || ''}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, longitude: parseFloat(e.target.value) || 0 })}
                 required
-                autoComplete="off"
                 inputProps={{
+                  name: 'longitude',
+                  id: 'station-longitude',
+                  autoComplete: 'off',
+                  'aria-label': 'Longitude',
                   step: 'any',
                   min: -180,
                   max: 180,
@@ -548,9 +570,16 @@ export default function Stations() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormData({ ...formData, stationType: e.target.value as StationType })
                 }
-                autoComplete="off"
+                inputProps={{
+                  name: 'stationType',
+                  id: 'station-type-select',
+                  autoComplete: 'off',
+                  'aria-label': 'Station Type',
+                }}
                 SelectProps={{
                   native: true,
+                  name: 'stationType',
+                  id: 'station-type-select',
                 }}
               >
                 {Object.values(StationType).map((type) => (
@@ -570,9 +599,16 @@ export default function Stations() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormData({ ...formData, status: e.target.value as StationStatus })
                 }
-                autoComplete="off"
+                inputProps={{
+                  name: 'status',
+                  id: 'station-status-select',
+                  autoComplete: 'off',
+                  'aria-label': 'Status',
+                }}
                 SelectProps={{
                   native: true,
+                  name: 'status',
+                  id: 'station-status-select',
                 }}
               >
                 {Object.values(StationStatus).map((status) => (
@@ -591,8 +627,11 @@ export default function Stations() {
               placeholder="1500"
               value={formData.powerConsumption || ''}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, powerConsumption: parseFloat(e.target.value) || 0 })}
-              autoComplete="off"
               inputProps={{
+                name: 'powerConsumption',
+                id: 'station-power-consumption',
+                autoComplete: 'off',
+                'aria-label': 'Power Consumption',
                 step: 'any',
                 min: 0,
               }}
@@ -625,12 +664,17 @@ export default function Stations() {
               placeholder="Enter station description, notes, or specifications..."
               value={formData.description || ''}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, description: e.target.value })}
-              autoComplete="off"
               multiline
               rows={3}
+              inputProps={{
+                name: 'description',
+                id: 'station-description',
+                autoComplete: 'off',
+                'aria-label': 'Description',
+              }}
             />
           </Box>
-          </Box>
+          </form>
         </DialogContent>
 
         <DialogActions sx={{ px: 3, py: 2.5, background: mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)' }}>
