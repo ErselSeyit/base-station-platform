@@ -21,7 +21,7 @@ jobs:
     
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_DB: testdb
           POSTGRES_USER: test
@@ -35,7 +35,7 @@ jobs:
           --health-retries 5
       
       mongodb:
-        image: mongo:7.0
+        image: mongo:8.2
         ports:
           - 27017:27017
         options: >-
