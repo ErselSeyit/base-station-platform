@@ -9,6 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 
 import com.huawei.monitoring.config.RabbitMQConfig;
@@ -36,8 +38,9 @@ public class AlertingService {
     private final Map<String, AlertRule> rules = new ConcurrentHashMap<>();
     private final RabbitTemplate rabbitTemplate;
 
+    @Autowired(required = false)
     public AlertingService(RabbitTemplate rabbitTemplate) {
-        this.rabbitTemplate = Objects.requireNonNull(rabbitTemplate, "RabbitTemplate cannot be null");
+        this.rabbitTemplate = rabbitTemplate; // Optional - will be null if RabbitMQ not configured
         // Initialize default rules - in production, these would be from DB/config
         initializeDefaultRules();
     }
@@ -149,31 +152,36 @@ public class AlertingService {
                 rule.getThreshold());
 
         // Send alert event to notification service via RabbitMQ
-        try {
-            AlertEvent alertEvent = new AlertEvent(
-                    rule.getId(),
-                    rule.getName(),
-                    metric.getStationId(),
-                    metric.getStationName(),
-                    metric.getMetricType(),
-                    metric.getValue(),
-                    rule.getThreshold(),
-                    rule.getSeverity(),
-                    rule.getMessage()
-            );
-            
-            rabbitTemplate.convertAndSend(
-                    RabbitMQConfig.ALERTS_EXCHANGE,
-                    RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY,
-                    alertEvent
-            );
-            
-            log.debug("Alert event published to RabbitMQ: ruleId={}, stationId={}", 
+        if (rabbitTemplate != null) {
+            try {
+                AlertEvent alertEvent = new AlertEvent(
+                        rule.getId(),
+                        rule.getName(),
+                        metric.getStationId(),
+                        metric.getStationName(),
+                        metric.getMetricType(),
+                        metric.getValue(),
+                        rule.getThreshold(),
+                        rule.getSeverity(),
+                        rule.getMessage()
+                );
+                
+                rabbitTemplate.convertAndSend(
+                        RabbitMQConfig.ALERTS_EXCHANGE,
+                        RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY,
+                        alertEvent
+                );
+                
+                log.debug("Alert event published to RabbitMQ: ruleId={}, stationId={}", 
+                        rule.getId(), metric.getStationId());
+            } catch (Exception e) {
+                log.error("Failed to publish alert event to RabbitMQ: ruleId={}, stationId={}", 
+                        rule.getId(), metric.getStationId(), e);
+                // Continue execution even if RabbitMQ fails - alert is still logged
+            }
+        } else {
+            log.debug("RabbitMQ not available, alert logged only: ruleId={}, stationId={}", 
                     rule.getId(), metric.getStationId());
-        } catch (Exception e) {
-            log.error("Failed to publish alert event to RabbitMQ: ruleId={}, stationId={}", 
-                    rule.getId(), metric.getStationId(), e);
-            // Continue execution even if RabbitMQ fails - alert is still logged
         }
     }
 
