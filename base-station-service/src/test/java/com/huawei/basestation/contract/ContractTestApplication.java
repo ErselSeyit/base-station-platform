@@ -10,7 +10,6 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.test.context.TestPropertySource;
 
 @SpringBootApplication(
         exclude = {
@@ -18,9 +17,6 @@ import org.springframework.test.context.TestPropertySource;
                 RedisRepositoriesAutoConfiguration.class,
                 EurekaClientAutoConfiguration.class
         })
-@TestPropertySource(properties = {
-        "spring.main.allow-bean-definition-overriding=true"
-})
 @ComponentScan(
         basePackages = "com.huawei.basestation",
         excludeFilters = {
