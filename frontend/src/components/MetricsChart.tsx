@@ -1,6 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { format } from 'date-fns' // Consider installing 'date-fns' if you haven't already (npm install date-fns)
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { metricsApi } from '../services/api'
 import { MetricData } from '../types'
 
