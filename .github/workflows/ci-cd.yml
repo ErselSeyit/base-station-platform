@@ -117,6 +117,8 @@ jobs:
 
   code-quality:
     runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     
     steps:
     - uses: actions/checkout@v4
@@ -131,7 +133,7 @@ jobs:
         cache: maven
     
     - name: Run SonarQube Scan
-      if: ${{ secrets.SONAR_TOKEN != '' }}
+      if: env.SONAR_TOKEN != ''
       uses: SonarSource/sonarqube-scan-action@v5.0.0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
