@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -31,6 +32,9 @@ public class MonitoringServiceClient {
 
     private static final Logger log = LoggerFactory.getLogger(MonitoringServiceClient.class);
     private static final String MONITORING_SERVICE = "monitoringService";
+    @NonNull
+    private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE_REF = 
+            new ParameterizedTypeReference<Map<String, Object>>() {};
 
     private final RestClient restClient;
     private final String monitoringServiceUrl;
@@ -62,11 +66,10 @@ public class MonitoringServiceClient {
         return CompletableFuture.supplyAsync(() -> {
             log.debug("Fetching metrics for station {} from {}", stationId, monitoringServiceUrl);
 
-            @SuppressWarnings("unchecked")
             Map<String, Object> metrics = restClient.get()
                     .uri("/api/v1/metrics/station/{stationId}/latest", stationId)
                     .retrieve()
-                    .body(Map.class);
+                    .body(MAP_TYPE_REF);
 
             // Cache successful response for fallback
             if (metrics != null) {
@@ -86,11 +89,10 @@ public class MonitoringServiceClient {
     public Map<String, Object> getLatestMetricsSync(Long stationId) {
         log.debug("Fetching metrics synchronously for station {}", stationId);
 
-        @SuppressWarnings("unchecked")
         Map<String, Object> metrics = restClient.get()
                 .uri("/api/v1/metrics/station/{stationId}/latest", stationId)
                 .retrieve()
-                .body(Map.class);
+                .body(MAP_TYPE_REF);
 
         if (metrics != null) {
             cachedMetrics = metrics;
@@ -125,8 +127,7 @@ public class MonitoringServiceClient {
      * Fallback when circuit breaker is open or service fails.
      * Returns cached data or empty response.
      */
-    @SuppressWarnings("unused")
-    private CompletableFuture<Map<String, Object>> getMetricsFallback(Long stationId, Throwable t) {
+    CompletableFuture<Map<String, Object>> getMetricsFallback(Long stationId, Throwable t) {
         log.warn("Circuit breaker fallback for station {}. Reason: {}", stationId, t.getMessage());
         return CompletableFuture.completedFuture(
                 cachedMetrics.isEmpty()
@@ -137,8 +138,7 @@ public class MonitoringServiceClient {
     /**
      * Fallback specifically for timeout scenarios.
      */
-    @SuppressWarnings("unused")
-    private CompletableFuture<Map<String, Object>> getMetricsTimeoutFallback(Long stationId, Throwable t) {
+    CompletableFuture<Map<String, Object>> getMetricsTimeoutFallback(Long stationId, Throwable t) {
         log.warn("Timeout fallback for station {}. Service too slow.", stationId);
         return CompletableFuture.completedFuture(
                 Map.of("status", "timeout", "stationId", stationId, "message", "Service response too slow"));
@@ -147,8 +147,7 @@ public class MonitoringServiceClient {
     /**
      * Sync fallback for circuit breaker.
      */
-    @SuppressWarnings("unused")
-    private Map<String, Object> getMetricsSyncFallback(Long stationId, Throwable t) {
+    Map<String, Object> getMetricsSyncFallback(Long stationId, Throwable t) {
         log.warn("Sync fallback for station {}. Reason: {}", stationId, t.getMessage());
         return Map.of("status", "unavailable", "stationId", stationId);
     }
@@ -156,8 +155,7 @@ public class MonitoringServiceClient {
     /**
      * Health check fallback - service is down.
      */
-    @SuppressWarnings("unused")
-    private boolean healthCheckFallback(Throwable t) {
+    boolean healthCheckFallback(Throwable t) {
         log.warn("Monitoring service is unhealthy: {}", t.getMessage());
         return false;
     }
