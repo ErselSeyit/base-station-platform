@@ -1,6 +1,6 @@
 services:
   postgres-basestation:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: postgres-basestation
     environment:
       POSTGRES_DB: ${POSTGRES_BASESTATION_DB:-basestationdb}
@@ -20,7 +20,7 @@ services:
       retries: 5
 
   postgres-notification:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: postgres-notification
     environment:
       POSTGRES_DB: ${POSTGRES_NOTIFICATION_DB:-notificationdb}
@@ -40,7 +40,7 @@ services:
       retries: 5
 
   postgres-auth:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: postgres-auth
     environment:
       POSTGRES_DB: ${POSTGRES_AUTH_DB:-authdb}
@@ -60,7 +60,7 @@ services:
       retries: 5
 
   mongodb:
-    image: mongo:7.0
+    image: mongo:8.2
     container_name: mongodb
     environment:
       MONGO_INITDB_DATABASE: monitoringdb
@@ -78,7 +78,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: redis
     ports:
       - "6379:6379"
@@ -94,7 +94,7 @@ services:
       retries: 5
 
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:4-management-alpine
     container_name: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
@@ -114,7 +114,7 @@ services:
       retries: 5
 
   zipkin:
-    image: openzipkin/zipkin:latest
+    image: openzipkin/zipkin:3.5
     container_name: zipkin
     ports:
       - "9411:9411"

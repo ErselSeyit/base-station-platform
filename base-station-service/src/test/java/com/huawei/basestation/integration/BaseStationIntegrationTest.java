@@ -72,7 +72,7 @@ class BaseStationIntegrationTest {
     @Container
     @ServiceConnection
     @SuppressWarnings("resource") // Testcontainers manages lifecycle via @Container annotation
-    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
             .withPassword("test");
