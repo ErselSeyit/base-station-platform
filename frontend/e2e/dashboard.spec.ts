@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test'
 test.describe('Dashboard', () => {
   test('should load dashboard page', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('text=Dashboard')).toBeVisible()
+    // Use heading role to target the page title, not navigation items
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
   })
 
   test('should display base station statistics', async ({ page }) => {
