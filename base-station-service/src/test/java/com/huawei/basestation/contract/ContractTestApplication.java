@@ -16,13 +16,22 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
                 RedisAutoConfiguration.class,
                 RedisRepositoriesAutoConfiguration.class,
                 EurekaClientAutoConfiguration.class
+        },
+        properties = {
+                "spring.main.allow-bean-definition-overriding=true"
         })
 @ComponentScan(
         basePackages = "com.huawei.basestation",
-        excludeFilters = @ComponentScan.Filter(
-                type = FilterType.ASSIGNABLE_TYPE,
-                classes = com.huawei.basestation.BaseStationServiceApplication.class
-        ))
+        excludeFilters = {
+                @ComponentScan.Filter(
+                        type = FilterType.ASSIGNABLE_TYPE,
+                        classes = com.huawei.basestation.BaseStationServiceApplication.class
+                ),
+                @ComponentScan.Filter(
+                        type = FilterType.ASSIGNABLE_TYPE,
+                        classes = com.huawei.basestation.integration.IntegrationTestApplication.class
+                )
+        })
 @EntityScan("com.huawei.basestation.model")
 @EnableJpaRepositories("com.huawei.basestation.repository")
 @EnableJpaAuditing

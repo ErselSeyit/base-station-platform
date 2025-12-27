@@ -15,8 +15,13 @@ import com.huawei.basestation.service.BaseStationService;
 
 import io.restassured.RestAssured;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        classes = {ContractTestApplication.class})
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {ContractTestApplication.class},
+        properties = {
+                "spring.main.allow-bean-definition-overriding=true",
+                "spring.profiles.active=contract-test"
+        })
 public abstract class BaseStationContractTestBase {
 
     @LocalServerPort

@@ -71,3 +71,4 @@ config/secrets.*
 .nyc_output/
 coverage/
 
+effective-pom.xml

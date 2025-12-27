@@ -53,7 +53,9 @@ import com.huawei.basestation.repository.BaseStationRepository;
         classes = {IntegrationTestApplication.class},
         properties = {
                 "eureka.client.enabled=false",
-                "spring.cache.type=none"
+                "spring.cache.type=none",
+                "spring.main.allow-bean-definition-overriding=true",
+                "spring.profiles.active=integration-test"
         })
 @AutoConfigureMockMvc
 @Testcontainers
@@ -85,6 +87,10 @@ class BaseStationIntegrationTest {
         registry.add("spring.data.redis.host", () -> "localhost");
         registry.add("spring.cache.type", () -> "none");
         registry.add("monitoring.service.url", () -> "http://localhost:8082");
+        // JPA configuration - @ServiceConnection handles DataSource, but we need to configure JPA
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        registry.add("spring.jpa.show-sql", () -> "false");
+        registry.add("spring.jpa.properties.hibernate.dialect", () -> "org.hibernate.dialect.PostgreSQLDialect");
     }
 
     @AfterAll
