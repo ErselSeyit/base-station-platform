@@ -2,14 +2,14 @@
 
 [![CI/CD Pipeline](https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.0-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.13-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-Helm-326CE5?style=flat&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 
-**Advanced microservices platform for base station operations and maintenance** - A showcase project demonstrating advanced Java and Spring Boot microservices architecture, service discovery, API gateway patterns, and cloud-native development skills.
+**Microservices platform for base station operations and maintenance** - A showcase project demonstrating Java and Spring Boot microservices architecture, service discovery, API gateway patterns, and cloud-native development skills.
 
-A comprehensive microservices-based platform for managing and monitoring base station operations, built with Java 21, Spring Boot 3.2.0, and modern cloud-native technologies.
+A microservices-based platform for managing and monitoring base station operations, built with Java 21, Spring Boot 3.4.13, and modern cloud-native technologies.
 
 ## 📖 About
 
@@ -69,8 +69,8 @@ The Base Station Operations & Maintenance Platform is an advanced microservices 
 
 ### Architecture Highlights
 
-- **Spring Boot 3.2.0**: Modern Java framework with auto-configuration
-- **Spring Cloud 2023.0.0**: Cloud-native patterns and service mesh capabilities
+- **Spring Boot 3.4.13**: Modern Java framework with auto-configuration
+- **Spring Cloud 2024.0.0**: Cloud-native patterns and service mesh capabilities
 - **Eureka Server**: Netflix service discovery for microservices
 - **Spring Cloud Gateway**: Reactive API gateway with routing and filtering
 - **JPA/Hibernate**: Object-relational mapping for PostgreSQL
@@ -548,8 +548,8 @@ PUT /api/v1/alerts/rules/cpu-critical/disable
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | Java | 21 | Language |
-| Spring Boot | 3.2.0 | Framework |
-| Spring Cloud | 2023.0.0 | Microservices patterns |
+| Spring Boot | 3.4.13 | Framework |
+| Spring Cloud | 2024.0.0 | Microservices patterns |
 | Spring Data JPA | - | PostgreSQL ORM |
 | Spring Data MongoDB | - | NoSQL integration |
 | Spring WebSocket | - | Real-time streaming |
@@ -626,13 +626,32 @@ This project is a comprehensive demonstration of modern microservices architectu
 - **Comprehensive Testing**: Multi-layered testing strategy with unit, integration, contract, and resilience tests
 
 Built as a portfolio project to demonstrate proficiency in:
-- Java 21 and Spring Boot 3.2.0 ecosystem
+- Java 21 and Spring Boot 3.4.13 ecosystem
 - Microservices architecture and design
 - RESTful API development
 - Database design and integration
 - Docker and containerization
 - DevOps and CI/CD practices
 - Test-driven development and test infrastructure
+
+## 🛠️ Post-Sprint Technical Debt & Roadmap
+
+Given the development timeline, the following items are prioritized for the next iteration:
+
+**Service Communication:**
+- **Event-Driven Architecture**: Currently, Monitoring Service alerts are logged but not sent to Notification Service via RabbitMQ. The RabbitMQ infrastructure exists, but the event publishing is commented out. Next step: Implement RabbitMQ event publishing for alert notifications.
+
+**Performance Optimizations:**
+- **Virtual Threads**: While Java 21 supports virtual threads, they are not currently enabled (`spring.threads.virtual.enabled`). This would improve scalability for I/O-bound operations in future iterations.
+
+**Service Mesh:**
+- **Istio Integration**: Transitioning from Eureka to Istio for better mTLS and traffic management would provide enhanced security and observability.
+
+**Observability Enhancements:**
+- **Deep Health Checks**: Expanding Actuator endpoints to include custom database connection pool metrics and more granular service health indicators.
+
+**Testing:**
+- Current test coverage includes unit, integration, contract, and resilience tests. Future iterations will focus on expanding E2E test coverage and performance testing.
 
 ## 📝 License
 
