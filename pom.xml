@@ -27,8 +27,16 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.2.0</spring-boot.version>
-        <spring-cloud.version>2023.0.0</spring-cloud.version>
+        <spring-boot.version>3.4.13</spring-boot.version>
+        <spring-cloud.version>2024.0.0</spring-cloud.version>
+        <spring-security.version>6.5.5</spring-security.version>
+        <jjwt.version>0.12.5</jjwt.version>
+        <resilience4j.version>2.2.0</resilience4j.version>
+        <springdoc.version>2.8.14</springdoc.version>
+        <wiremock.version>3.9.0</wiremock.version>
+        <spring-cloud-contract.version>4.2.0</spring-cloud-contract.version>
+        <embedded-mongo.version>4.13.0</embedded-mongo.version>
+        <mockito.version>5.21.0</mockito.version>
     </properties>
 
     <dependencyManagement>
@@ -47,6 +55,46 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Override Spring Security to latest compatible version -->
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-bom</artifactId>
+                <version>${spring-security.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Explicitly override Spring Security core dependencies -->
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-core</artifactId>
+                <version>${spring-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-web</artifactId>
+                <version>${spring-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-config</artifactId>
+                <version>${spring-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-crypto</artifactId>
+                <version>${spring-security.version}</version>
+            </dependency>
+            <!-- Explicitly override Mockito to latest version for better null-safety -->
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-junit-jupiter</artifactId>
+                <version>${mockito.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -61,7 +109,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.11.0</version>
+                    <version>3.13.0</version>
                     <configuration>
                         <release>${java.version}</release>
                         <parameters>true</parameters>

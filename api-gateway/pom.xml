@@ -37,12 +37,12 @@
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-spring-boot3</artifactId>
-            <version>2.1.0</version>
+            <version>${resilience4j.version}</version>
         </dependency>
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-reactor</artifactId>
-            <version>2.1.0</version>
+            <version>${resilience4j.version}</version>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
