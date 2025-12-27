@@ -645,10 +645,6 @@ This project is part of a portfolio demonstration.
 - GitHub: [@ErselSeyit](https://github.com/ErselSeyit)
 - Email: erselseyit@gmail.com
 
-## 🔗 Links
-
-- **Repository**: https://github.com/ErselSeyit/base-station-platform
-
 ---
 
 **Happy Coding! 🚀**
