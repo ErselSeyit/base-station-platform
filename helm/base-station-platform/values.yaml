@@ -1,0 +1,62 @@
+replicaCount: 2
+
+image:
+  repository: ""
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 80
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: basestation.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+    ephemeral-storage: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+    ephemeral-storage: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+postgres:
+  enabled: true
+  storage: 10Gi
+
+redis:
+  enabled: true
+
+rabbitmq:
+  enabled: true
+
+mongodb:
+  enabled: true
+
+eureka:
+  enabled: true
+  replicaCount: 1
+
+prometheus:
+  enabled: true
+
+grafana:
+  enabled: true
+
+zipkin:
+  enabled: true
+

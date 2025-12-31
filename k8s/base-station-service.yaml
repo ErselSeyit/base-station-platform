@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: base-station-service
+  namespace: basestation-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: base-station-service
+  template:
+    metadata:
+      labels:
+        app: base-station-service
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: base-station-service
+        image: base-station-service:1.0.0
+        ports:
+        - containerPort: 8081
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:postgresql://postgres-basestation:5432/$(POSTGRES_BASESTATION_DB)
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: basestation-user
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: basestation-password
+        - name: POSTGRES_BASESTATION_DB
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: basestation-db
+        - name: SPRING_DATA_REDIS_HOST
+          value: redis
+        - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: http://eureka-server:8761/eureka/
+        - name: SECURITY_INTERNAL_ENABLED
+          value: "true"
+        - name: SECURITY_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: security-internal-secret
+              key: secret
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: base-station-service
+  namespace: basestation-platform
+spec:
+  selector:
+    app: base-station-service
+  ports:
+  - port: 8081
+    targetPort: 8081
+

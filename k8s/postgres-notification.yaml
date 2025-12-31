@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-notification-pvc
+  namespace: basestation-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-notification
+  namespace: basestation-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-notification
+  template:
+    metadata:
+      labels:
+        app: postgres-notification
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: postgres
+        image: postgres:18-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: notification-db
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: notification-user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: notification-password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+            ephemeral-storage: "2Gi"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-notification-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-notification
+  namespace: basestation-platform
+spec:
+  selector:
+    app: postgres-notification
+  ports:
+  - port: 5432
+    targetPort: 5432

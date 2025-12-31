@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "base-station-platform.fullname" . }}-{{ .Values.serviceName }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "base-station-platform.labels" . | nindent 4 }}
+    app: {{ .Values.serviceName }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "base-station-platform.selectorLabels" . | nindent 6 }}
+      app: {{ .Values.serviceName }}
+  template:
+    metadata:
+      labels:
+        {{- include "base-station-platform.selectorLabels" . | nindent 8 }}
+        app: {{ .Values.serviceName }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: {{ .Values.serviceName }}
+        image: "{{ .Values.image.repository }}/{{ .Values.serviceName }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.port }}
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: {{ .Values.resources.limits.cpu }}
+            memory: {{ .Values.resources.limits.memory }}
+            ephemeral-storage: {{ .Values.resources.limits.ephemeral-storage }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+            ephemeral-storage: {{ .Values.resources.requests.ephemeral-storage }}
+
