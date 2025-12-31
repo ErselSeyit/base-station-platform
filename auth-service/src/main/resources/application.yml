@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: auth-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres-auth:5432/authdb}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+server:
+  port: 8084
+
+# ============================================
+# EUREKA CLIENT CONFIGURATION
+# ============================================
+# This service registers with Eureka for service discovery.
+# Other services can find this service by name: 'auth-service'
+# ============================================
+eureka:
+  client:
+    # service-url.defaultZone: Eureka server URL for registration.
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.uuid}
+
+jwt:
+  # JWT_SECRET environment variable is REQUIRED
+  # No default value for security - must be set explicitly
+  # Generate a secure secret: openssl rand -base64 32
+  secret: ${JWT_SECRET:}
+  expiration: ${JWT_EXPIRATION:86400000} # 24 hours default
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    com.huawei.auth: DEBUG
+

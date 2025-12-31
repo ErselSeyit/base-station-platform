@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for auth-service
+  
+  Logging Strategy:
+  - Production: ROOT=WARN, auth events=INFO
+  - Authentication events at INFO for security auditing
+  - JWT operations at INFO for token lifecycle tracking
+  - Failed auth attempts at WARN for security monitoring
+  
+  MDC Keys:
+  - correlationId: X-Correlation-ID for request tracing
+  - userId: Authenticated user identifier
+  - clientIp: Source IP for security context
+  
+  SECURITY NOTICE:
+  - Never log sensitive data (passwords, tokens, secrets)
+  - Failed authentication attempts should be logged for intrusion detection
+  - Consider separate security audit log appender for compliance
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] [%X{userId:-anonymous}] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="CONSOLE"/>
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Development profile -->
+    <springProfile name="!production">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        
+        <logger name="com.huawei.auth" level="DEBUG"/>
+        <logger name="com.huawei.auth.security" level="DEBUG"/>
+        <logger name="org.springframework.web" level="INFO"/>
+        <logger name="org.springframework.security" level="DEBUG"/>
+        <logger name="org.hibernate.SQL" level="DEBUG"/>
+    </springProfile>
+
+    <!-- Production profile -->
+    <springProfile name="production">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>correlationId</includeMdcKeyName>
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>userId</includeMdcKeyName>
+                <customFields>{"service":"auth-service"}</customFields>
+            </encoder>
+        </appender>
+
+        <!-- ROOT: WARN for production -->
+        <root level="WARN">
+            <appender-ref ref="JSON"/>
+        </root>
+        
+        <!-- Authentication: INFO for security auditing -->
+        <logger name="com.huawei.auth" level="INFO"/>
+        
+        <!-- JWT operations: INFO for token lifecycle -->
+        <logger name="com.huawei.auth.security" level="INFO"/>
+        
+        <!-- Spring Security: INFO for auth events -->
+        <logger name="org.springframework.security" level="INFO"/>
+        
+        <!-- Hibernate: WARN to avoid SQL spam -->
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="org.hibernate.type.descriptor.sql" level="WARN"/>
+        
+        <!-- Eureka -->
+        <logger name="com.netflix.discovery" level="INFO"/>
+        <logger name="com.netflix.eureka" level="INFO"/>
+    </springProfile>
+</configuration>
