@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: notification-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres-notification:5432/notificationdb}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  task:
+    execution:
+      pool:
+        core-size: 5
+        max-size: 10
+        queue-capacity: 100
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:admin}
+    password: ${SPRING_RABBITMQ_PASSWORD:admin}
+
+server:
+  port: 8083
+
+# ============================================
+# EUREKA CLIENT CONFIGURATION
+# ============================================
+# This service registers with Eureka for service discovery.
+# Other services can find this service by name: 'notification-service'
+# ============================================
+eureka:
+  client:
+    # service-url.defaultZone: Eureka server URL for registration.
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.uuid}
+
+logging:
+  level:
+    com.huawei.notification: DEBUG
+

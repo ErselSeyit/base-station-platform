@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for notification-service
+  
+  Logging Strategy:
+  - Production: ROOT=WARN, app packages=INFO
+  - RabbitMQ listener at INFO for message consumption visibility
+  - Dead Letter Queue handling at WARN for failure tracking
+  
+  MDC Keys:
+  - correlationId: X-Correlation-ID for distributed tracing
+  - notificationId: Unique notification identifier
+  - stationId: Source station for the notification
+  
+  Production recommendations:
+  - Monitor DLQ logs closely for message delivery failures
+  - Use structured logging for alert aggregation
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="CONSOLE"/>
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Development profile -->
+    <springProfile name="!production">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        
+        <logger name="com.huawei.notification" level="DEBUG"/>
+        <logger name="com.huawei.notification.listener" level="DEBUG"/>
+        <logger name="org.springframework.web" level="INFO"/>
+        <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <logger name="org.springframework.amqp" level="DEBUG"/>
+    </springProfile>
+
+    <!-- Production profile -->
+    <springProfile name="production">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>correlationId</includeMdcKeyName>
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>notificationId</includeMdcKeyName>
+                <customFields>{"service":"notification-service"}</customFields>
+            </encoder>
+        </appender>
+
+        <!-- ROOT: WARN for production -->
+        <root level="WARN">
+            <appender-ref ref="JSON"/>
+        </root>
+        
+        <!-- Application: INFO for delivery tracking -->
+        <logger name="com.huawei.notification" level="INFO"/>
+        
+        <!-- RabbitMQ listeners: INFO for message consumption -->
+        <logger name="com.huawei.notification.listener" level="INFO"/>
+        
+        <!-- Spring AMQP: INFO for connection events -->
+        <logger name="org.springframework.amqp" level="INFO"/>
+        
+        <!-- Hibernate: WARN to avoid SQL spam -->
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="org.hibernate.type.descriptor.sql" level="WARN"/>
+        
+        <!-- Eureka -->
+        <logger name="com.netflix.discovery" level="INFO"/>
+        <logger name="com.netflix.eureka" level="INFO"/>
+    </springProfile>
+</configuration>
