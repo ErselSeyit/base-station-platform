@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for base-station-service
+  
+  Logging Strategy:
+  - Production: ROOT=WARN (reduces noise), app packages=INFO
+  - Development: ROOT=INFO, app packages=DEBUG
+  - SQL logging disabled by default (enable via dev profile)
+  
+  MDC Keys:
+  - correlationId: X-Correlation-ID header for distributed tracing
+  - requestId: Unique request identifier
+  
+  Production recommendations:
+  - Use JSON encoder for log aggregation (ELK/Splunk)
+  - Set root level to ERROR in high-traffic environments
+  - Enable async appenders for performance
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- Console appender with correlation ID support -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- Async wrapper for production (reduces I/O blocking) -->
+    <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="CONSOLE"/>
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Development profile: more verbose logging -->
+    <springProfile name="!production">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        
+        <!-- Application: DEBUG in development -->
+        <logger name="com.huawei.basestation" level="DEBUG"/>
+        <logger name="org.springframework.web" level="INFO"/>
+        <!-- SQL logging: enable for query debugging -->
+        <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <logger name="org.hibernate.type.descriptor.sql" level="TRACE"/>
+    </springProfile>
+
+    <!-- Production profile: optimized for noise reduction -->
+    <springProfile name="production">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>correlationId</includeMdcKeyName>
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <customFields>{"service":"base-station-service"}</customFields>
+            </encoder>
+        </appender>
+
+        <!-- ROOT: WARN to reduce noise from third-party libs -->
+        <root level="WARN">
+            <appender-ref ref="JSON"/>
+        </root>
+        
+        <!-- Application packages: INFO for operational visibility -->
+        <logger name="com.huawei.basestation" level="INFO"/>
+        <logger name="com.huawei.basestation.config" level="INFO"/>
+        
+        <!-- Hibernate: WARN to avoid SQL spam -->
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="org.hibernate.type.descriptor.sql" level="WARN"/>
+        
+        <!-- Resilience4j: INFO for circuit breaker state changes -->
+        <logger name="io.github.resilience4j" level="INFO"/>
+        
+        <!-- Eureka: INFO for registration events -->
+        <logger name="com.netflix.discovery" level="INFO"/>
+        <logger name="com.netflix.eureka" level="INFO"/>
+    </springProfile>
+</configuration>
+

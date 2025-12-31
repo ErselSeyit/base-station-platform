@@ -1,0 +1,115 @@
+spring:
+  application:
+    name: base-station-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres-basestation:5432/basestationdb}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+  # Note: Redis configuration removed - not used for caching in this service
+  # Redis is only used in API Gateway for rate limiting
+
+server:
+  port: 8081
+
+# ============================================
+# EUREKA CLIENT CONFIGURATION
+# ============================================
+# This service registers with Eureka for service discovery.
+# Other services can find this service by name: 'base-station-service'
+# ============================================
+eureka:
+  client:
+    # service-url.defaultZone: Eureka server URL for registration.
+    # Use 'eureka-server' service name in Docker/K8s, localhost for local dev.
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
+    
+    # register-with-eureka: true to register this service with Eureka.
+    # This allows other services to discover this service by name.
+    register-with-eureka: true
+    
+    # fetch-registry: true to fetch the registry from Eureka.
+    # Enables this service to discover and call other services.
+    fetch-registry: true
+  instance:
+    # prefer-ip-address: Use IP instead of hostname for registration.
+    # Recommended for Docker/Kubernetes environments.
+    prefer-ip-address: true
+    # instance-id: Unique identifier for this instance.
+    # Useful when running multiple instances of the same service.
+    instance-id: ${spring.application.name}:${random.uuid}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      # Zipkin tracing endpoint - use 'zipkin' service name in Docker/K8s
+      endpoint: ${MANAGEMENT_TRACING_ENDPOINT:http://zipkin:9411/api/v2/spans}
+
+# ============================================
+# MONITORING SERVICE CLIENT CONFIGURATION
+# ============================================
+# URL for connecting to the monitoring service.
+# Use 'monitoring-service' hostname in Docker/K8s environments.
+# ============================================
+monitoring:
+  service:
+    url: ${MONITORING_SERVICE_URL:http://monitoring-service:8082}
+
+logging:
+  level:
+    com.huawei.basestation: DEBUG
+    org.springframework.web: INFO
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      monitoringService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+  timelimiter:
+    instances:
+      monitoringService:
+        timeoutDuration: 2s
+        cancelRunningFuture: true
+  retry:
+    instances:
+      monitoringService:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - org.springframework.web.client.RestClientException
+          - java.io.IOException

@@ -1,0 +1,32 @@
+spring:
+  autoconfigure:
+    exclude:
+      - io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration
+      - io.github.resilience4j.springboot3.retry.autoconfigure.RetryAutoConfiguration
+      - io.github.resilience4j.springboot3.timelimiter.autoconfigure.TimeLimiterAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:basestation-it;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+  sql:
+    init:
+      mode: never
+
+server:
+  port: 0
+
+eureka:
+  client:
+    enabled: false
+
+monitoring:
+  service:
+    url: http://localhost:0
