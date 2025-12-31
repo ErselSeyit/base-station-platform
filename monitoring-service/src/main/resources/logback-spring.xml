@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for monitoring-service
+  
+  Logging Strategy:
+  - Production: ROOT=WARN, app packages=INFO
+  - WebSocket handlers at INFO to track connection lifecycle
+  - MongoDB operations at WARN to avoid query spam
+  
+  MDC Keys:
+  - correlationId: X-Correlation-ID for distributed tracing
+  - stationId: Base station identifier for metric correlation
+  
+  Production recommendations:
+  - Use structured JSON logging for log aggregation
+  - Enable async appenders for high-throughput metric ingestion
+  - Consider separate appender for WebSocket events
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="CONSOLE"/>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Development profile -->
+    <springProfile name="!production">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        
+        <logger name="com.huawei.monitoring" level="DEBUG"/>
+        <logger name="com.huawei.monitoring.websocket" level="DEBUG"/>
+        <logger name="org.springframework.web" level="INFO"/>
+        <logger name="org.springframework.data.mongodb" level="DEBUG"/>
+    </springProfile>
+
+    <!-- Production profile -->
+    <springProfile name="production">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>correlationId</includeMdcKeyName>
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>stationId</includeMdcKeyName>
+                <customFields>{"service":"monitoring-service"}</customFields>
+            </encoder>
+        </appender>
+
+        <!-- ROOT: WARN for production -->
+        <root level="WARN">
+            <appender-ref ref="JSON"/>
+        </root>
+        
+        <!-- Application: INFO for operational visibility -->
+        <logger name="com.huawei.monitoring" level="INFO"/>
+        
+        <!-- WebSocket: INFO to track connections -->
+        <logger name="com.huawei.monitoring.websocket" level="INFO"/>
+        
+        <!-- Alert engine: INFO for threshold events -->
+        <logger name="com.huawei.monitoring.service.AlertRuleEngine" level="INFO"/>
+        
+        <!-- MongoDB: WARN to avoid query spam -->
+        <logger name="org.springframework.data.mongodb" level="WARN"/>
+        <logger name="org.mongodb.driver" level="WARN"/>
+        
+        <!-- RabbitMQ: INFO for connection events -->
+        <logger name="org.springframework.amqp" level="INFO"/>
+        
+        <!-- Eureka -->
+        <logger name="com.netflix.discovery" level="INFO"/>
+        <logger name="com.netflix.eureka" level="INFO"/>
+    </springProfile>
+</configuration>
