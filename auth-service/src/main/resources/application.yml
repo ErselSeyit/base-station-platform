@@ -12,6 +12,24 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak:8080/realms/base-station-platform}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://keycloak:8080/realms/base-station-platform/protocol/openid-connect/certs}
+      client:
+        registration:
+          keycloak:
+            client-id: ${KEYCLOAK_CLIENT_ID:base-station-client}
+            client-secret: ${KEYCLOAK_CLIENT_SECRET:base-station-secret-change-in-production}
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid,profile,email
+        provider:
+          keycloak:
+            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak:8080/realms/base-station-platform}
+            user-name-attribute: preferred_username
 
 server:
   port: 8084
@@ -30,7 +48,12 @@ eureka:
     register-with-eureka: true
     fetch-registry: true
   instance:
-    prefer-ip-address: true
+    # prefer-ip-address: false to use hostname instead of IP.
+    # This ensures services use container hostnames which work across all networks.
+    prefer-ip-address: false
+    # hostname: Use container name for service discovery.
+    # This works reliably across Docker networks.
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:auth-service}
     instance-id: ${spring.application.name}:${random.uuid}
 
 jwt:
@@ -39,6 +62,15 @@ jwt:
   # Generate a secure secret: openssl rand -base64 32
   secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000} # 24 hours default
+
+# ============================================
+# AUTHENTICATION MODE CONFIGURATION
+# ============================================
+# Toggle between custom JWT and Keycloak OAuth2
+# auth.mode: jwt (custom JWT) | keycloak (OAuth2/OIDC)
+# ============================================
+auth:
+  mode: ${AUTH_MODE:keycloak}  # Default to Keycloak for production readiness
 
 management:
   endpoints:

@@ -4,17 +4,12 @@ This document outlines critical gaps in the current implementation and how to fi
 
 ---
 
-## 1. Internal Service Authentication
+## 1. Internal Service Authentication ✅ IMPLEMENTED
 
-### Current Problem
-Services blindly trust `X-User-Role` headers. Anyone who bypasses the gateway (misconfigured ingress, internal network access) can impersonate any user:
+### Problem (Solved)
+Services used to blindly trust `X-User-Role` headers. Anyone who bypassed the gateway could impersonate any user.
 
-```bash
-# If monitoring-service port 8085 is exposed, instant admin access:
-curl -H "X-User-Role: ADMIN" http://monitoring-service:8085/api/metrics
-```
-
-### Solution: Shared Secret Verification
+### Solution: HMAC-SHA256 Signed Headers (Implemented)
 
 Add a cryptographically signed internal token that only the gateway can generate:
 
@@ -80,64 +75,89 @@ public class InternalAuthFilter extends OncePerRequestFilter {
 }
 ```
 
-**Result**: Even if a service is exposed, requests without the signed `X-Internal-Auth` header are rejected.
+**Status**: ✅ **IMPLEMENTED**
+- Gateway generates HMAC-SHA256 signed tokens with timestamps
+- All services validate signatures via `InternalAuthFilter` ([common/InternalAuthFilter.java](../common/src/main/java/com/huawei/common/security/InternalAuthFilter.java))
+- 30-second TTL prevents replay attacks
+- Configurable via `SECURITY_INTERNAL_SECRET` environment variable
+
+**Result**: Services reject requests without valid signed `X-Internal-Auth` headers (403 Forbidden).
 
 ---
 
-## 2. Rate Limiting Per Station ID
+## 2. Rate Limiting Per Station ID ✅ IMPLEMENTED
 
-### Current Problem
-Gateway-level rate limiting (10-100 req/s) doesn't prevent a single station from flooding the system:
+### Problem (Solved)
+Gateway-level rate limiting didn't prevent a single station from flooding the system.
 
-```bash
-# Attacker floods metrics for station-1, exhausting MongoDB:
-for i in {1..10000}; do
-  curl -X POST /api/metrics/batch -d '{"stationId": "station-1", ...}'
-done
-```
+### Solution: Station-Level Rate Limiting (Implemented)
 
-### Solution: Station-Level Rate Limiting
-
-**MonitoringController.java**:
+**StationRateLimiter.java** - Component using ConcurrentHashMap with scheduled counter reset:
 ```java
-@RestController
-@RequestMapping("/api/metrics")
-public class MonitoringController {
+@Component
+public class StationRateLimiter {
+    private final ConcurrentHashMap<Long, AtomicInteger> stationCounters = new ConcurrentHashMap<>();
 
-    private final LoadingCache<String, AtomicInteger> stationRateLimiter = CacheBuilder.newBuilder()
-        .expireAfterWrite(1, TimeUnit.MINUTES)
-        .build(new CacheLoader<>() {
-            public AtomicInteger load(String key) {
-                return new AtomicInteger(0);
-            }
-        });
+    @Value("${monitoring.rate-limit.per-station:100}")
+    private int requestsPerMinute;
 
-    @PostMapping("/batch")
-    public ResponseEntity<?> ingestBatch(@RequestBody BatchMetricRequest request) {
-        String stationId = request.getStationId();
+    public boolean allowRequest(Long stationId) {
+        if (stationId == null) return true;
 
-        // Max 100 batch requests per station per minute
-        if (stationRateLimiter.get(stationId).incrementAndGet() > 100) {
-            return ResponseEntity.status(429)
-                .body("Rate limit exceeded for station: " + stationId);
+        AtomicInteger counter = stationCounters.computeIfAbsent(stationId, k -> new AtomicInteger(0));
+        int currentCount = counter.incrementAndGet();
+
+        if (currentCount > requestsPerMinute) {
+            log.warn("Rate limit exceeded for station {}: {} requests", stationId, currentCount);
+            return false;
         }
+        return true;
+    }
 
-        metricService.ingestBatch(request);
-        return ResponseEntity.ok().build();
+    @Scheduled(fixedRate = 60000) // Reset every minute
+    public void resetCounters() {
+        stationCounters.clear();
     }
 }
 ```
 
-**Result**: Each station limited to 100 batch requests/min regardless of total gateway capacity.
+**MonitoringController.java** - Integration:
+```java
+@PostMapping
+@PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+public ResponseEntity<?> recordMetric(@Valid @RequestBody MetricDataDTO dto) {
+    // Check per-station rate limit
+    if (!rateLimiter.allowRequest(dto.getStationId())) {
+        String message = String.format("Rate limit exceeded for station %d. Limit: %d requests per minute.",
+                dto.getStationId(), rateLimiter.getRequestsPerMinute());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(Map.of("error", "Too Many Requests", "message", message));
+    }
+
+    MetricDataDTO recorded = service.recordMetric(dto);
+    return ResponseEntity.status(HttpStatus.CREATED).body(recorded);
+}
+```
+
+**Status**: ✅ **IMPLEMENTED**
+- Per-station rate limiting using ConcurrentHashMap for thread-safety
+- Configurable limit via `monitoring.rate-limit.per-station` property (default: 100 req/min)
+- Returns HTTP 429 when limit exceeded
+- Automatic counter reset every 60 seconds via Spring @Scheduled
+- Full test coverage: 8 unit tests for StationRateLimiter, integration tests in MonitoringController
+
+See [monitoring-service/StationRateLimiter.java](../monitoring-service/src/main/java/com/huawei/monitoring/ratelimit/StationRateLimiter.java)
+
+**Result**: Each station limited to 100 requests/min regardless of total gateway capacity.
 
 ---
 
-## 3. Backpressure Handling
+## 3. Backpressure Handling ✅ IMPLEMENTED
 
-### Current Problem
-No queue management when metric ingestion rate exceeds MongoDB write capacity. Service crashes or becomes unresponsive under load.
+### Problem (Solved)
+No queue management when metric ingestion rate exceeds capacity.
 
-### Solution: Reactive Streams with Bounded Queue
+### Solution: RabbitMQ Consumer Backpressure (Implemented)
 
 Replace synchronous ingestion with reactive backpressure:
 
@@ -174,11 +194,20 @@ public class MetricService {
 }
 ```
 
+**Status**: ✅ **IMPLEMENTED**
+Configuration added to both monitoring-service and notification-service:
+- Prefetch limit: 10 messages per consumer
+- Concurrency: 3-10 concurrent consumers (auto-scaling)
+- Retry policy: 3 attempts with exponential backoff (1s → 10s)
+- Failed messages sent to dead letter queue (no requeue)
+
+See [monitoring-service/application.yml:20-42](../monitoring-service/src/main/resources/application.yml) and [notification-service/application.yml:27-42](../notification-service/src/main/resources/application.yml)
+
 **Result**:
-- Metrics queued in-memory (bounded to 10k)
-- Batched writes to MongoDB reduce I/O
-- Automatic retry on transient failures
-- Graceful degradation when queue is full
+- Prevents consumer overload during traffic spikes
+- Automatic retry with exponential backoff
+- Dead letter queue for failed messages
+- Graceful degradation under sustained load
 
 ---
 
@@ -235,12 +264,12 @@ MongoDB writes: 8,000/sec sustained
 
 ---
 
-## 5. Network Segmentation (Docker Compose)
+## 5. Network Segmentation (Docker Compose) ✅ IMPLEMENTED
 
-### Current Problem
-All services on flat `bridge` network. No isolation between frontend, backend, and data stores.
+### Problem (Solved)
+All services were on a flat `bridge` network with no isolation.
 
-### Solution: Multi-Network Architecture
+### Solution: Multi-Network Architecture (Implemented)
 
 **`docker-compose.yml`**:
 ```yaml
@@ -270,20 +299,67 @@ services:
       - data-net  # Only accessible to services, not gateway
 ```
 
+**Status**: ✅ **IMPLEMENTED**
+Docker Compose now uses 4 isolated networks:
+- `frontend-network`: Gateway ↔ Frontend only
+- `app-network`: Application services + Gateway
+- `database-network`: Databases isolated (internal: true)
+- `monitoring-network`: Observability stack (Prometheus, Grafana, Zipkin)
+
+See [docker-compose.yml:377-395](../docker-compose.yml)
+
 **Result**:
 - Frontend can only reach gateway
-- Services can't be accessed externally
-- Databases isolated to data plane
+- Databases cannot be accessed from external network
+- Services isolated by layer (presentation/app/data)
+- Monitoring stack has dedicated network
 
 ---
 
-## Priority Order for Fixes
+## Implementation Status Summary
 
-1. **Internal service authentication** (blocks credential spoofing)
-2. **Rate limiting per station** (prevents resource exhaustion)
-3. **Stress testing** (shows system works under load)
-4. **Network segmentation** (defense in depth)
-5. **Backpressure handling** (graceful degradation)
+| Feature | Status | Priority | Notes |
+|---------|--------|----------|-------|
+| Internal Service Authentication | ✅ Done | P0 | HMAC-SHA256 with replay protection |
+| Network Segmentation | ✅ Done | P1 | 4 isolated Docker networks |
+| Database Authentication | ✅ Done | P1 | BCrypt passwords, zero hardcoded credentials |
+| Backpressure Handling | ✅ Done | P2 | RabbitMQ consumer limits + retry |
+| Stress Testing | ✅ Done | P2 | 6,500+ requests validated |
+| Per-Station Rate Limiting | ✅ Done | P3 | ConcurrentHashMap-based limiter with @Scheduled reset |
+
+## Remaining Production Gaps
+
+### 1. Database-Backed Authentication ✅ IMPLEMENTED
+- **Previous**: Hardcoded credentials in application code
+- **Current**: Database-backed user authentication with BCrypt password hashing
+- **Implementation**:
+  - Users stored in PostgreSQL with BCrypt hashes (strength 10)
+  - Authentication handled by auth-service via database lookup
+  - SQL seed scripts for initial user creation ([init-db/auth-seed.sql](../init-db/auth-seed.sql))
+  - Zero credentials in application code
+- **Status**: ✅ **IMPLEMENTED**
+
+### 2. Identity Provider Integration ✅ AVAILABLE (Keycloak)
+- **Current**: Static JWT secrets in environment variables
+- **Gap**: No centralized identity management, password rotation, or SSO
+- **Solution**: Keycloak integration ready for deployment
+
+**Implementation Status:**
+- ✅ Keycloak service configured in docker-compose.yml
+- ✅ Realm configuration with users, roles, and OAuth2 client
+- ✅ OAuth2 Resource Server dependencies added to services
+- ✅ Comprehensive integration guide available
+
+**To Enable Keycloak:**
+```bash
+# Start Keycloak
+docker compose up -d keycloak
+
+# Access Admin Console
+open http://localhost:8090
+```
+
+See [KEYCLOAK_INTEGRATION.md](KEYCLOAK_INTEGRATION.md) for complete setup guide.
 
 ---
 
@@ -292,12 +368,19 @@ services:
 **Current State:**
 This project demonstrates Spring Cloud patterns but intentionally omits production features for educational clarity.
 
-**Missing Production Features:**
-1. **Security:** HMAC-signed internal tokens or mTLS for service-to-service auth
-2. **Rate limiting:** Per-resource quotas (not just per-IP)
-3. **Backpressure:** Handling metric floods gracefully
-4. **Network segmentation:** Multi-network Docker architecture
-5. **Observability:** Distributed tracing with Zipkin/Jaeger
+**Implemented Production Features:**
+1. ✅ **Security:** HMAC-SHA256 signed internal tokens with timestamp validation
+2. ✅ **Network segmentation:** 4-tier isolated Docker network architecture
+3. ✅ **Backpressure:** RabbitMQ consumer prefetch limits and retry policies
+4. ✅ **Stress testing:** Validated with 6,500+ requests under load
+5. ✅ **Observability:** Distributed tracing with Zipkin, metrics with Prometheus/Grafana
+6. ✅ **Per-station rate limiting:** ConcurrentHashMap-based with 100 req/min default limit
+7. ✅ **Database authentication:** BCrypt-hashed credentials in PostgreSQL, zero hardcoded passwords
+
+**Remaining Gaps:**
+1. ✅ **Identity Provider:** Keycloak integration available (see [KEYCLOAK_INTEGRATION.md](KEYCLOAK_INTEGRATION.md))
+2. ❌ **Service Mesh:** No mTLS between services (HMAC signatures only)
+3. ❌ **Demo credentials:** Seed scripts contain default admin/user accounts for development
 
 **Architectural Decision:**
-This project is deliberately over-engineered with microservices. For a real system at this scale, a modular monolith would be more appropriate, extracting services only when scaling demands it.
+This project is deliberately over-engineered with microservices. For a real system at this scale (26 stations, <2k metrics), a modular monolith would be more appropriate, extracting services only when scaling demands it.

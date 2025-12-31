@@ -34,18 +34,21 @@ eureka:
     # Use 'eureka-server' service name in Docker/K8s, localhost for local dev.
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
-    
+
     # register-with-eureka: true to register this service with Eureka.
     # This allows other services to discover this service by name.
     register-with-eureka: true
-    
+
     # fetch-registry: true to fetch the registry from Eureka.
     # Enables this service to discover and call other services.
     fetch-registry: true
   instance:
-    # prefer-ip-address: Use IP instead of hostname for registration.
-    # Recommended for Docker/Kubernetes environments.
-    prefer-ip-address: true
+    # prefer-ip-address: false to use hostname instead of IP.
+    # This ensures services use container hostnames which work across all networks.
+    prefer-ip-address: false
+    # hostname: Use container name for service discovery.
+    # This works reliably across Docker networks.
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:base-station-service}
     # instance-id: Unique identifier for this instance.
     # Useful when running multiple instances of the same service.
     instance-id: ${spring.application.name}:${random.uuid}

@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.monitoring.config.TestSecurityConfig;
 import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.MetricType;
+import com.huawei.monitoring.ratelimit.StationRateLimiter;
 import com.huawei.monitoring.service.MonitoringService;
 
 /**
@@ -50,6 +51,9 @@ class MonitoringControllerTest {
     @MockitoBean
     private MonitoringService monitoringService;
 
+    @MockitoBean
+    private StationRateLimiter rateLimiter;
+
     @Test
     @DisplayName("POST /api/v1/metrics - Should record metric successfully")
     void recordMetric_ValidRequest_ReturnsCreated() throws Exception {
@@ -59,6 +63,7 @@ class MonitoringControllerTest {
         savedDTO.setId("metric-123");
         savedDTO.setTimestamp(LocalDateTime.now());
 
+        when(rateLimiter.allowRequest(1L)).thenReturn(true);
         when(monitoringService.recordMetric(any(MetricDataDTO.class))).thenReturn(savedDTO);
 
         // When & Then
@@ -72,6 +77,7 @@ class MonitoringControllerTest {
                 .andExpect(jsonPath("$.value").value(75.5))
                 .andExpect(jsonPath("$.timestamp").exists());
 
+        verify(rateLimiter).allowRequest(1L);
         verify(monitoringService).recordMetric(any(MetricDataDTO.class));
     }
 
@@ -86,6 +92,27 @@ class MonitoringControllerTest {
                 .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
                 .content(Objects.requireNonNull(objectMapper.writeValueAsString(invalidDTO))))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/metrics - Should return 429 when rate limit exceeded")
+    void recordMetric_RateLimitExceeded_ReturnsTooManyRequests() throws Exception {
+        // Given
+        MetricDataDTO inputDTO = createMetricDTO(1L, MetricType.CPU_USAGE, 75.5);
+        when(rateLimiter.allowRequest(1L)).thenReturn(false);
+        when(rateLimiter.getRequestsPerMinute()).thenReturn(100);
+        when(rateLimiter.getCurrentCount(1L)).thenReturn(101);
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/metrics")
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content(Objects.requireNonNull(objectMapper.writeValueAsString(inputDTO))))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error").value("Too Many Requests"))
+                .andExpect(jsonPath("$.message").value("Rate limit exceeded for station 1. Limit: 100 requests per minute."));
+
+        verify(rateLimiter).allowRequest(1L);
+        verify(rateLimiter).getRequestsPerMinute();
     }
 
     @Test

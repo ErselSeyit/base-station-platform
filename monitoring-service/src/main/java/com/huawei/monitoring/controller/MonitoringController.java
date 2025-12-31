@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.MetricType;
+import com.huawei.monitoring.ratelimit.StationRateLimiter;
 import com.huawei.monitoring.service.MonitoringService;
 
 import jakarta.validation.Valid;
@@ -37,18 +38,31 @@ public class MonitoringController {
     private static final String START_TIME_NULL_MESSAGE = "Start time cannot be null";
 
     private final MonitoringService service;
+    private final StationRateLimiter rateLimiter;
 
-    public MonitoringController(MonitoringService service) {
+    public MonitoringController(MonitoringService service, StationRateLimiter rateLimiter) {
         this.service = service;
+        this.rateLimiter = rateLimiter;
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
-    public ResponseEntity<MetricDataDTO> recordMetric(@Valid @RequestBody MetricDataDTO dto) {
-        log.debug("Recording metric for station {}: type={}, value={}", 
+    public ResponseEntity<?> recordMetric(@Valid @RequestBody MetricDataDTO dto) {
+        log.debug("Recording metric for station {}: type={}, value={}",
                 dto.getStationId(), dto.getMetricType(), dto.getValue());
+
+        // Check per-station rate limit
+        if (!rateLimiter.allowRequest(dto.getStationId())) {
+            String message = String.format("Rate limit exceeded for station %d. Limit: %d requests per minute.",
+                    dto.getStationId(), rateLimiter.getRequestsPerMinute());
+            log.warn("Rate limit exceeded for station {}: current count={}",
+                    dto.getStationId(), rateLimiter.getCurrentCount(dto.getStationId()));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", "Too Many Requests", "message", message));
+        }
+
         MetricDataDTO recorded = service.recordMetric(Objects.requireNonNull(dto, "Metric DTO cannot be null"));
-        log.info("Successfully recorded metric for station {}: type={}", 
+        log.info("Successfully recorded metric for station {}: type={}",
                 recorded.getStationId(), recorded.getMetricType());
         return ResponseEntity.status(HttpStatus.CREATED).body(recorded);
     }
