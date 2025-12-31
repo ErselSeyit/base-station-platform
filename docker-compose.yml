@@ -1,0 +1,367 @@
+# Base Station Operations & Maintenance Platform - Docker Compose
+#
+# SECURITY WARNING:
+# This file uses default passwords for development convenience.
+# For production deployment, ALWAYS set environment variables with strong passwords.
+# 
+# To use environment variables:
+# 1. Copy .env.example to .env
+# 2. Update .env with strong, unique passwords
+# 3. Docker Compose will automatically use values from .env file
+#
+# Default values (used if .env not set):
+# - PostgreSQL passwords: "postgres"
+# - RabbitMQ credentials: "admin/admin"
+# - These defaults are INSECURE and should NOT be used in production
+#
+services:
+  postgres-basestation:
+    image: postgres:18-alpine
+    container_name: postgres-basestation
+    environment:
+      POSTGRES_DB: ${POSTGRES_BASESTATION_DB:-basestationdb}
+      POSTGRES_USER: ${POSTGRES_BASESTATION_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-basestation-data:/var/lib/postgresql/data
+      - ./init-db/basestation-seed.sql:/docker-entrypoint-initdb.d/seed.sql
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-notification:
+    image: postgres:18-alpine
+    container_name: postgres-notification
+    environment:
+      POSTGRES_DB: ${POSTGRES_NOTIFICATION_DB:-notificationdb}
+      POSTGRES_USER: ${POSTGRES_NOTIFICATION_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_NOTIFICATION_PASSWORD:-postgres}
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-notification-data:/var/lib/postgresql/data
+      - ./init-db/notification-seed.sql:/docker-entrypoint-initdb.d/seed.sql
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-auth:
+    image: postgres:18-alpine
+    container_name: postgres-auth
+    environment:
+      POSTGRES_DB: ${POSTGRES_AUTH_DB:-authdb}
+      POSTGRES_USER: ${POSTGRES_AUTH_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_AUTH_PASSWORD:-postgres}
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:8.2
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-admin}
+      MONGO_INITDB_DATABASE: monitoringdb
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - ./init-db/mongodb-seed.js:/docker-entrypoint-initdb.d/seed.js
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--username", "${MONGODB_USER:-admin}", "--password", "${MONGODB_PASSWORD:-admin}", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zipkin:
+    image: openzipkin/zipkin:3.5
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - basestation-network
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - basestation-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  eureka-server:
+    build:
+      context: .
+      dockerfile: eureka-server/Dockerfile
+    container_name: eureka-server
+    ports:
+      - "8762:8761"
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  base-station-service:
+    build:
+      context: .
+      dockerfile: base-station-service/Dockerfile
+    container_name: base-station-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-basestation:5432/${POSTGRES_BASESTATION_DB:-basestationdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_BASESTATION_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      MANAGEMENT_TRACING_ENDPOINT: http://zipkin:9411
+      # Internal service authentication (prevents header spoofing)
+      SECURITY_INTERNAL_ENABLED: "true"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+    ports:
+      - "8084:8081"
+    depends_on:
+      postgres-basestation:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    networks:
+      - basestation-network
+    restart: unless-stopped
+
+  monitoring-service:
+    build:
+      context: .
+      dockerfile: monitoring-service/Dockerfile
+    container_name: monitoring-service
+    environment:
+      SPRING_DATA_MONGODB_HOST: mongodb
+      SPRING_DATA_MONGODB_PORT: 27017
+      SPRING_DATA_MONGODB_DATABASE: monitoringdb
+      SPRING_DATA_MONGODB_USERNAME: ${MONGODB_USER:-admin}
+      SPRING_DATA_MONGODB_PASSWORD: ${MONGODB_PASSWORD:-admin}
+      SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: admin
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      # Internal service authentication (prevents header spoofing)
+      SECURITY_INTERNAL_ENABLED: "true"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+    ports:
+      - "8085:8082"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    networks:
+      - basestation-network
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: notification-service
+    command: ["java", "-Dspring.main.allow-circular-references=true", "-jar", "/app/app.jar"]
+    environment:
+      SPRING_MAIN_ALLOW_CIRCULAR_REFERENCES: "true"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-notification:5432/${POSTGRES_NOTIFICATION_DB:-notificationdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_NOTIFICATION_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_NOTIFICATION_PASSWORD:-postgres}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      # Internal service authentication (prevents header spoofing)
+      SECURITY_INTERNAL_ENABLED: "true"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+    ports:
+      - "8086:8083"
+    depends_on:
+      postgres-notification:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    networks:
+      - basestation-network
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: auth-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/${POSTGRES_AUTH_DB:-authdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_AUTH_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_AUTH_PASSWORD:-postgres}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      # SECURITY: JWT_SECRET must be set via .env file - no default provided for security
+      # Generate a strong secret: openssl rand -base64 64
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET environment variable is required}
+      # Internal service authentication (prevents header spoofing)
+      SECURITY_INTERNAL_ENABLED: "true"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+    ports:
+      - "8087:8084"
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    networks:
+      - basestation-network
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: api-gateway
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      MANAGEMENT_TRACING_ENDPOINT: http://zipkin:9411
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_SIMULATE_VALIDATION: "true"
+      # Internal service authentication (prevents header spoofing)
+      SECURITY_INTERNAL_ENABLED: "true"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - base-station-service
+      - monitoring-service
+      - notification-service
+      - auth-service
+      - eureka-server
+      - redis
+    networks:
+      - basestation-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - basestation-network
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=http://api-gateway:8080/api/v1
+
+volumes:
+  postgres-basestation-data:
+  postgres-notification-data:
+  postgres-auth-data:
+  mongodb-data:
+  redis-data:
+  rabbitmq-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  basestation-network:
+    driver: bridge
