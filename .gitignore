@@ -1,0 +1,82 @@
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Package Files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Spring Boot
+application-local.yml
+application-dev.yml
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+.env.development
+# Note: .env.example should be committed as a template
+secrets/
+*.secret
+*.key
+*.pem
+*.p12
+*.jks
+credentials.*
+config/secrets.*
+sonar-project.properties
+
+# Docker
+*.log
+
+# Test coverage
+.nyc_output/
+coverage/
+
+effective-pom.xml
+.claude/
+*.sh
+node_modules
+
+# Mermaid CLI
+package.json
+package-lock.json
+node_modules/

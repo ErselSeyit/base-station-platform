@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+README.md
+TESTING.md
+QUICK_TEST.md
+DEPRECATION_FIX.md
+FRONTEND_SETUP.md
+GUI_FEATURES.md
+PROFESSIONAL_GUI_COMPLETE.md
+PACKAGE_UPDATES.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node modules (for root, frontend has its own)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build outputs
+target/
+dist/
+build/
+*.jar
+*.war
+*.ear
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scripts (not needed in containers)
+scripts/
+
+# Frontend specific (handled by frontend/.dockerignore)
+frontend/
