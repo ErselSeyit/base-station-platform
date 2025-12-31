@@ -1,0 +1,66 @@
+export enum StationType {
+  MACRO_CELL = 'MACRO_CELL',
+  MICRO_CELL = 'MICRO_CELL',
+  SMALL_CELL = 'SMALL_CELL',
+  FEMTO_CELL = 'FEMTO_CELL',
+}
+
+export enum StationStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  MAINTENANCE = 'MAINTENANCE',
+  OFFLINE = 'OFFLINE',
+}
+
+export enum MetricType {
+  CPU_USAGE = 'CPU_USAGE',
+  MEMORY_USAGE = 'MEMORY_USAGE',
+  POWER_CONSUMPTION = 'POWER_CONSUMPTION',
+  TEMPERATURE = 'TEMPERATURE',
+  SIGNAL_STRENGTH = 'SIGNAL_STRENGTH',
+  UPTIME = 'UPTIME',
+  CONNECTION_COUNT = 'CONNECTION_COUNT',
+  DATA_THROUGHPUT = 'DATA_THROUGHPUT',
+}
+
+export enum NotificationType {
+  ALERT = 'ALERT',
+  WARNING = 'WARNING',
+  INFO = 'INFO',
+}
+
+export interface BaseStation {
+  id?: number
+  stationName: string
+  location: string
+  latitude: number
+  longitude: number
+  stationType: StationType
+  status: StationStatus
+  powerConsumption: number
+  description?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface MetricData {
+  id?: string
+  stationId: number
+  stationName: string
+  metricType: MetricType
+  value: number
+  unit: string
+  timestamp?: string
+}
+
+export interface Notification {
+  id?: number
+  stationId: number
+  stationName?: string
+  message: string
+  type: NotificationType
+  status?: 'UNREAD' | 'READ'
+  createdAt?: string
+  readAt?: string
+}
+
