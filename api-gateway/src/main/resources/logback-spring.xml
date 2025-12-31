@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for api-gateway
+  
+  Logging Strategy:
+  - Production: ROOT=WARN, gateway routing=INFO
+  - Rate limiting events at INFO for throttling visibility
+  - Error handling at INFO for debugging failed requests
+  
+  MDC Keys:
+  - correlationId: X-Correlation-ID propagated to downstream services
+  - requestPath: API path being accessed
+  - clientIp: Source IP for rate limiting context
+  
+  Production recommendations:
+  - Enable access logging for audit trails
+  - Monitor rate limiting logs for abuse detection
+  - Use structured logging for API analytics
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="CONSOLE"/>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Development profile -->
+    <springProfile name="!production">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        
+        <logger name="com.huawei.gateway" level="DEBUG"/>
+        <logger name="org.springframework.cloud.gateway" level="DEBUG"/>
+        <logger name="org.springframework.cloud.gateway.filter.ratelimit" level="DEBUG"/>
+    </springProfile>
+
+    <!-- Production profile -->
+    <springProfile name="production">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>correlationId</includeMdcKeyName>
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>requestPath</includeMdcKeyName>
+                <customFields>{"service":"api-gateway"}</customFields>
+            </encoder>
+        </appender>
+
+        <!-- ROOT: WARN for production -->
+        <root level="WARN">
+            <appender-ref ref="JSON"/>
+        </root>
+        
+        <!-- Gateway routing: INFO for request flow -->
+        <logger name="com.huawei.gateway" level="INFO"/>
+        <logger name="org.springframework.cloud.gateway" level="INFO"/>
+        
+        <!-- Rate limiting: INFO for throttle events -->
+        <logger name="org.springframework.cloud.gateway.filter.ratelimit" level="INFO"/>
+        
+        <!-- Redis: WARN to reduce noise -->
+        <logger name="io.lettuce" level="WARN"/>
+        <logger name="org.springframework.data.redis" level="WARN"/>
+        
+        <!-- Reactor Netty: WARN to avoid connection spam -->
+        <logger name="reactor.netty" level="WARN"/>
+        
+        <!-- Eureka -->
+        <logger name="com.netflix.discovery" level="INFO"/>
+        <logger name="com.netflix.eureka" level="INFO"/>
+    </springProfile>
+</configuration>

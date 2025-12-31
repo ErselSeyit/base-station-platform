@@ -1,0 +1,134 @@
+spring:
+  application:
+    name: api-gateway
+  threads:
+    virtual:
+      enabled: true
+  data:
+    redis:
+      reactive:
+        # Redis host - use 'redis' service name in Docker/K8s
+        host: ${SPRING_DATA_REDIS_HOST:redis}
+        port: ${SPRING_DATA_REDIS_PORT:6379}
+  cloud:
+    gateway:
+      routes:
+        - id: base-station-service
+          uri: lb://base-station-service
+          predicates:
+            - Path=/api/v1/stations/**
+          filters:
+            - StripPrefix=0
+            # Rate limiting: 50 requests/second per user, burst capacity 100
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                redis-rate-limiter.requestedTokens: 1
+        - id: monitoring-service
+          uri: lb://monitoring-service
+          predicates:
+            - Path=/api/v1/metrics/**
+          filters:
+            - StripPrefix=0
+            # Rate limiting: 100 requests/second per user, burst capacity 200
+            # Higher limits for metrics service (high-volume time-series data)
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+                redis-rate-limiter.requestedTokens: 1
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - StripPrefix=0
+            # Rate limiting: 30 requests/second per user, burst capacity 60
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 30
+                redis-rate-limiter.burstCapacity: 60
+                redis-rate-limiter.requestedTokens: 1
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - StripPrefix=0
+            # Rate limiting: 10 requests/second per user, burst capacity 20
+            # Lower limits for auth endpoints to prevent brute force attacks
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+    service-registry:
+      auto-registration:
+        enabled: false
+
+server:
+  port: 8080
+
+# ============================================
+# EUREKA CLIENT CONFIGURATION
+# ============================================
+# API Gateway fetches registry to route requests to services.
+# Does not register itself as it's the entry point.
+# ============================================
+eureka:
+  client:
+    # service-url.defaultZone: Eureka server URL.
+    # Use 'eureka-server' service name in Docker/K8s.
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
+    
+    # register-with-eureka: false - gateway is the entry point,
+    # no need for other services to discover it via Eureka.
+    register-with-eureka: false
+    
+    # fetch-registry: true - gateway needs to discover backend services.
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      # Zipkin tracing endpoint - use 'zipkin' service name in Docker/K8s
+      endpoint: ${MANAGEMENT_TRACING_ENDPOINT:http://zipkin:9411/api/v2/spans}
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+
+# ============================================
+# CORS CONFIGURATION
+# ============================================
+# Allowed origins for cross-origin requests.
+# In production, specify actual frontend domains.
+# ============================================
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://frontend:80,http://localhost:3000}
+
+# JWT Configuration
+# In production, use environment variables or secrets manager
+jwt:
+  # Secret key must match auth-service secret for token validation
+  # Set via environment variable: JWT_SECRET
+  secret: ${JWT_SECRET:}
+  # Simulation mode: Set to true to simulate validation when tokens unavailable
+  # In production, always set to false
+  simulate-validation: ${JWT_SIMULATE_VALIDATION:false}
+
