@@ -2,7 +2,10 @@
 
 <div align="center">
 
-![Architecture](docs/diagram.svg)
+<picture>
+  <source media="(max-width: 768px)" srcset="docs/diagram.svg" width="100%">
+  <img src="docs/diagram.svg" alt="Architecture Diagram" style="max-width: 100%; height: auto;">
+</picture>
 
 </div>
 
@@ -26,15 +29,38 @@ Educational microservices platform demonstrating distributed systems trade-offs 
 
 ## Quick Start
 
+### Docker Compose (Local Development)
+
 ```bash
+# One-command startup with Makefile
+make docker_start
+
+# Or use Docker Compose directly
 docker compose up -d
+
+# Initialize databases with seed data
+make docker_init_db
+
 # Dashboard: http://localhost:3000 (admin/admin)
 # API Gateway: http://localhost:8080
 # Eureka: http://localhost:8762
 # Grafana: http://localhost:3001
 ```
 
-**Architecture:** 6 services (API Gateway, Auth, Base Station, Monitoring, Notification, Eureka) • 5 databases (PostgreSQL×3, MongoDB, Redis) • RabbitMQ messaging
+### Kubernetes (Production)
+
+```bash
+# One-click deployment with Fabric8
+make k8s_deploy
+
+# Check status
+make k8s_status
+
+# View logs
+make k8s_logs
+```
+
+**Architecture:** 6 services (API Gateway, Auth, Base Station, Monitoring, Notification, Eureka) • 5 databases (PostgreSQL×3, MongoDB, Redis) • RabbitMQ messaging • **Resource optimized for 12-core CPU**
 
 **Features:**
 - Database-backed JWT authentication with RBAC + HMAC-SHA256 service auth
@@ -43,12 +69,14 @@ docker compose up -d
 - Geospatial search (Haversine formula)
 - Event-driven alerting (RabbitMQ)
 - Redis-backed rate limiting (tested with 6,500+ requests)
-- **FIXED:** Multi-network Docker architecture with proper isolation
+- **FIXED:** Container crash issues with resource optimization ([details](docs/CONTAINER_CRASH_FIXES.md))
+- **NEW:** Kubernetes deployment with Fabric8/JKube auto-generated manifests ([guide](docs/FABRIC8_KUBERNETES.md))
+- **OPTIMIZED:** CPU usage reduced from 1300% spike to 60% peak / 7% stable ([optimization guide](docs/RESOURCE_OPTIMIZATION.md))
 
 **Production Gaps:**
 - Keycloak IdP available but not enabled by default • Demo credentials in seed scripts • Haversine doesn't scale beyond 10k rows • Multiple database types where one suffices • Eureka in containers (redundant with Kubernetes)
 
-📖 [Architecture details](docs/ARCHITECTURE.md) • [Setup guide](docs/SETUP.md) • [Production requirements](docs/IMPROVEMENTS.md)
+📖 [Architecture details](docs/ARCHITECTURE.md) • [Setup guide](docs/SETUP.md) • [Production requirements](docs/IMPROVEMENTS.md) • [Makefile commands](Makefile)
 
 ---
 
@@ -271,18 +299,24 @@ base-station-platform/
 - [Installation & Setup](docs/SETUP.md)
 - [API Reference](docs/API.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
+- [Makefile Commands](Makefile) - One-command Docker & K8s operations
 
 **Architecture:**
 - [Design Overview](docs/ARCHITECTURE.md)
 - [Authentication](docs/AUTH_IMPLEMENTATION.md)
 - [Monolith vs Microservices](docs/MONOLITH_VS_MICROSERVICES.md)
 
+**Operations & Optimization:**
+- [Resource Optimization Guide](docs/RESOURCE_OPTIMIZATION.md) - CPU/memory tuning for 12-core systems
+- [Container Crash Fixes](docs/CONTAINER_CRASH_FIXES.md) - Database initialization and dependency resolution
+- [Kubernetes with Fabric8](docs/FABRIC8_KUBERNETES.md) - Auto-generated manifests deployment
+- [Kubernetes Migration](docs/K8S_MIGRATION.md) - Manual to Fabric8 migration path
+
 **Performance & Security:**
 - [Geospatial Optimization](docs/POSTGIS_MIGRATION.md)
 - [Load Testing Results](docs/STRESS_TEST_RESULTS.md)
 - [Security Implementation](docs/HEADER_SPOOFING_BLOCKED.md)
 - [Production Gaps](docs/IMPROVEMENTS.md)
-- [Kubernetes Migration](docs/K8S_MIGRATION.md)
 - [Testing Strategy](docs/TESTING.md)
 
 ---
