@@ -8,6 +8,7 @@
 
 Educational microservices platform demonstrating distributed systems trade-offs with measured performance data. Current scale: 26 base stations, 1,365 synthetic metrics - intentionally over-engineered to quantify costs. Benchmarks show **6.7× slower startup, 3× more memory** vs modular monolith.
 
+
 [![CI/CD](https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
