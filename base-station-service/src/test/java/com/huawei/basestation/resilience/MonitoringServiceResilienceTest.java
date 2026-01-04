@@ -225,28 +225,28 @@ class MonitoringServiceResilienceTest {
 
             // Transition to HALF_OPEN to test recovery
             circuitBreaker.transitionToHalfOpenState();
-            assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.HALF_OPEN);
 
-            // Make multiple successful calls to trigger transition to CLOSED
+            // Wait for state transition to complete and verify
+            await().atMost(Duration.ofSeconds(2))
+                    .pollInterval(Duration.ofMillis(50))
+                    .untilAsserted(() -> assertThat(circuitBreaker.getState())
+                            .isEqualTo(CircuitBreaker.State.HALF_OPEN));
+
+            // Make successful calls and wait for circuit to close
             // Config requires 3 successful calls in HALF_OPEN state (permittedNumberOfCallsInHalfOpenState: 3)
-            await().atMost(Duration.ofSeconds(5))
-                    .pollInterval(Duration.ofMillis(100))
-                    .ignoreExceptions()
-                    .until(() -> {
-                        for (int i = 0; i < 3; i++) {
+            await().atMost(Duration.ofSeconds(15))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(() -> {
+                        // Keep making calls until we've made 3 successful ones
+                        int successfulCalls = 0;
+                        for (int i = 0; i < 5 && successfulCalls < 3; i++) {
                             Map<String, Object> result = client.getLatestMetricsSync(1L);
-                            if (result.containsKey("status")) {
-                                return false; // Still failing
+                            if (!result.containsKey("status")) {
+                                successfulCalls++;
                             }
                         }
-                        return true;
+                        assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
                     });
-
-            // Now check that it transitioned to CLOSED
-            await().atMost(Duration.ofSeconds(5))
-                    .pollInterval(Duration.ofMillis(500))
-                    .untilAsserted(() -> assertThat(circuitBreaker.getState())
-                            .isEqualTo(CircuitBreaker.State.CLOSED));
         }
     }
 

@@ -71,16 +71,20 @@ public class MetricsWebSocketHandler extends TextWebSocketHandler {
 
             for (WebSocketSession session : sessions) {
                 if (session.isOpen()) {
-                    try {
-                        session.sendMessage(message);
-                    } catch (IOException e) {
-                        log.warn("Failed to send to session {}: {}", session.getId(), e.getMessage());
-                        sessions.remove(session);
-                    }
+                    sendMessageToSession(session, message);
                 }
             }
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize metric: {}", e.getMessage());
+        }
+    }
+
+    private void sendMessageToSession(WebSocketSession session, @NonNull TextMessage message) {
+        try {
+            session.sendMessage(message);
+        } catch (IOException e) {
+            log.warn("Failed to send to session {}: {}", session.getId(), e.getMessage());
+            sessions.remove(session);
         }
     }
 
