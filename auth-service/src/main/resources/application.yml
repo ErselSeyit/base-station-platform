@@ -30,7 +30,12 @@ eureka:
     register-with-eureka: true
     fetch-registry: true
   instance:
-    prefer-ip-address: true
+    # prefer-ip-address: false to use hostname instead of IP.
+    # This ensures services use container hostnames which work across all networks.
+    prefer-ip-address: false
+    # hostname: Use container name for service discovery.
+    # This works reliably across Docker networks.
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:auth-service}
     instance-id: ${spring.application.name}:${random.uuid}
 
 jwt:

@@ -42,7 +42,7 @@ stations.forEach(station => {
 
         // CPU Usage (40-95%)
         metrics.push({
-            stationId: NumberLong(station.id),
+            stationId: station.id,
             stationName: station.name,
             metricType: 'CPU_USAGE',
             value: randomInRange(40, 95),
@@ -53,7 +53,7 @@ stations.forEach(station => {
 
         // Memory Usage (50-90%)
         metrics.push({
-            stationId: NumberLong(station.id),
+            stationId: station.id,
             stationName: station.name,
             metricType: 'MEMORY_USAGE',
             value: randomInRange(50, 90),
@@ -64,7 +64,7 @@ stations.forEach(station => {
 
         // Signal Strength (-80 to -40 dBm)
         metrics.push({
-            stationId: NumberLong(station.id),
+            stationId: station.id,
             stationName: station.name,
             metricType: 'SIGNAL_STRENGTH',
             value: randomInRange(-80, -40),
@@ -75,7 +75,7 @@ stations.forEach(station => {
 
         // Power Consumption (1000-3000 W)
         metrics.push({
-            stationId: NumberLong(station.id),
+            stationId: station.id,
             stationName: station.name,
             metricType: 'POWER_CONSUMPTION',
             value: randomInRange(1000, 3000),
@@ -86,7 +86,7 @@ stations.forEach(station => {
 
         // Temperature (20-70°C)
         metrics.push({
-            stationId: NumberLong(station.id),
+            stationId: station.id,
             stationName: station.name,
             metricType: 'TEMPERATURE',
             value: randomInRange(20, 70),
@@ -97,7 +97,7 @@ stations.forEach(station => {
 
         // Connection Count (100-5000)
         metrics.push({
-            stationId: NumberLong(station.id),
+            stationId: station.id,
             stationName: station.name,
             metricType: 'CONNECTION_COUNT',
             value: Math.floor(randomInRange(100, 5000)),
@@ -108,7 +108,7 @@ stations.forEach(station => {
 
         // Data Throughput (100-1000 Mbps)
         metrics.push({
-            stationId: NumberLong(station.id),
+            stationId: station.id,
             stationName: station.name,
             metricType: 'DATA_THROUGHPUT',
             value: randomInRange(100, 1000),
@@ -123,7 +123,7 @@ stations.forEach(station => {
 // Station 3 (OFFLINE)
 for (let hour = 0; hour < 5; hour++) {
     metrics.push({
-        stationId: NumberLong(3),
+        stationId: 3,
         stationName: 'BS-BEIJING-003',
         metricType: 'CPU_USAGE',
         value: 0,
@@ -136,7 +136,7 @@ for (let hour = 0; hour < 5; hour++) {
 // Station 12 (ERROR state) - high error rate
 for (let hour = 0; hour < 8; hour++) {
     metrics.push({
-        stationId: NumberLong(12),
+        stationId: 12,
         stationName: 'BS-SHENZHEN-003',
         metricType: 'CPU_USAGE',
         value: randomInRange(95, 100),
@@ -145,7 +145,7 @@ for (let hour = 0; hour < 8; hour++) {
         status: 'ERROR'
     });
     metrics.push({
-        stationId: NumberLong(12),
+        stationId: 12,
         stationName: 'BS-SHENZHEN-003',
         metricType: 'TEMPERATURE',
         value: randomInRange(80, 95),

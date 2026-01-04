@@ -245,8 +245,11 @@ export default function StationFormDialog({
                 label="Latitude"
                 type="number"
                 placeholder="40.7128"
-                value={formData.latitude || ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, latitude: Number.parseFloat(e.target.value) || 0 })}
+                value={formData.latitude ?? ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.target.value === '' ? undefined : Number.parseFloat(e.target.value)
+                  setFormData({ ...formData, latitude: value })
+                }}
                 required
                 inputProps={{
                   name: 'latitude',
@@ -266,8 +269,11 @@ export default function StationFormDialog({
                 label="Longitude"
                 type="number"
                 placeholder="-74.0060"
-                value={formData.longitude || ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, longitude: Number.parseFloat(e.target.value) || 0 })}
+                value={formData.longitude ?? ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.target.value === '' ? undefined : Number.parseFloat(e.target.value)
+                  setFormData({ ...formData, longitude: value })
+                }}
                 required
                 inputProps={{
                   name: 'longitude',
@@ -359,8 +365,11 @@ export default function StationFormDialog({
               label="Power Consumption"
               type="number"
               placeholder="1500"
-              value={formData.powerConsumption || ''}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, powerConsumption: Number.parseFloat(e.target.value) || 0 })}
+              value={formData.powerConsumption ?? ''}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = e.target.value === '' ? undefined : Number.parseFloat(e.target.value)
+                setFormData({ ...formData, powerConsumption: value })
+              }}
               inputProps={{
                 name: 'powerConsumption',
                 id: 'station-power-consumption',

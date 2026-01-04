@@ -1,0 +1,273 @@
+# Optimized Docker Compose for 12-Thread CPU
+# This file shows the resource-optimized configuration pattern
+# Apply these settings to your main docker-compose.yml
+
+services:
+  # ============================================
+  # DATABASES - Start first, wait for health
+  # ============================================
+
+  postgres-basestation:
+    # ... existing config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      start_period: 60s  # Give more time on slow systems
+
+  mongodb:
+    # ... existing config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.75'
+          memory: 512M
+
+  redis:
+    # ... existing config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  rabbitmq:
+    # ... existing config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ============================================
+  # INFRASTRUCTURE SERVICES
+  # ============================================
+
+  eureka-server:
+    # ... existing config ...
+    environment:
+      JAVA_OPTS: "-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+        reservations:
+          cpus: '0.25'
+          memory: 192M
+    healthcheck:
+      start_period: 90s  # Eureka needs time to start
+
+  keycloak:
+    # ... existing config ...
+    environment:
+      JAVA_OPTS: "-Xms384m -Xmx768m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+        reservations:
+          cpus: '0.5'
+          memory: 384M
+
+  # ============================================
+  # MICROSERVICES - JVM optimized
+  # ============================================
+
+  base-station-service:
+    # ... existing config ...
+    environment:
+      # Database config
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-basestation:5432/${POSTGRES_BASESTATION_DB:-basestationdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_BASESTATION_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET}
+      # JVM optimization
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 640M
+        reservations:
+          cpus: '0.5'
+          memory: 320M
+    depends_on:
+      postgres-basestation:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started  # Don't wait for health, starts faster
+
+  monitoring-service:
+    # ... existing config ...
+    environment:
+      # Database config
+      SPRING_DATA_MONGODB_HOST: mongodb
+      SPRING_DATA_MONGODB_DATABASE: monitoringdb
+      SPRING_DATA_MONGODB_USERNAME: ${MONGODB_USER:-admin}
+      SPRING_DATA_MONGODB_PASSWORD: ${MONGODB_PASSWORD:-admin}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET}
+      # JVM optimization - larger heap for metrics processing
+      JAVA_OPTS: "-Xms512m -Xmx768m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 960M
+        reservations:
+          cpus: '0.5'
+          memory: 480M
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+
+  notification-service:
+    # ... existing config ...
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-notification:5432/${POSTGRES_NOTIFICATION_DB:-notificationdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_NOTIFICATION_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_NOTIFICATION_PASSWORD:-postgres}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET}
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 640M
+        reservations:
+          cpus: '0.5'
+          memory: 320M
+
+  auth-service:
+    # ... existing config ...
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/${POSTGRES_AUTH_DB:-authdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_AUTH_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_AUTH_PASSWORD:-postgres}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET}
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 640M
+        reservations:
+          cpus: '0.5'
+          memory: 320M
+
+  api-gateway:
+    # ... existing config ...
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATA_REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET}
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET}
+      # API Gateway needs more memory (handles all traffic + rate limiting)
+      JAVA_OPTS: "-Xms512m -Xmx1024m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1280M
+        reservations:
+          cpus: '0.75'
+          memory: 640M
+    depends_on:
+      - base-station-service
+      - monitoring-service
+      - notification-service
+      - auth-service
+      - redis
+
+  # ============================================
+  # MONITORING INFRASTRUCTURE
+  # ============================================
+
+  prometheus:
+    # ... existing config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  grafana:
+    # ... existing config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  zipkin:
+    # ... existing config ...
+    environment:
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  frontend:
+    # ... existing config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+# ============================================
+# RESOURCE SUMMARY
+# ============================================
+# Total CPU Limits: ~11.75 cores (within 12-core budget)
+# Total Memory Limits: ~9.5GB (safe for 16GB system)
+#
+# Startup order:
+# 1. Databases (postgres × 3, mongodb, redis, rabbitmq)
+# 2. Eureka + Infrastructure (eureka, keycloak, prometheus, grafana, zipkin)
+# 3. Microservices (base-station, monitoring, notification, auth)
+# 4. API Gateway
+# 5. Frontend

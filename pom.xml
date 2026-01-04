@@ -41,6 +41,8 @@
         <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
         <testcontainers.version>1.20.4</testcontainers.version>
         <awaitility.version>4.2.2</awaitility.version>
+        <!-- Fabric8 for Kubernetes YAML generation -->
+        <fabric8.version>0.16.2</fabric8.version>
     </properties>
 
     <dependencyManagement>
@@ -138,6 +140,12 @@
                         <release>${java.version}</release>
                         <parameters>true</parameters>
                     </configuration>
+                </plugin>
+                <!-- Fabric8 Maven Plugin for Kubernetes -->
+                <plugin>
+                    <groupId>org.eclipse.jkube</groupId>
+                    <artifactId>kubernetes-maven-plugin</artifactId>
+                    <version>${fabric8.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>

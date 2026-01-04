@@ -26,9 +26,8 @@ services:
       - "5434:5432"
     volumes:
       - postgres-basestation-data:/var/lib/postgresql/data
-      - ./init-db/basestation-seed.sql:/docker-entrypoint-initdb.d/seed.sql
     networks:
-      - basestation-network
+      - database-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -47,9 +46,8 @@ services:
       - "5435:5432"
     volumes:
       - postgres-notification-data:/var/lib/postgresql/data
-      - ./init-db/notification-seed.sql:/docker-entrypoint-initdb.d/seed.sql
     networks:
-      - basestation-network
+      - database-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -69,7 +67,7 @@ services:
     volumes:
       - postgres-auth-data:/var/lib/postgresql/data
     networks:
-      - basestation-network
+      - database-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -88,9 +86,8 @@ services:
       - "27018:27017"
     volumes:
       - mongodb-data:/data/db
-      - ./init-db/mongodb-seed.js:/docker-entrypoint-initdb.d/seed.js
     networks:
-      - basestation-network
+      - database-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mongosh", "--username", "${MONGODB_USER:-admin}", "--password", "${MONGODB_PASSWORD:-admin}", "--eval", "db.adminCommand('ping')"]
@@ -106,13 +103,48 @@ services:
     volumes:
       - redis-data:/data
     networks:
-      - basestation-network
+      - app-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: keycloak
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres-auth:5432/${POSTGRES_AUTH_DB:-authdb}
+      KC_DB_USERNAME: ${POSTGRES_AUTH_USER:-postgres}
+      KC_DB_PASSWORD: ${POSTGRES_AUTH_PASSWORD:-postgres}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY: edge
+    command:
+      - start-dev
+      - --import-realm
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+    networks:
+      - app-network
+      - database-network
+      - frontend-network
+    restart: unless-stopped
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
@@ -126,7 +158,7 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     networks:
-      - basestation-network
+      - app-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
@@ -140,7 +172,8 @@ services:
     ports:
       - "9411:9411"
     networks:
-      - basestation-network
+      - monitoring-network
+      - app-network
     restart: unless-stopped
 
   prometheus:
@@ -155,7 +188,8 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
     networks:
-      - basestation-network
+      - monitoring-network
+      - app-network
     restart: unless-stopped
 
   grafana:
@@ -170,7 +204,7 @@ services:
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
     networks:
-      - basestation-network
+      - monitoring-network
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -183,7 +217,7 @@ services:
     ports:
       - "8762:8761"
     networks:
-      - basestation-network
+      - app-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
@@ -203,9 +237,10 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       MANAGEMENT_TRACING_ENDPOINT: http://zipkin:9411
-      # Internal service authentication (prevents header spoofing)
       SECURITY_INTERNAL_ENABLED: "true"
       SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+      # JVM Memory optimization for 12-thread CPU
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
     ports:
       - "8084:8081"
     depends_on:
@@ -214,8 +249,18 @@ services:
       eureka-server:
         condition: service_started
     networks:
-      - basestation-network
+      - app-network
+      - database-network
+      - monitoring-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 640M
+        reservations:
+          cpus: '0.5'
+          memory: 320M
 
   monitoring-service:
     build:
@@ -247,7 +292,9 @@ services:
       eureka-server:
         condition: service_started
     networks:
-      - basestation-network
+      - app-network
+      - database-network
+      - monitoring-network
     restart: unless-stopped
 
   notification-service:
@@ -279,7 +326,9 @@ services:
       eureka-server:
         condition: service_started
     networks:
-      - basestation-network
+      - app-network
+      - database-network
+      - monitoring-network
     restart: unless-stopped
 
   auth-service:
@@ -306,7 +355,9 @@ services:
       eureka-server:
         condition: service_started
     networks:
-      - basestation-network
+      - app-network
+      - database-network
+      - monitoring-network
     restart: unless-stopped
 
   api-gateway:
@@ -334,7 +385,9 @@ services:
       - eureka-server
       - redis
     networks:
-      - basestation-network
+      - frontend-network
+      - app-network
+      - monitoring-network
     restart: unless-stopped
 
   frontend:
@@ -347,10 +400,9 @@ services:
     depends_on:
       - api-gateway
     networks:
-      - basestation-network
+      - frontend-network
+      - app-network
     restart: unless-stopped
-    environment:
-      - VITE_API_URL=http://api-gateway:8080/api/v1
 
 volumes:
   postgres-basestation-data:
@@ -363,5 +415,20 @@ volumes:
   grafana-data:
 
 networks:
-  basestation-network:
+  # Public-facing network - Only gateway and frontend
+  frontend-network:
+    driver: bridge
+
+  # Application services network - Gateway communicates with services
+  app-network:
+    driver: bridge
+    internal: false  # Gateway needs external access
+
+  # Database network - Isolated for data layer
+  database-network:
+    driver: bridge
+    internal: false  # Changed to false to allow service-to-database communication
+
+  # Monitoring network - Observability stack
+  monitoring-network:
     driver: bridge

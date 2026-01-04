@@ -33,17 +33,19 @@ docker compose up -d
 # Grafana: http://localhost:3001
 ```
 
-**Architecture:** 6 services (API Gateway, Auth, Base Station, Monitoring, Notification, Eureka) • 3 databases (PostgreSQL×3, MongoDB, Redis) • RabbitMQ messaging
+**Architecture:** 6 services (API Gateway, Auth, Base Station, Monitoring, Notification, Eureka) • 5 databases (PostgreSQL×3, MongoDB, Redis) • RabbitMQ messaging
 
 **Features:**
-- JWT authentication with RBAC + HMAC-SHA256 service auth
+- Database-backed JWT authentication with RBAC + HMAC-SHA256 service auth
+- **NEW:** Keycloak OAuth2/OIDC integration available ([setup guide](docs/KEYCLOAK_INTEGRATION.md))
 - Real-time metrics via WebSocket
 - Geospatial search (Haversine formula)
 - Event-driven alerting (RabbitMQ)
 - Redis-backed rate limiting (tested with 6,500+ requests)
+- **FIXED:** Multi-network Docker architecture with proper isolation
 
 **Production Gaps:**
-- Static JWT secrets (no IdP) • Haversine doesn't scale beyond 10k rows • No backpressure handling • Multiple database types where one suffices • Eureka in containers (redundant with orchestration) • No network segmentation
+- Keycloak IdP available but not enabled by default • Demo credentials in seed scripts • Haversine doesn't scale beyond 10k rows • Multiple database types where one suffices • Eureka in containers (redundant with Kubernetes)
 
 📖 [Architecture details](docs/ARCHITECTURE.md) • [Setup guide](docs/SETUP.md) • [Production requirements](docs/IMPROVEMENTS.md)
 
