@@ -44,7 +44,7 @@ export default function Stations() {
     longitude: 0,
     stationType: StationType.MACRO_CELL,
     status: StationStatus.ACTIVE,
-    powerConsumption: 0,
+    powerConsumption: 1500,
   })
 
   const { data, isLoading, error } = useQuery({
@@ -90,7 +90,7 @@ export default function Stations() {
       longitude: 0,
       stationType: StationType.MACRO_CELL,
       status: StationStatus.ACTIVE,
-      powerConsumption: 0,
+      powerConsumption: 1500,
     })
     setEditingStation(null)
   }

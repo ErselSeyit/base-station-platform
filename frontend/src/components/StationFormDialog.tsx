@@ -376,7 +376,7 @@ export default function StationFormDialog({
                 autoComplete: 'off',
                 'aria-label': 'Power Consumption',
                 step: 'any',
-                min: 0,
+                min: 0.01,
               }}
               InputProps={{
                 startAdornment: (
@@ -386,6 +386,7 @@ export default function StationFormDialog({
                 ),
                 endAdornment: <InputAdornment position="end">kW</InputAdornment>,
               }}
+              helperText="Must be greater than 0"
             />
           </Box>
 

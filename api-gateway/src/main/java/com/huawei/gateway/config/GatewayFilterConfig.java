@@ -29,9 +29,9 @@ public class GatewayFilterConfig {
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
     public GlobalFilter jwtGlobalFilter() {
-        return (exchange, chain) -> {
-            return jwtAuthenticationFilter.apply(new JwtAuthenticationFilter.Config())
+        return (exchange, chain) ->
+            jwtAuthenticationFilter.apply(new JwtAuthenticationFilter.Config())
                     .filter(exchange, chain);
-        };
     }
 }
+                  
