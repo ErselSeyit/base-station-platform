@@ -29,11 +29,20 @@ services:
     networks:
       - database-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 60s
 
   postgres-notification:
     image: postgres:18-alpine
@@ -49,11 +58,20 @@ services:
     networks:
       - database-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 60s
 
   postgres-auth:
     image: postgres:18-alpine
@@ -69,11 +87,20 @@ services:
     networks:
       - database-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 60s
 
   mongodb:
     image: mongo:8.2
@@ -89,11 +116,20 @@ services:
     networks:
       - database-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.75'
+          memory: 512M
     healthcheck:
       test: ["CMD", "mongosh", "--username", "${MONGODB_USER:-admin}", "--password", "${MONGODB_PASSWORD:-admin}", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 60s
 
   redis:
     image: redis:8-alpine
@@ -105,6 +141,14 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -124,6 +168,7 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_PROXY: edge
+      JAVA_OPTS: "-Xms384m -Xmx768m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC"
     command:
       - start-dev
       - --import-realm
@@ -136,6 +181,14 @@ services:
       - database-network
       - frontend-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+        reservations:
+          cpus: '0.5'
+          memory: 384M
     depends_on:
       postgres-auth:
         condition: service_healthy
@@ -160,6 +213,14 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -169,12 +230,22 @@ services:
   zipkin:
     image: openzipkin/zipkin:3.5
     container_name: zipkin
+    environment:
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC"
     ports:
       - "9411:9411"
     networks:
       - monitoring-network
       - app-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   prometheus:
     image: prom/prometheus:latest
@@ -191,6 +262,14 @@ services:
       - monitoring-network
       - app-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   grafana:
     image: grafana/grafana:latest
@@ -206,6 +285,14 @@ services:
     networks:
       - monitoring-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
     depends_on:
       - prometheus
 
@@ -214,17 +301,27 @@ services:
       context: .
       dockerfile: eureka-server/Dockerfile
     container_name: eureka-server
+    environment:
+      JAVA_OPTS: "-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
     ports:
       - "8762:8761"
     networks:
       - app-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+        reservations:
+          cpus: '0.25'
+          memory: 192M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 90s
 
   base-station-service:
     build:
@@ -239,8 +336,7 @@ services:
       MANAGEMENT_TRACING_ENDPOINT: http://zipkin:9411
       SECURITY_INTERNAL_ENABLED: "true"
       SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
-      # JVM Memory optimization for 12-thread CPU
-      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
     ports:
       - "8084:8081"
     depends_on:
@@ -279,9 +375,9 @@ services:
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      # Internal service authentication (prevents header spoofing)
       SECURITY_INTERNAL_ENABLED: "true"
       SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+      JAVA_OPTS: "-Xms512m -Xmx768m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
     ports:
       - "8085:8082"
     depends_on:
@@ -296,6 +392,14 @@ services:
       - database-network
       - monitoring-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 960M
+        reservations:
+          cpus: '0.5'
+          memory: 480M
 
   notification-service:
     build:
@@ -313,9 +417,9 @@ services:
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      # Internal service authentication (prevents header spoofing)
       SECURITY_INTERNAL_ENABLED: "true"
       SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
     ports:
       - "8086:8083"
     depends_on:
@@ -330,6 +434,14 @@ services:
       - database-network
       - monitoring-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 640M
+        reservations:
+          cpus: '0.5'
+          memory: 320M
 
   auth-service:
     build:
@@ -341,12 +453,10 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_AUTH_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_AUTH_PASSWORD:-postgres}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      # SECURITY: JWT_SECRET must be set via .env file - no default provided for security
-      # Generate a strong secret: openssl rand -base64 64
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET environment variable is required}
-      # Internal service authentication (prevents header spoofing)
       SECURITY_INTERNAL_ENABLED: "true"
       SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
     ports:
       - "8087:8084"
     depends_on:
@@ -359,6 +469,14 @@ services:
       - database-network
       - monitoring-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 640M
+        reservations:
+          cpus: '0.5'
+          memory: 320M
 
   api-gateway:
     build:
@@ -372,9 +490,9 @@ services:
       MANAGEMENT_TRACING_ENDPOINT: http://zipkin:9411
       JWT_SECRET: ${JWT_SECRET}
       JWT_SIMULATE_VALIDATION: "true"
-      # Internal service authentication (prevents header spoofing)
       SECURITY_INTERNAL_ENABLED: "true"
       SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+      JAVA_OPTS: "-Xms512m -Xmx1024m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
     ports:
       - "8080:8080"
     depends_on:
@@ -389,6 +507,14 @@ services:
       - app-network
       - monitoring-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1280M
+        reservations:
+          cpus: '0.75'
+          memory: 640M
 
   frontend:
     build:
@@ -403,6 +529,14 @@ services:
       - frontend-network
       - app-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
 volumes:
   postgres-basestation-data:
