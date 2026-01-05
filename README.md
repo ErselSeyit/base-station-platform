@@ -309,6 +309,7 @@ base-station-platform/
 **Operations & Optimization:**
 - [Resource Optimization Guide](docs/RESOURCE_OPTIMIZATION.md) - CPU/memory tuning for 12-core systems
 - [Container Crash Fixes](docs/CONTAINER_CRASH_FIXES.md) - Database initialization and dependency resolution
+- [Service Discovery & Security](docs/SERVICE_DISCOVERY_FIX.md) - Hostname-based Eureka, credential management
 - [Kubernetes with Fabric8](docs/FABRIC8_KUBERNETES.md) - Auto-generated manifests deployment
 - [Kubernetes Migration](docs/K8S_MIGRATION.md) - Manual to Fabric8 migration path
 
