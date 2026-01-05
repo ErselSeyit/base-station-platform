@@ -73,6 +73,30 @@ This is a **portfolio demonstration** project. The architecture supports product
 | Simulated tokens for dev | OAuth2/OIDC with real IdP (Keycloak, Auth0) |
 | No token revocation | Redis blacklist or short-lived + refresh tokens |
 | Basic gateway validation | JWKS endpoint discovery |
+| **Environment-based credentials** | **✅ Kubernetes Secrets (ready)** |
+
+### Credential Management
+
+**All credentials are provided via environment variables** - no hardcoded defaults in application.yml files.
+
+For Docker Compose (local development):
+```bash
+# Credentials defined in docker-compose.yml
+SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-admin}
+SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-admin}
+SPRING_DATA_MONGODB_USERNAME=${MONGODB_USER:-admin}
+SPRING_DATA_MONGODB_PASSWORD=${MONGODB_PASSWORD:-admin}
+```
+
+For Kubernetes (production):
+```bash
+# Credentials from Kubernetes Secrets
+kubectl create secret generic rabbitmq-credentials \
+  --from-literal=username=admin \
+  --from-literal=password=<secure-password>
+```
+
+See [Service Discovery & Security](SERVICE_DISCOVERY_FIX.md) for details.
 
 ### Development Setup
 
@@ -100,6 +124,28 @@ docker compose logs -f
 # Restart everything
 docker compose restart
 ```
+
+### Metrics/Alerts endpoints timeout
+
+**Symptom**: API Gateway returns 500 errors or timeouts when accessing `/api/v1/metrics` or `/api/v1/notifications`
+
+**Cause**: Services registered with unreachable IP addresses in Eureka
+
+**Solution**: Verify services are using hostname-based registration:
+```bash
+# Check Eureka registry
+curl http://localhost:8762/eureka/apps/MONITORING-SERVICE | grep hostName
+
+# Should show: <hostName>monitoring-service</hostName>
+# NOT: <hostName>172.18.0.9</hostName>
+```
+
+If services show IP addresses, restart them to re-register with hostnames:
+```bash
+docker compose restart monitoring-service notification-service
+```
+
+See [Service Discovery Fix](SERVICE_DISCOVERY_FIX.md) for details.
 
 ### Port conflicts
 ```bash

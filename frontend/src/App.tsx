@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { CircularProgress, Box } from '@mui/material'
 import Layout from './components/Layout'
+import { ToastProvider } from './components/ToastProvider'
 import { authService } from './services/authService'
 
 // Lazy load pages for code splitting
@@ -30,31 +31,34 @@ function ProtectedRoute({ children }: { readonly children: React.ReactNode }) {
 
 function App() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Routes>
-        {/* Public route */}
-        <Route path="/login" element={<Login />} />
+    <>
+      <ToastProvider />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Public route */}
+          <Route path="/login" element={<Login />} />
 
-        {/* Protected routes */}
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/stations" element={<Stations />} />
-                  <Route path="/stations/:id" element={<StationDetail />} />
-                  <Route path="/map" element={<MapView />} />
-                  <Route path="/alerts" element={<Alerts />} />
-                  <Route path="/metrics" element={<Metrics />} />
-                </Routes>
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </Suspense>
+          {/* Protected routes */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/stations" element={<Stations />} />
+                    <Route path="/stations/:id" element={<StationDetail />} />
+                    <Route path="/map" element={<MapView />} />
+                    <Route path="/alerts" element={<Alerts />} />
+                    <Route path="/metrics" element={<Metrics />} />
+                  </Routes>
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </Suspense>
+    </>
   )
 }
 

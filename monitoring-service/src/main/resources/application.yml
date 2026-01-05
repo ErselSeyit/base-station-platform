@@ -15,8 +15,8 @@ spring:
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:rabbitmq}
     port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:admin}
-    password: ${SPRING_RABBITMQ_PASSWORD:admin}
+    username: ${SPRING_RABBITMQ_USERNAME:}
+    password: ${SPRING_RABBITMQ_PASSWORD:}
 
 server:
   port: 8082
@@ -33,14 +33,16 @@ eureka:
     # Use 'eureka-server' service name in Docker/K8s, localhost for local dev.
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
-    
+
     # register-with-eureka: true to register this service.
     register-with-eureka: true
-    
+
     # fetch-registry: true to discover other services.
     fetch-registry: true
   instance:
-    prefer-ip-address: true
+    # Use hostname instead of IP to avoid network routing issues
+    prefer-ip-address: false
+    hostname: monitoring-service
     instance-id: ${spring.application.name}:${random.uuid}
 
 management:

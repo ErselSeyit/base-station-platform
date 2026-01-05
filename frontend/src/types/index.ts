@@ -59,6 +59,7 @@ export interface Notification {
   stationName?: string
   message: string
   type: NotificationType
+  severity?: string
   status?: 'UNREAD' | 'READ'
   createdAt?: string
   readAt?: string
