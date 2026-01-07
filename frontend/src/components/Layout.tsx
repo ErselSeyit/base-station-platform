@@ -1,8 +1,8 @@
 import {
   BarChart as BarChartIcon,
   CellTower as CellTowerIcon,
-  DarkMode as DarkModeIcon,
   Dashboard as DashboardIcon,
+  DarkMode as DarkModeIcon,
   LightMode as LightModeIcon,
   Logout as LogoutIcon,
   Map as MapIcon,
@@ -13,7 +13,6 @@ import {
   AppBar,
   Badge,
   Box,
-  Divider,
   Drawer,
   IconButton,
   List,
@@ -26,9 +25,8 @@ import {
   Typography,
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useTheme } from '../contexts/ThemeContext'
 import { notificationsApi } from '../services/api'
 import { authService } from '../services/authService'
 import { Notification } from '../types'
@@ -52,81 +50,81 @@ const handleLogout = (navigate: ReturnType<typeof useNavigate>) => {
   navigate('/login')
 }
 
-interface DrawerHeaderProps {
-  readonly mode: 'light' | 'dark'
-}
-
-function DrawerHeader({ mode }: DrawerHeaderProps) {
-  return (
-    <Toolbar
-      sx={{
-        background: mode === 'dark'
-          ? 'linear-gradient(135deg, #64b5f6 0%, #42a5f5 100%)'
-          : 'linear-gradient(135deg, #1976d2 0%, #115293 100%)',
-        color: 'white',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-      }}
-    >
-      <CellTowerIcon sx={{ mr: 2, fontSize: 28 }} />
-      <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700, letterSpacing: '0.02em' }}>
-        Base Station O&M
-      </Typography>
-    </Toolbar>
-  )
-}
-
 interface DrawerContentProps {
-  readonly mode: 'light' | 'dark'
   readonly menuItems: Array<{ text: string; icon: React.ReactNode; path: string; badge?: number }>
   readonly currentPath: string
   readonly onNavigate: (path: string) => void
 }
 
-function DrawerContent({ mode, menuItems, currentPath, onNavigate }: DrawerContentProps) {
+function DrawerContent({ menuItems, currentPath, onNavigate }: DrawerContentProps) {
   return (
-    <Box>
-      <DrawerHeader mode={mode} />
-      <Divider sx={{ borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }} />
-      <List sx={{ pt: 2 }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Minimal Header */}
+      <Box
+        sx={{
+          padding: '20px 16px',
+          borderBottom: '1px solid var(--surface-border)',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <CellTowerIcon sx={{ fontSize: 24, color: 'var(--mono-950)' }} />
+          <Typography
+            sx={{
+              fontSize: '1.125rem',
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              color: 'var(--mono-950)',
+            }}
+          >
+            Base Station O&M
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Menu Items */}
+      <List sx={{ padding: '16px 8px', flex: 1 }}>
         {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding sx={{ mb: 0.5, px: 1 }}>
+          <ListItem key={item.text} disablePadding sx={{ marginBottom: '4px' }}>
             <ListItemButton
               selected={currentPath === item.path}
               onClick={() => onNavigate(item.path)}
               sx={{
-                borderRadius: 2,
-                py: 1.5,
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                willChange: 'transform, background',
-                backfaceVisibility: 'hidden',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
                 '&.Mui-selected': {
-                  background: mode === 'dark'
-                    ? 'linear-gradient(135deg, rgba(100, 181, 246, 0.2) 0%, rgba(66, 165, 245, 0.15) 100%)'
-                    : 'linear-gradient(135deg, rgba(25, 118, 210, 0.15) 0%, rgba(21, 101, 192, 0.1) 100%)',
-                  color: 'primary.main',
-                  borderLeft: '4px solid',
-                  borderColor: 'primary.main',
+                  background: 'var(--mono-950)',
+                  color: 'var(--mono-50)',
                   '&:hover': {
-                    background: mode === 'dark'
-                      ? 'linear-gradient(135deg, rgba(100, 181, 246, 0.25) 0%, rgba(66, 165, 245, 0.2) 100%)'
-                      : 'linear-gradient(135deg, rgba(25, 118, 210, 0.2) 0%, rgba(21, 101, 192, 0.15) 100%)',
+                    background: 'var(--mono-900)',
                   },
                 },
                 '&:hover': {
-                  background: mode === 'dark'
-                    ? 'rgba(100, 181, 246, 0.1)'
-                    : 'rgba(25, 118, 210, 0.08)',
+                  background: 'var(--mono-100)',
                 },
               }}
             >
               <ListItemIcon
                 sx={{
-                  color: currentPath === item.path ? 'primary.main' : 'inherit',
-                  minWidth: 40,
+                  color: currentPath === item.path ? 'var(--mono-50)' : 'var(--mono-600)',
+                  minWidth: 36,
+                  transition: 'color 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
                 }}
               >
                 {item.badge ? (
-                  <Badge badgeContent={item.badge} color="error">
+                  <Badge
+                    badgeContent={item.badge}
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        background: 'var(--status-offline)',
+                        color: 'white',
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        minWidth: '18px',
+                        height: '18px',
+                      },
+                    }}
+                  >
                     {item.icon}
                   </Badge>
                 ) : (
@@ -136,7 +134,9 @@ function DrawerContent({ mode, menuItems, currentPath, onNavigate }: DrawerConte
               <ListItemText
                 primary={item.text}
                 primaryTypographyProps={{
+                  fontSize: '0.875rem',
                   fontWeight: currentPath === item.path ? 600 : 500,
+                  color: currentPath === item.path ? 'var(--mono-50)' : 'var(--mono-950)',
                 }}
               />
             </ListItemButton>
@@ -149,9 +149,18 @@ function DrawerContent({ mode, menuItems, currentPath, onNavigate }: DrawerConte
 
 export default function Layout({ children }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('theme')
+    if (saved) return saved === 'dark'
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
   const navigate = useNavigate()
   const location = useLocation()
-  const { mode, toggleMode } = useTheme()
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+    localStorage.setItem('theme', isDark ? 'dark' : 'light')
+  }, [isDark])
 
   const { data: notifications } = useQuery({
     queryKey: ['notifications'],
@@ -180,7 +189,6 @@ export default function Layout({ children }: LayoutProps) {
 
   const drawer = (
     <DrawerContent
-      mode={mode}
       menuItems={menuItems}
       currentPath={location.pathname}
       onNavigate={handleNavigate}
@@ -189,14 +197,18 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      {/* Minimal AppBar */}
       <AppBar
         position="fixed"
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
+          background: 'var(--surface-base)',
+          borderBottom: '1px solid var(--surface-border)',
+          boxShadow: 'none',
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ minHeight: '64px !important' }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -205,8 +217,9 @@ export default function Layout({ children }: LayoutProps) {
             sx={{
               mr: 2,
               display: { sm: 'none' },
+              color: 'var(--mono-950)',
               '&:hover': {
-                background: mode === 'dark' ? 'rgba(100, 181, 246, 0.1)' : 'rgba(25, 118, 210, 0.08)',
+                background: 'var(--mono-100)',
               },
             }}
           >
@@ -218,66 +231,53 @@ export default function Layout({ children }: LayoutProps) {
             component="div"
             sx={{
               flexGrow: 1,
+              fontSize: '0.875rem',
               fontWeight: 600,
-              background: mode === 'dark'
-                ? 'linear-gradient(135deg, #64b5f6 0%, #90caf9 100%)'
-                : 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: 'var(--mono-950)',
+              letterSpacing: '-0.01em',
             }}
           >
             {menuItems.find(item => item.path === location.pathname)?.text || 'Base Station Platform'}
           </Typography>
-          <Tooltip title={mode === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+          <Tooltip title={isDark ? 'Light mode' : 'Dark mode'}>
             <IconButton
-              onClick={toggleMode}
+              onClick={() => setIsDark(!isDark)}
               sx={{
-                color: mode === 'dark' ? '#ffb74d' : '#1976d2',
-                background: mode === 'dark'
-                  ? 'rgba(255, 183, 77, 0.1)'
-                  : 'rgba(25, 118, 210, 0.1)',
+                width: '36px',
+                height: '36px',
+                color: 'var(--mono-600)',
+                transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                mr: 1,
                 '&:hover': {
-                  background: mode === 'dark'
-                    ? 'rgba(255, 183, 77, 0.2)'
-                    : 'rgba(25, 118, 210, 0.2)',
-                  transform: 'rotate(15deg) scale(1.1)',
+                  background: 'var(--mono-100)',
+                  color: 'var(--mono-950)',
                 },
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                border: mode === 'dark'
-                  ? '1px solid rgba(255, 183, 77, 0.3)'
-                  : '1px solid rgba(25, 118, 210, 0.3)',
               }}
             >
-              {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+              {isDark ? <LightModeIcon sx={{ fontSize: 20 }} /> : <DarkModeIcon sx={{ fontSize: 20 }} />}
             </IconButton>
           </Tooltip>
           <Tooltip title="Logout">
             <IconButton
               onClick={() => handleLogout(navigate)}
               sx={{
-                ml: 1,
-                color: mode === 'dark' ? '#ef5350' : '#d32f2f',
-                background: mode === 'dark'
-                  ? 'rgba(239, 83, 80, 0.1)'
-                  : 'rgba(211, 47, 47, 0.1)',
+                width: '36px',
+                height: '36px',
+                color: 'var(--mono-600)',
+                transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
                 '&:hover': {
-                  background: mode === 'dark'
-                    ? 'rgba(239, 83, 80, 0.2)'
-                    : 'rgba(211, 47, 47, 0.2)',
-                  transform: 'scale(1.1)',
+                  background: 'var(--mono-100)',
+                  color: 'var(--mono-950)',
                 },
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                border: mode === 'dark'
-                  ? '1px solid rgba(239, 83, 80, 0.3)'
-                  : '1px solid rgba(211, 47, 47, 0.3)',
               }}
             >
-              <LogoutIcon />
+              <LogoutIcon sx={{ fontSize: 20 }} />
             </IconButton>
           </Tooltip>
         </Toolbar>
       </AppBar>
+
+      {/* Drawer */}
       <Box
         component="nav"
         sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
@@ -294,6 +294,8 @@ export default function Layout({ children }: LayoutProps) {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
+              background: 'var(--surface-base)',
+              borderRight: '1px solid var(--surface-border)',
             },
           }}
         >
@@ -306,6 +308,8 @@ export default function Layout({ children }: LayoutProps) {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
+              background: 'var(--surface-base)',
+              borderRight: '1px solid var(--surface-border)',
             },
           }}
           open
@@ -313,18 +317,16 @@ export default function Layout({ children }: LayoutProps) {
           {drawer}
         </Drawer>
       </Box>
+
+      {/* Main Content */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           p: 3,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
-          backgroundColor: 'background.default',
+          backgroundColor: 'var(--surface-base)',
           minHeight: '100vh',
-          background: mode === 'dark'
-            ? 'radial-gradient(ellipse at top, rgba(100, 181, 246, 0.05) 0%, transparent 50%), radial-gradient(ellipse at bottom, rgba(186, 104, 200, 0.05) 0%, transparent 50%), #0a0e27'
-            : 'radial-gradient(ellipse at top, rgba(25, 118, 210, 0.03) 0%, transparent 50%), radial-gradient(ellipse at bottom, rgba(156, 39, 176, 0.03) 0%, transparent 50%), #f5f7fa',
-          transition: 'background 0.3s ease-in-out',
         }}
       >
         <Toolbar />
@@ -333,4 +335,3 @@ export default function Layout({ children }: LayoutProps) {
     </Box>
   )
 }
-

@@ -1,0 +1,106 @@
+---
+# ============================================================================
+# Persistent Volume Claims for Base Station Platform
+# ============================================================================
+# These PVCs ensure database data persists across pod restarts.
+# StorageClass: local-path (for local development/testing)
+# Change to appropriate class for production (gp2, standard, etc.)
+# ============================================================================
+
+# PostgreSQL Auth Database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-auth-pvc
+  namespace: basestation-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+# PostgreSQL Base Station Database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-basestation-pvc
+  namespace: basestation-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+---
+# PostgreSQL Notification Database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-notification-pvc
+  namespace: basestation-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+# MongoDB Metrics Database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  namespace: basestation-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi  # Larger for time-series metrics data
+  storageClassName: local-path
+---
+# Redis Cache (Optional - can use emptyDir)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: basestation-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: local-path
+---
+# RabbitMQ Message Queue
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rabbitmq-pvc
+  namespace: basestation-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+# Backup Storage (for automated backups)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-pvc
+  namespace: basestation-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi  # Sufficient for 30 days of daily backups
+  storageClassName: local-path

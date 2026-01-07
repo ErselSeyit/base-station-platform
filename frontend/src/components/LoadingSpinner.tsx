@@ -29,7 +29,7 @@ export default function LoadingSpinner({
     >
       <CircularProgress size={size} />
       {message && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
           {message}
         </Typography>
       )}

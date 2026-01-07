@@ -23,7 +23,6 @@ import {
 } from '@mui/material'
 import { TransitionProps } from '@mui/material/transitions'
 import React from 'react'
-import { useTheme } from '../contexts/ThemeContext'
 import { BaseStation, StationStatus, StationType } from '../types'
 
 const Transition = React.forwardRef(function Transition(
@@ -43,76 +42,6 @@ interface StationFormDialogProps {
   readonly isSubmitting: boolean
 }
 
-// Helper function to get dialog paper styles based on theme mode
-const getDialogPaperStyles = (isDark: boolean) => ({
-  borderRadius: 3,
-  background: isDark
-    ? 'linear-gradient(145deg, #1a1f3a 0%, #0f1425 100%)'
-    : 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
-  border: isDark
-    ? '1px solid rgba(100, 181, 246, 0.2)'
-    : '1px solid rgba(0, 0, 0, 0.08)',
-  boxShadow: isDark
-    ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-    : '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-})
-
-const getHeaderStyles = (isDark: boolean) => ({
-  background: isDark
-    ? 'linear-gradient(135deg, rgba(100, 181, 246, 0.15) 0%, rgba(186, 104, 200, 0.15) 100%)'
-    : 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(156, 39, 176, 0.1) 100%)',
-  px: 3,
-  py: 2.5,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-})
-
-const getIconBoxStyles = (isDark: boolean) => ({
-  width: 48,
-  height: 48,
-  borderRadius: 2,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: isDark
-    ? 'linear-gradient(135deg, #64b5f6 0%, #42a5f5 100%)'
-    : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-  boxShadow: isDark
-    ? '0 4px 14px rgba(100, 181, 246, 0.3)'
-    : '0 4px 14px rgba(25, 118, 210, 0.3)',
-})
-
-const getButtonHoverStyles = (isDark: boolean) => ({
-  color: 'text.secondary',
-  '&:hover': {
-    background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-  },
-})
-
-const getSubmitButtonStyles = (isDark: boolean) => ({
-  px: 4,
-  py: 1.2,
-  background: isDark
-    ? 'linear-gradient(135deg, #64b5f6 0%, #42a5f5 100%)'
-    : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-  boxShadow: isDark
-    ? '0 4px 14px rgba(100, 181, 246, 0.3)'
-    : '0 4px 14px rgba(25, 118, 210, 0.3)',
-  '&:hover': {
-    background: isDark
-      ? 'linear-gradient(135deg, #42a5f5 0%, #2196f3 100%)'
-      : 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
-    boxShadow: isDark
-      ? '0 6px 20px rgba(100, 181, 246, 0.4)'
-      : '0 6px 20px rgba(25, 118, 210, 0.4)',
-  },
-})
-
-const getDividerColor = (isDark: boolean) => isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'
-
-const getActionsBackgroundColor = (isDark: boolean) => isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)'
-
 export default function StationFormDialog({
   open,
   onClose,
@@ -122,9 +51,6 @@ export default function StationFormDialog({
   setFormData,
   isSubmitting,
 }: StationFormDialogProps) {
-  const { mode } = useTheme()
-  const isDark = mode === 'dark'
-
   const isFormValid = formData.stationName && formData.location
 
   return (
@@ -135,27 +61,57 @@ export default function StationFormDialog({
       fullWidth
       TransitionComponent={Transition}
       PaperProps={{
-        sx: getDialogPaperStyles(isDark),
+        sx: {
+          borderRadius: '12px',
+          background: 'var(--surface-base)',
+          border: '1px solid var(--surface-border)',
+          boxShadow: 'var(--shadow-lg)',
+        },
       }}
     >
-      {/* Header with gradient */}
-      <Box sx={getHeaderStyles(isDark)}>
+      {/* Minimal Header */}
+      <Box
+        sx={{
+          px: 3,
+          py: 2.5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid var(--surface-border)',
+        }}
+      >
         <Box display="flex" alignItems="center" gap={2}>
-          <Box sx={getIconBoxStyles(isDark)}>
-            <CellTowerIcon sx={{ color: 'white', fontSize: 28 }} />
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--mono-950)',
+              border: '1px solid var(--surface-border)',
+            }}
+          >
+            <CellTowerIcon sx={{ color: 'var(--mono-50)', fontSize: 28 }} />
           </Box>
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--mono-950)' }}>
               {editingStation ? 'Edit Station' : 'New Station'}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
               {editingStation ? 'Update station configuration' : 'Configure a new base station'}
             </Typography>
           </Box>
         </Box>
         <IconButton
           onClick={onClose}
-          sx={getButtonHoverStyles(isDark)}
+          sx={{
+            color: 'var(--mono-600)',
+            '&:hover': {
+              background: 'var(--mono-100)',
+            },
+          }}
         >
           <CloseIcon />
         </IconButton>
@@ -172,8 +128,8 @@ export default function StationFormDialog({
           {/* Basic Information Section */}
           <Box sx={{ mb: 3 }}>
             <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <CellTowerIcon sx={{ color: 'primary.main', fontSize: 20 }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'primary.main' }}>
+              <CellTowerIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--mono-500)' }}>
                 Basic Information
               </Typography>
             </Box>
@@ -196,7 +152,7 @@ export default function StationFormDialog({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <CellTowerIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                    <CellTowerIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
                   </InputAdornment>
                 ),
               }}
@@ -220,20 +176,20 @@ export default function StationFormDialog({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LocationIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                    <LocationIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
                   </InputAdornment>
                 ),
               }}
             />
           </Box>
 
-          <Divider sx={{ my: 3, borderColor: getDividerColor(isDark) }} />
+          <Divider sx={{ my: 3, borderColor: 'var(--surface-border)' }} />
 
           {/* Coordinates Section */}
           <Box sx={{ mb: 3 }}>
             <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <CoordinatesIcon sx={{ color: 'secondary.main', fontSize: 20 }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'secondary.main' }}>
+              <CoordinatesIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--mono-500)' }}>
                 Coordinates
               </Typography>
             </Box>
@@ -289,13 +245,13 @@ export default function StationFormDialog({
             </Box>
           </Box>
 
-          <Divider sx={{ my: 3, borderColor: getDividerColor(isDark) }} />
+          <Divider sx={{ my: 3, borderColor: 'var(--surface-border)' }} />
 
           {/* Configuration Section */}
           <Box sx={{ mb: 3 }}>
             <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <SettingsIcon sx={{ color: 'warning.main', fontSize: 20 }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'warning.main' }}>
+              <SettingsIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--mono-500)' }}>
                 Configuration
               </Typography>
             </Box>
@@ -381,7 +337,7 @@ export default function StationFormDialog({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <PowerIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                    <PowerIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
                   </InputAdornment>
                 ),
                 endAdornment: <InputAdornment position="end">kW</InputAdornment>,
@@ -390,13 +346,13 @@ export default function StationFormDialog({
             />
           </Box>
 
-          <Divider sx={{ my: 3, borderColor: getDividerColor(isDark) }} />
+          <Divider sx={{ my: 3, borderColor: 'var(--surface-border)' }} />
 
           {/* Description Section */}
           <Box>
             <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <DescriptionIcon sx={{ color: 'info.main', fontSize: 20 }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'info.main' }}>
+              <DescriptionIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--mono-500)' }}>
                 Additional Details
               </Typography>
             </Box>
@@ -421,10 +377,22 @@ export default function StationFormDialog({
         </form>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 2.5, background: getActionsBackgroundColor(isDark) }}>
+      <DialogActions
+        sx={{
+          px: 3,
+          py: 2.5,
+          background: 'var(--surface-elevated)',
+          borderTop: '1px solid var(--surface-border)',
+        }}
+      >
         <Button
           onClick={onClose}
-          sx={getButtonHoverStyles(isDark)}
+          sx={{
+            color: 'var(--mono-600)',
+            '&:hover': {
+              background: 'var(--mono-100)',
+            },
+          }}
         >
           Cancel
         </Button>
@@ -433,10 +401,26 @@ export default function StationFormDialog({
           onClick={onSubmit}
           variant="contained"
           disabled={isSubmitting || !isFormValid}
-          sx={getSubmitButtonStyles(isDark)}
+          sx={{
+            px: 4,
+            py: 1.2,
+            background: 'var(--mono-950)',
+            color: 'var(--mono-50)',
+            fontWeight: 600,
+            transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+            '&:hover': {
+              background: 'var(--mono-900)',
+              color: 'var(--mono-50)',
+              transform: 'translateY(-1px)',
+            },
+            '&:disabled': {
+              background: 'var(--mono-300)',
+              color: 'var(--mono-600)',
+            },
+          }}
         >
           {isSubmitting ? (
-            <CircularProgress size={24} sx={{ color: 'white' }} />
+            <CircularProgress size={24} sx={{ color: 'var(--mono-600)' }} />
           ) : (
             <>
               {editingStation ? 'Update Station' : 'Create Station'}

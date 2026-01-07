@@ -1,110 +1,283 @@
 import {
-  CellTower as CellTowerIcon,
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
-  Warning as WarningIcon,
-  Bolt as BoltIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material'
 import {
   Alert,
   Box,
-  CardContent,
   Grid,
   Typography,
-  LinearProgress,
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import { useState } from 'react'
 import AnimatedCounter from '../components/AnimatedCounter'
 import LiveActivityFeed from '../components/LiveActivityFeed'
 import LoadingSpinner from '../components/LoadingSpinner'
 import MetricsChart from '../components/MetricsChart'
-import PulsingStatus from '../components/PulsingStatus'
 import { notificationsApi, stationApi } from '../services/api'
 import { BaseStation, Notification, StationStatus } from '../types'
 
-// Neon color palette
-const NEON = {
-  pink: '#FF006E',
-  blue: '#00F5FF',
-  purple: '#B537F2',
-  green: '#00FF9F',
-  yellow: '#FFD60A',
-  orange: '#FF6B35',
+// Status colors now use CSS variables
+const STATUS_COLORS = {
+  active: 'var(--status-active)',
+  maintenance: 'var(--status-maintenance)',
+  offline: 'var(--status-offline)',
+  neutral: 'var(--status-info)',
 }
 
-// Neon Card Component with 3D effects and glow
-interface NeonCardProps {
-  children: React.ReactNode
+// Revolutionary micro-metric component with magnetic hover
+interface MicroMetricProps {
+  label: string
+  value: number | string
+  status?: 'active' | 'maintenance' | 'offline' | 'neutral'
+  unit?: string
+  trend?: number
   delay?: number
-  color?: string
-  className?: string
 }
 
-const NeonCard = ({ children, delay = 0, color = NEON.blue, className = '' }: NeonCardProps) => (
-  <Box
-    component={motion.div}
-    initial={{ opacity: 0, y: 50, scale: 0.9 }}
-    animate={{ opacity: 1, y: 0, scale: 1 }}
-    transition={{
-      delay,
-      duration: 0.8,
-      ease: [0.34, 1.56, 0.64, 1], // Bounce easing
-    }}
-    className={className}
-    sx={{
-      height: '100%',
-      background: 'linear-gradient(145deg, #1a1f3a, #141829)',
-      border: `2px solid ${color}40`,
-      borderRadius: 3,
-      boxShadow: `
-        20px 20px 60px #0c0f1c,
-        -20px -20px 60px #222847,
-        0 0 30px ${color}30
-      `,
-      transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
-      cursor: 'pointer',
-      position: 'relative',
-      overflow: 'hidden',
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        top: '-50%',
-        left: '-50%',
-        width: '200%',
-        height: '200%',
-        background: `radial-gradient(circle, ${color}20 0%, transparent 60%)`,
-        animation: 'rotate3d 10s linear infinite',
-        opacity: 0.3,
-      },
-      '&:hover': {
-        transform: 'translateY(-12px) scale(1.02)',
-        boxShadow: `
-          25px 25px 70px #0a0d18,
-          -25px -25px 70px #242a4f,
-          0 0 60px ${color}60,
-          inset 0 0 20px ${color}20
-        `,
-        borderColor: `${color}80`,
-      },
-    }}
-  >
-    {children}
-  </Box>
-)
+const MicroMetric = ({ label, value, status = 'neutral', unit = '', trend, delay = 0 }: MicroMetricProps) => {
+  const [isHovered, setIsHovered] = useState(false)
+  const mouseX = useMotionValue(0)
+  const mouseY = useMotionValue(0)
 
-// Helper function to get status color in neon palette
-function getStatusNeonColor(status: StationStatus): string {
-  switch (status) {
-    case StationStatus.ACTIVE:
-      return NEON.green
-    case StationStatus.MAINTENANCE:
-      return NEON.yellow
-    case StationStatus.OFFLINE:
-      return NEON.pink
-    default:
-      return NEON.pink
+  const springConfig = { damping: 25, stiffness: 400 }
+  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [5, -5]), springConfig)
+  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-5, 5]), springConfig)
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    mouseX.set((e.clientX - centerX) / rect.width)
+    mouseY.set((e.clientY - centerY) / rect.height)
   }
+
+  return (
+    <Box
+      component={motion.div}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => {
+        setIsHovered(false)
+        mouseX.set(0)
+        mouseY.set(0)
+      }}
+      sx={{
+        position: 'relative',
+        padding: '20px',
+        background: 'var(--surface-base)',
+        border: '1px solid var(--surface-border)',
+        borderRadius: '12px',
+        cursor: 'pointer',
+        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: 'var(--shadow-lg)',
+          borderColor: 'var(--mono-300)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '2px',
+          background: STATUS_COLORS[status],
+          transform: isHovered ? 'scaleX(1)' : 'scaleX(0)',
+          transformOrigin: 'left',
+          transition: 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+        },
+      }}
+      style={{
+        rotateX,
+        rotateY,
+        transformStyle: 'preserve-3d',
+      }}
+    >
+      {/* Label */}
+      <Typography
+        variant="caption"
+        sx={{
+          display: 'block',
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          color: 'var(--mono-500)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          marginBottom: '8px',
+        }}
+      >
+        {label}
+      </Typography>
+
+      {/* Value with tabular nums */}
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '4px' }}>
+        <Typography
+          sx={{
+            fontSize: '2rem',
+            fontWeight: 600,
+            lineHeight: 1,
+            letterSpacing: '-0.02em',
+            fontVariantNumeric: 'tabular-nums',
+            color: 'var(--mono-950)',
+          }}
+        >
+          {typeof value === 'number' ? (
+            <AnimatedCounter value={value} decimals={unit === 'kW' ? 1 : 0} duration={1200} />
+          ) : (
+            value
+          )}
+        </Typography>
+        {unit && (
+          <Typography
+            sx={{
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: 'var(--mono-500)',
+            }}
+          >
+            {unit}
+          </Typography>
+        )}
+      </Box>
+
+      {/* Trend indicator */}
+      {trend !== undefined && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}>
+          <TrendingUpIcon
+            sx={{
+              fontSize: '14px',
+              color: trend > 0 ? STATUS_COLORS.active : trend < 0 ? STATUS_COLORS.offline : STATUS_COLORS.neutral,
+              transform: trend < 0 ? 'rotate(180deg)' : 'none',
+            }}
+          />
+          <Typography
+            sx={{
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              color: trend > 0 ? STATUS_COLORS.active : trend < 0 ? STATUS_COLORS.offline : STATUS_COLORS.neutral,
+            }}
+          >
+            {trend > 0 ? '+' : ''}{trend}%
+          </Typography>
+        </Box>
+      )}
+
+      {/* Status indicator */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '16px',
+          right: '16px',
+          width: '6px',
+          height: '6px',
+          borderRadius: '50%',
+          background: STATUS_COLORS[status],
+          boxShadow: `0 0 0 2px ${STATUS_COLORS[status]}20`,
+        }}
+      >
+        {status === 'active' && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: '-2px',
+              borderRadius: '50%',
+              background: STATUS_COLORS[status],
+              opacity: 0.2,
+              animation: 'pulse 2s ease-in-out infinite',
+            }}
+          />
+        )}
+      </Box>
+    </Box>
+  )
+}
+
+// Inline status row component
+interface StatusRowProps {
+  station: BaseStation
+  delay: number
+}
+
+const StatusRow = ({ station, delay }: StatusRowProps) => {
+  const statusColor =
+    station.status === StationStatus.ACTIVE
+      ? STATUS_COLORS.active
+      : station.status === StationStatus.MAINTENANCE
+      ? STATUS_COLORS.maintenance
+      : STATUS_COLORS.offline
+
+  return (
+    <Box
+      component={motion.div}
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        borderBottom: '1px solid var(--surface-border)',
+        transition: 'background 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+        cursor: 'pointer',
+        '&:hover': {
+          background: 'var(--mono-50)',
+        },
+        '&:last-child': {
+          borderBottom: 'none',
+        },
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+        <Box
+          sx={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: statusColor,
+            position: 'relative',
+          }}
+        >
+          {station.status === StationStatus.ACTIVE && (
+            <Box
+              sx={{
+                position: 'absolute',
+                inset: '-2px',
+                borderRadius: '50%',
+                background: statusColor,
+                opacity: 0.2,
+                animation: 'pulse 2s ease-in-out infinite',
+              }}
+            />
+          )}
+        </Box>
+        <Typography
+          sx={{
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            color: 'var(--mono-950)',
+          }}
+        >
+          {station.stationName}
+        </Typography>
+      </Box>
+      <Typography
+        sx={{
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          fontVariantNumeric: 'tabular-nums',
+          fontFamily: "'JetBrains Mono', monospace",
+          color: 'var(--mono-600)',
+        }}
+      >
+        {(station.powerConsumption || 0).toFixed(1)} kW
+      </Typography>
+    </Box>
+  )
 }
 
 export default function Dashboard() {
@@ -135,448 +308,245 @@ export default function Dashboard() {
   const notificationsList = Array.isArray(notifications) ? notifications : []
   const unreadAlerts = notificationsList.filter((n: Notification) => n.status === 'UNREAD').length || 0
 
-  const statCards = [
-    {
-      title: 'TOTAL STATIONS',
-      value: stationsData.length,
-      icon: <CellTowerIcon sx={{ fontSize: 48 }} />,
-      color: NEON.blue,
-      unit: '',
-    },
-    {
-      title: 'ACTIVE',
-      value: activeCount,
-      icon: <CheckCircleIcon sx={{ fontSize: 48 }} />,
-      color: NEON.green,
-      unit: '',
-    },
-    {
-      title: 'MAINTENANCE',
-      value: maintenanceCount,
-      icon: <WarningIcon sx={{ fontSize: 48 }} />,
-      color: NEON.yellow,
-      unit: '',
-    },
-    {
-      title: 'OFFLINE',
-      value: offlineCount,
-      icon: <ErrorIcon sx={{ fontSize: 48 }} />,
-      color: NEON.pink,
-      unit: '',
-    },
-    {
-      title: 'TOTAL POWER',
-      value: totalPower.toFixed(1),
-      icon: <BoltIcon sx={{ fontSize: 48 }} />,
-      color: NEON.purple,
-      unit: 'kW',
-    },
-    {
-      title: 'UNREAD ALERTS',
-      value: unreadAlerts,
-      icon: <WarningIcon sx={{ fontSize: 48 }} />,
-      color: NEON.orange,
-      unit: '',
-    },
-  ]
+  const uptime = stationsData.length > 0 ? ((activeCount / stationsData.length) * 100).toFixed(1) : '0'
 
   return (
-    <Box sx={{ position: 'relative' }}>
-      {/* Cyber grid background */}
+    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+      {/* Header - Brutally minimal */}
       <Box
-        sx={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundImage: `
-            linear-gradient(${NEON.blue}15 1px, transparent 1px),
-            linear-gradient(90deg, ${NEON.blue}15 1px, transparent 1px)
-          `,
-          backgroundSize: '50px 50px',
-          opacity: 0.15,
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
+        component={motion.div}
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        sx={{ marginBottom: '32px' }}
+      >
+        <Typography
+          variant="h1"
+          sx={{
+            fontSize: '2.25rem',
+            fontWeight: 700,
+            letterSpacing: '-0.025em',
+            color: 'var(--mono-950)',
+            marginBottom: '8px',
+          }}
+        >
+          Operations
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: '0.875rem',
+            color: 'var(--mono-500)',
+            letterSpacing: '0.01em',
+          }}
+        >
+          Real-time infrastructure monitoring · {stationsData.length} stations · {uptime}% uptime
+        </Typography>
+      </Box>
 
-      <Box sx={{ position: 'relative', zIndex: 1 }}>
-        {/* Mission Control Title */}
+      {/* Alert banner - minimal */}
+      {unreadAlerts > 0 && (
         <Box
           component={motion.div}
-          initial={{ opacity: 0, y: -50 }}
+          initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-          sx={{ mb: 5, textAlign: 'center' }}
+          transition={{ duration: 0.3 }}
+          sx={{ marginBottom: '24px' }}
         >
-          <Typography
-            variant="h2"
-            className="neon-text"
+          <Alert
+            severity="warning"
             sx={{
-              fontFamily: "'Space Grotesk', sans-serif",
-              fontWeight: 800,
-              fontSize: { xs: '2.5rem', md: '4rem' },
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              color: NEON.blue,
-              textShadow: `
-                0 0 10px ${NEON.blue}ff,
-                0 0 20px ${NEON.blue}cc,
-                0 0 40px ${NEON.blue}88,
-                0 0 80px ${NEON.blue}44
-              `,
-              animation: 'neonPulse 3s ease-in-out infinite',
-              mb: 2,
+              background: 'var(--mono-50)',
+              border: '1px solid var(--surface-border)',
+              borderLeft: `3px solid ${STATUS_COLORS.maintenance}`,
+              borderRadius: '8px',
+              padding: '12px 16px',
+              fontSize: '0.875rem',
+              '& .MuiAlert-icon': {
+                fontSize: '18px',
+                color: STATUS_COLORS.maintenance,
+              },
             }}
           >
-            MISSION CONTROL
-          </Typography>
-          <Typography
-            variant="h6"
-            sx={{
-              fontFamily: "'Inter', sans-serif",
-              color: NEON.purple,
-              textShadow: `0 0 10px ${NEON.purple}80`,
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              fontSize: '0.9rem',
-            }}
-          >
-            Base Station Operations Dashboard
-          </Typography>
+            {unreadAlerts} unread alert{unreadAlerts > 1 ? 's' : ''} require attention
+          </Alert>
         </Box>
+      )}
 
-        {/* Unread alerts banner */}
-        {unreadAlerts > 0 && (
+      {/* Metrics grid - hyper-dense */}
+      <Grid container spacing={2} sx={{ marginBottom: '24px' }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <MicroMetric
+            label="Total Stations"
+            value={stationsData.length}
+            status="neutral"
+            delay={0}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MicroMetric
+            label="Active"
+            value={activeCount}
+            status="active"
+            trend={5}
+            delay={0.05}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MicroMetric
+            label="Maintenance"
+            value={maintenanceCount}
+            status="maintenance"
+            delay={0.1}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MicroMetric
+            label="Offline"
+            value={offlineCount}
+            status="offline"
+            trend={offlineCount > 0 ? -2 : 0}
+            delay={0.15}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4}>
+          <MicroMetric
+            label="Power Consumption"
+            value={totalPower.toFixed(1)}
+            unit="kW"
+            status="neutral"
+            delay={0.2}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4}>
+          <MicroMetric
+            label="System Uptime"
+            value={uptime}
+            unit="%"
+            status="active"
+            trend={1}
+            delay={0.25}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4}>
+          <MicroMetric
+            label="Alerts"
+            value={unreadAlerts}
+            status={unreadAlerts > 0 ? 'maintenance' : 'neutral'}
+            delay={0.3}
+          />
+        </Grid>
+      </Grid>
+
+      {/* Main content grid */}
+      <Grid container spacing={2}>
+        {/* Metrics chart */}
+        <Grid item xs={12} lg={8}>
           <Box
             component={motion.div}
-            initial={{ opacity: 0, x: -100 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-            sx={{ mb: 4 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '12px',
+              padding: '24px',
+              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              '&:hover': {
+                boxShadow: 'var(--shadow-md)',
+                borderColor: 'var(--mono-300)',
+              },
+            }}
           >
-            <Alert
-              severity="warning"
-              className="glow-border"
+            <Typography
               sx={{
-                background: `linear-gradient(135deg, ${NEON.orange}20, ${NEON.yellow}20)`,
-                border: `2px solid ${NEON.orange}`,
-                borderRadius: 3,
-                color: NEON.yellow,
-                boxShadow: `0 0 30px ${NEON.orange}40`,
+                fontSize: '0.875rem',
                 fontWeight: 600,
-                fontSize: '1.1rem',
-                '& .MuiAlert-icon': {
-                  color: NEON.orange,
-                  filter: `drop-shadow(0 0 10px ${NEON.orange})`,
-                },
+                color: 'var(--mono-950)',
+                marginBottom: '20px',
+                letterSpacing: '-0.01em',
               }}
             >
-              {unreadAlerts} UNREAD ALERT{unreadAlerts > 1 ? 'S' : ''} DETECTED
-            </Alert>
+              Performance Metrics
+            </Typography>
+            <MetricsChart />
           </Box>
-        )}
-
-        {/* Stat Cards Grid */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {statCards.map((card, index) => (
-            <Grid item xs={12} sm={6} md={4} key={card.title}>
-              <NeonCard delay={index * 0.15} color={card.color}>
-                <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                    <Typography
-                      variant="overline"
-                      sx={{
-                        fontFamily: "'Space Grotesk', sans-serif",
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        letterSpacing: '0.15em',
-                        color: card.color,
-                        textShadow: `0 0 10px ${card.color}80`,
-                      }}
-                    >
-                      {card.title}
-                    </Typography>
-                    <Box
-                      component={motion.div}
-                      animate={{
-                        rotate: [0, 10, -10, 0],
-                        scale: [1, 1.1, 1.1, 1],
-                      }}
-                      transition={{
-                        duration: 3,
-                        repeat: Infinity,
-                        ease: 'easeInOut',
-                      }}
-                      sx={{
-                        color: card.color,
-                        filter: `drop-shadow(0 0 15px ${card.color})`,
-                      }}
-                    >
-                      {card.icon}
-                    </Box>
-                  </Box>
-
-                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                    <Typography
-                      component={motion.div}
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: index * 0.15 + 0.3, type: 'spring', stiffness: 200 }}
-                      sx={{
-                        fontFamily: "'Space Grotesk', sans-serif",
-                        fontSize: '3rem',
-                        fontWeight: 800,
-                        color: card.color,
-                        textShadow: `
-                          0 0 5px ${card.color}ff,
-                          0 0 10px ${card.color}cc,
-                          0 0 20px ${card.color}88
-                        `,
-                        lineHeight: 1,
-                      }}
-                    >
-                      <AnimatedCounter
-                        value={typeof card.value === 'number' ? card.value : Number.parseFloat(String(card.value)) || 0}
-                        decimals={card.title.includes('POWER') ? 1 : 0}
-                        duration={2000}
-                      />
-                    </Typography>
-                    {card.unit && (
-                      <Typography
-                        variant="h6"
-                        sx={{
-                          color: card.color,
-                          opacity: 0.7,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {card.unit}
-                      </Typography>
-                    )}
-                  </Box>
-
-                  {/* Animated progress bar */}
-                  <Box
-                    component={motion.div}
-                    initial={{ width: 0 }}
-                    animate={{ width: '100%' }}
-                    transition={{ delay: index * 0.15 + 0.5, duration: 1.2, ease: 'easeOut' }}
-                    sx={{ mt: 2 }}
-                  >
-                    <LinearProgress
-                      variant="determinate"
-                      value={100}
-                      sx={{
-                        height: 4,
-                        borderRadius: 2,
-                        backgroundColor: `${card.color}20`,
-                        '& .MuiLinearProgress-bar': {
-                          backgroundColor: card.color,
-                          boxShadow: `0 0 10px ${card.color}`,
-                          animation: 'shimmerNeon 2s linear infinite',
-                        },
-                      }}
-                    />
-                  </Box>
-                </CardContent>
-              </NeonCard>
-            </Grid>
-          ))}
         </Grid>
 
-        {/* Charts and Health Section */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={8}>
-            <NeonCard delay={0.9} color={NEON.purple}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography
-                  variant="h5"
-                  sx={{
-                    fontFamily: "'Space Grotesk', sans-serif",
-                    fontWeight: 700,
-                    mb: 3,
-                    color: NEON.purple,
-                    textShadow: `0 0 10px ${NEON.purple}80`,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  METRICS ANALYSIS
-                </Typography>
-                <MetricsChart />
-              </CardContent>
-            </NeonCard>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <NeonCard delay={1.05} color={NEON.green}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontFamily: "'Space Grotesk', sans-serif",
-                    fontWeight: 700,
-                    mb: 3,
-                    color: NEON.green,
-                    textShadow: `0 0 10px ${NEON.green}80`,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  STATION HEALTH
-                </Typography>
-
-                {/* Animated Health Distribution */}
-                <Box sx={{ mb: 3 }}>
-                  <Box sx={{ display: 'flex', height: 16, borderRadius: 2, overflow: 'hidden', mb: 2 }}>
-                    {activeCount > 0 && (
-                      <Box
-                        component={motion.div}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(activeCount / stationsData.length) * 100}%` }}
-                        transition={{ delay: 1.2, duration: 1, ease: 'easeOut' }}
-                        sx={{
-                          bgcolor: NEON.green,
-                          boxShadow: `0 0 20px ${NEON.green}`,
-                        }}
-                      />
-                    )}
-                    {maintenanceCount > 0 && (
-                      <Box
-                        component={motion.div}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(maintenanceCount / stationsData.length) * 100}%` }}
-                        transition={{ delay: 1.3, duration: 1, ease: 'easeOut' }}
-                        sx={{
-                          bgcolor: NEON.yellow,
-                          boxShadow: `0 0 20px ${NEON.yellow}`,
-                        }}
-                      />
-                    )}
-                    {offlineCount > 0 && (
-                      <Box
-                        component={motion.div}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(offlineCount / stationsData.length) * 100}%` }}
-                        transition={{ delay: 1.4, duration: 1, ease: 'easeOut' }}
-                        sx={{
-                          bgcolor: NEON.pink,
-                          boxShadow: `0 0 20px ${NEON.pink}`,
-                        }}
-                      />
-                    )}
-                  </Box>
-
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PulsingStatus color={NEON.green} size={10} animate />
-                      <Typography variant="body2" sx={{ color: NEON.green, fontWeight: 600 }}>
-                        Active: {Math.round((activeCount / stationsData.length) * 100) || 0}%
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PulsingStatus color={NEON.yellow} size={10} animate />
-                      <Typography variant="body2" sx={{ color: NEON.yellow, fontWeight: 600 }}>
-                        Maintenance: {Math.round((maintenanceCount / stationsData.length) * 100) || 0}%
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PulsingStatus color={NEON.pink} size={10} animate />
-                      <Typography variant="body2" sx={{ color: NEON.pink, fontWeight: 600 }}>
-                        Offline: {Math.round((offlineCount / stationsData.length) * 100) || 0}%
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Box>
-
-                {/* Top Stations */}
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 700,
-                    mb: 2,
-                    color: NEON.blue,
-                    textShadow: `0 0 8px ${NEON.blue}60`,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Top Power Consumers
-                </Typography>
-                {[...stationsData]
-                  .sort((a: BaseStation, b: BaseStation) => (b.powerConsumption || 0) - (a.powerConsumption || 0))
-                  .slice(0, 5)
-                  .map((station: BaseStation, idx: number) => (
-                    <Box
-                      key={station.id}
-                      component={motion.div}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 1.5 + idx * 0.1, duration: 0.5 }}
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        p: 1.5,
-                        mb: 1,
-                        borderRadius: 2,
-                        background: `linear-gradient(135deg, ${getStatusNeonColor(station.status)}20, transparent)`,
-                        border: `1px solid ${getStatusNeonColor(station.status)}40`,
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          transform: 'translateX(8px)',
-                          boxShadow: `0 0 20px ${getStatusNeonColor(station.status)}40`,
-                          borderColor: `${getStatusNeonColor(station.status)}80`,
-                        },
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <PulsingStatus
-                          color={getStatusNeonColor(station.status)}
-                          size={10}
-                          animate={station.status === StationStatus.ACTIVE}
-                        />
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 600,
-                            color: '#fff',
-                          }}
-                        >
-                          {station.stationName}
-                        </Typography>
-                      </Box>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: 700,
-                          fontFamily: "'JetBrains Mono', monospace",
-                          color: NEON.yellow,
-                          textShadow: `0 0 5px ${NEON.yellow}80`,
-                        }}
-                      >
-                        {(station.powerConsumption || 0).toFixed(1)} kW
-                      </Typography>
-                    </Box>
-                  ))}
-              </CardContent>
-            </NeonCard>
-          </Grid>
+        {/* Station health list */}
+        <Grid item xs={12} lg={4}>
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              '&:hover': {
+                boxShadow: 'var(--shadow-md)',
+                borderColor: 'var(--mono-300)',
+              },
+            }}
+          >
+            <Box sx={{ padding: '24px 24px 16px' }}>
+              <Typography
+                sx={{
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: 'var(--mono-950)',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                Power Consumption
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: '0.75rem',
+                  color: 'var(--mono-500)',
+                  marginTop: '4px',
+                }}
+              >
+                Top consumers by usage
+              </Typography>
+            </Box>
+            <Box>
+              {[...stationsData]
+                .sort((a: BaseStation, b: BaseStation) => (b.powerConsumption || 0) - (a.powerConsumption || 0))
+                .slice(0, 6)
+                .map((station: BaseStation, idx: number) => (
+                  <StatusRow key={station.id} station={station} delay={0.45 + idx * 0.05} />
+                ))}
+            </Box>
+          </Box>
         </Grid>
 
-        {/* Live Activity Feed */}
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <NeonCard delay={1.2} color={NEON.orange}>
-              <CardContent sx={{ p: 3 }}>
-                <LiveActivityFeed />
-              </CardContent>
-            </NeonCard>
-          </Grid>
+        {/* Activity feed */}
+        <Grid item xs={12}>
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '12px',
+              padding: '24px',
+              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              '&:hover': {
+                boxShadow: 'var(--shadow-md)',
+                borderColor: 'var(--mono-300)',
+              },
+            }}
+          >
+            <LiveActivityFeed />
+          </Box>
         </Grid>
-      </Box>
+      </Grid>
     </Box>
   )
 }
