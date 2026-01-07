@@ -1,9 +1,6 @@
 import { Box, Skeleton, Grid } from '@mui/material'
-import { useTheme } from '../contexts/ThemeContext'
 
 export function DashboardSkeleton() {
-  const { mode } = useTheme()
-
   return (
     <Box>
       {/* Header skeleton */}
@@ -12,14 +9,14 @@ export function DashboardSkeleton() {
           variant="text"
           width="30%"
           height={60}
-          sx={{ mb: 1, borderRadius: 2 }}
+          sx={{ mb: 1, borderRadius: 2, bgcolor: 'var(--mono-100)' }}
           animation="wave"
         />
         <Skeleton
           variant="text"
           width="50%"
           height={30}
-          sx={{ borderRadius: 1 }}
+          sx={{ borderRadius: 1, bgcolor: 'var(--mono-100)' }}
           animation="wave"
         />
       </Box>
@@ -33,7 +30,7 @@ export function DashboardSkeleton() {
               height={120}
               sx={{
                 borderRadius: 3,
-                bgcolor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                bgcolor: 'var(--mono-100)',
               }}
               animation="wave"
             />
@@ -47,7 +44,7 @@ export function DashboardSkeleton() {
             height={400}
             sx={{
               borderRadius: 3,
-              bgcolor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+              bgcolor: 'var(--mono-100)',
             }}
             animation="wave"
           />
@@ -60,7 +57,7 @@ export function DashboardSkeleton() {
             height={400}
             sx={{
               borderRadius: 3,
-              bgcolor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+              bgcolor: 'var(--mono-100)',
             }}
             animation="wave"
           />
@@ -71,8 +68,6 @@ export function DashboardSkeleton() {
 }
 
 export function CardSkeleton({ count = 1 }: { count?: number }) {
-  const { mode } = useTheme()
-
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
@@ -83,7 +78,7 @@ export function CardSkeleton({ count = 1 }: { count?: number }) {
           sx={{
             mb: 2,
             borderRadius: 3,
-            bgcolor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+            bgcolor: 'var(--mono-100)',
           }}
           animation="wave"
         />

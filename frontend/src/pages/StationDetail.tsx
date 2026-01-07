@@ -1,28 +1,224 @@
 import {
   ArrowBack as ArrowBackIcon,
+  Error as ErrorIcon,
+  Info as InfoIcon,
   LocationOn as LocationIcon,
   Memory as MemoryIcon,
   Power as PowerIcon,
   Speed as SpeedIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material'
 import {
   Box,
   Button,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  Grid,
-  Paper,
   Typography,
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import MetricsChart from '../components/MetricsChart'
 import { metricsApi, notificationsApi, stationApi } from '../services/api'
-import { MetricData, Notification } from '../types'
-import { getStatusColor } from '../utils/statusHelpers'
+import { MetricData, Notification, NotificationType, StationStatus } from '../types'
+
+const STATUS_COLORS = {
+  ACTIVE: 'var(--status-active)',
+  MAINTENANCE: 'var(--status-maintenance)',
+  OFFLINE: 'var(--status-offline)',
+}
+
+const SEVERITY_COLORS = {
+  ALERT: 'var(--status-offline)',
+  WARNING: 'var(--status-maintenance)',
+  INFO: 'var(--status-info)',
+}
+
+interface MetricRowProps {
+  metric: MetricData
+  delay: number
+}
+
+const MetricRow = ({ metric, delay }: MetricRowProps) => {
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'POWER_CONSUMPTION':
+        return <PowerIcon sx={{ fontSize: '16px' }} />
+      case 'MEMORY_USAGE':
+        return <MemoryIcon sx={{ fontSize: '16px' }} />
+      case 'CPU_USAGE':
+        return <SpeedIcon sx={{ fontSize: '16px' }} />
+      default:
+        return <SpeedIcon sx={{ fontSize: '16px' }} />
+    }
+  }
+
+  const getMetricColor = (type: string) => {
+    switch (type) {
+      case 'POWER_CONSUMPTION':
+        return 'var(--status-info)'
+      case 'MEMORY_USAGE':
+        return 'var(--status-maintenance)'
+      case 'CPU_USAGE':
+        return 'var(--status-active)'
+      case 'TEMPERATURE':
+        return 'var(--status-offline)'
+      default:
+        return 'var(--status-info)'
+    }
+  }
+
+  return (
+    <Box
+      component={motion.div}
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '16px 20px',
+        borderBottom: '1px solid var(--surface-border)',
+        transition: 'background 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+        '&:hover': {
+          background: 'var(--mono-50)',
+        },
+        '&:last-child': {
+          borderBottom: 'none',
+        },
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+        <Box sx={{ color: getMetricColor(metric.metricType) }}>
+          {getIcon(metric.metricType)}
+        </Box>
+        <Box>
+          <Typography
+            sx={{
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              color: 'var(--mono-950)',
+            }}
+          >
+            {metric.metricType.replace('_', ' ')}
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: '0.75rem',
+              fontFamily: "'JetBrains Mono', monospace",
+              color: 'var(--mono-500)',
+            }}
+          >
+            {metric.timestamp ? new Date(metric.timestamp).toLocaleString() : 'No date'}
+          </Typography>
+        </Box>
+      </Box>
+      <Typography
+        sx={{
+          fontSize: '1.25rem',
+          fontWeight: 600,
+          fontVariantNumeric: 'tabular-nums',
+          fontFamily: "'JetBrains Mono', monospace",
+          color: 'var(--mono-950)',
+        }}
+      >
+        {metric.value} {metric.unit}
+      </Typography>
+    </Box>
+  )
+}
+
+interface AlertRowProps {
+  alert: Notification
+  delay: number
+}
+
+const AlertRow = ({ alert, delay }: AlertRowProps) => {
+  const severityColor = SEVERITY_COLORS[alert.type as keyof typeof SEVERITY_COLORS] || SEVERITY_COLORS.INFO
+
+  const getIcon = (type: NotificationType) => {
+    switch (type) {
+      case NotificationType.ALERT:
+        return <ErrorIcon sx={{ fontSize: '14px' }} />
+      case NotificationType.WARNING:
+        return <WarningIcon sx={{ fontSize: '14px' }} />
+      case NotificationType.INFO:
+        return <InfoIcon sx={{ fontSize: '14px' }} />
+      default:
+        return <InfoIcon sx={{ fontSize: '14px' }} />
+    }
+  }
+
+  return (
+    <Box
+      component={motion.div}
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      sx={{
+        position: 'relative',
+        padding: '16px 20px',
+        borderBottom: '1px solid var(--surface-border)',
+        transition: 'background 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+        '&:hover': {
+          background: 'var(--mono-50)',
+        },
+        '&:last-child': {
+          borderBottom: 'none',
+        },
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: '2px',
+          background: severityColor,
+        },
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+        <Box sx={{ color: severityColor, marginTop: '2px' }}>
+          {getIcon(alert.type)}
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <Typography
+              sx={{
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                color: 'var(--mono-500)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              {alert.type}
+            </Typography>
+          </Box>
+          <Typography
+            sx={{
+              fontSize: '0.8125rem',
+              color: 'var(--mono-700)',
+              lineHeight: 1.5,
+              marginBottom: '4px',
+            }}
+          >
+            {alert.message}
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: '0.7rem',
+              fontFamily: "'JetBrains Mono', monospace",
+              color: 'var(--mono-500)',
+            }}
+          >
+            {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : 'No date'}
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  )
+}
 
 export default function StationDetail() {
   const { id } = useParams<{ id: string }>()
@@ -61,8 +257,8 @@ export default function StationDetail() {
 
   if (!station) {
     return (
-      <Box>
-        <Typography variant="h6" color="error">
+      <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+        <Typography variant="h6" sx={{ color: 'var(--accent-error)' }}>
           Station not found
         </Typography>
       </Box>
@@ -75,179 +271,409 @@ export default function StationDetail() {
 
   const latestMetrics = stationMetrics.slice(-5).reverse()
 
+  const statusColor = STATUS_COLORS[stationData.status as keyof typeof STATUS_COLORS] || STATUS_COLORS.OFFLINE
+
   return (
-    <Box>
-      <Box display="flex" alignItems="center" gap={2} mb={3}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/stations')}
+    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+      {/* Header with Back Button */}
+      <Box
+        component={motion.div}
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        sx={{ marginBottom: '32px' }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/stations')}
+            sx={{
+              color: 'var(--mono-600)',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              textTransform: 'none',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+              '&:hover': {
+                background: 'var(--mono-100)',
+                color: 'var(--mono-950)',
+              },
+            }}
+          >
+            Back to Stations
+          </Button>
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Typography
+            variant="h1"
+            sx={{
+              fontSize: '2.25rem',
+              fontWeight: 700,
+              letterSpacing: '-0.025em',
+              color: 'var(--mono-950)',
+            }}
+          >
+            {stationData.stationName}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Box
+              sx={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: statusColor,
+                position: 'relative',
+              }}
+            >
+              {stationData.status === StationStatus.ACTIVE && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: '-2px',
+                    borderRadius: '50%',
+                    background: statusColor,
+                    opacity: 0.2,
+                    animation: 'pulse 2s ease-in-out infinite',
+                  }}
+                />
+              )}
+            </Box>
+            <Typography
+              sx={{
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                color: 'var(--mono-700)',
+              }}
+            >
+              {stationData.status}
+            </Typography>
+          </Box>
+        </Box>
+
+        <Typography
+          sx={{
+            fontSize: '0.875rem',
+            color: 'var(--mono-500)',
+            letterSpacing: '0.01em',
+            marginTop: '8px',
+          }}
         >
-          Back
-        </Button>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          {stationData.stationName}
+          Station ID: #{stationData.id} · {stationData.stationType}
         </Typography>
-        <Chip
-          label={stationData.status}
-          color={getStatusColor(stationData.status)}
-        />
       </Box>
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Station Information
-              </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="textSecondary">
-                    Station ID
-                  </Typography>
-                  <Typography variant="body1" fontWeight={600}>
-                    {stationData.id}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="textSecondary">
-                    Station Type
-                  </Typography>
-                  <Typography variant="body1" fontWeight={600}>
-                    {stationData.stationType}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12}>
-                  <Box display="flex" alignItems="center" gap={1} mb={1}>
-                    <LocationIcon color="action" />
-                    <Typography variant="body2" color="textSecondary">
-                      Location
-                    </Typography>
-                  </Box>
-                  <Typography variant="body1" fontWeight={600}>
-                    {stationData.location}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {stationData.latitude}, {stationData.longitude}
-                  </Typography>
-                </Grid>
-                {stationData.description && (
-                  <Grid item xs={12}>
-                    <Typography variant="body2" color="textSecondary">
-                      Description
-                    </Typography>
-                    <Typography variant="body1">
-                      {stationData.description}
-                    </Typography>
-                  </Grid>
-                )}
-              </Grid>
-            </CardContent>
-          </Card>
+      {/* Main Content Grid */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: '16px' }}>
+        {/* Left Column */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Station Information */}
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '12px',
+              padding: '24px',
+              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              '&:hover': {
+                boxShadow: 'var(--shadow-md)',
+                borderColor: 'var(--mono-300)',
+              },
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                color: 'var(--mono-950)',
+                marginBottom: '20px',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Station Information
+            </Typography>
 
-          <Card sx={{ mt: 3 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Metrics History
-              </Typography>
-              <MetricsChart />
-            </CardContent>
-          </Card>
-        </Grid>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: '20px' }}>
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    color: 'var(--mono-500)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '6px',
+                  }}
+                >
+                  Station ID
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    color: 'var(--mono-950)',
+                  }}
+                >
+                  #{stationData.id}
+                </Typography>
+              </Box>
 
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    color: 'var(--mono-500)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '6px',
+                  }}
+                >
+                  Station Type
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    color: 'var(--mono-950)',
+                  }}
+                >
+                  {stationData.stationType}
+                </Typography>
+              </Box>
+
+              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <LocationIcon sx={{ fontSize: '14px', color: 'var(--mono-500)' }} />
+                  <Typography
+                    sx={{
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      color: 'var(--mono-500)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    Location
+                  </Typography>
+                </Box>
+                <Typography
+                  sx={{
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    color: 'var(--mono-950)',
+                    marginBottom: '4px',
+                  }}
+                >
+                  {stationData.location}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '0.8125rem',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    color: 'var(--mono-600)',
+                  }}
+                >
+                  {stationData.latitude}, {stationData.longitude}
+                </Typography>
+              </Box>
+
+              {stationData.description && (
+                <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      color: 'var(--mono-500)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      marginBottom: '6px',
+                    }}
+                  >
+                    Description
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: '0.875rem',
+                      color: 'var(--mono-700)',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {stationData.description}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+
+          {/* Metrics Chart */}
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '12px',
+              padding: '24px',
+              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              '&:hover': {
+                boxShadow: 'var(--shadow-md)',
+                borderColor: 'var(--mono-300)',
+              },
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                color: 'var(--mono-950)',
+                marginBottom: '20px',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Performance Metrics
+            </Typography>
+            <MetricsChart />
+          </Box>
+        </Box>
+
+        {/* Right Column */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Current Metrics */}
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              '&:hover': {
+                boxShadow: 'var(--shadow-md)',
+                borderColor: 'var(--mono-300)',
+              },
+            }}
+          >
+            <Box sx={{ padding: '24px 24px 16px' }}>
+              <Typography
+                sx={{
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: 'var(--mono-950)',
+                  letterSpacing: '-0.01em',
+                }}
+              >
                 Current Metrics
               </Typography>
-              <Divider sx={{ my: 2 }} />
+              <Typography
+                sx={{
+                  fontSize: '0.75rem',
+                  color: 'var(--mono-500)',
+                  marginTop: '4px',
+                }}
+              >
+                Latest readings
+              </Typography>
+            </Box>
+            <Box>
               {latestMetrics.length > 0 ? (
-                latestMetrics.map((metric: MetricData) => (
-                  <Paper
+                latestMetrics.map((metric: MetricData, idx: number) => (
+                  <MetricRow
                     key={metric.id || `${metric.metricType}-${metric.timestamp}`}
-                    sx={{
-                      p: 2,
-                      mb: 2,
-                      backgroundColor: (theme) => 
-                        theme.palette.mode === 'dark' 
-                          ? 'rgba(255, 255, 255, 0.05)' 
-                          : 'grey.50',
-                    }}
-                  >
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Box>
-                        <Typography variant="body2" color="textSecondary">
-                          {metric.metricType}
-                        </Typography>
-                        <Typography variant="h6">
-                          {metric.value} {metric.unit}
-                        </Typography>
-                      </Box>
-                      {metric.metricType === 'POWER_CONSUMPTION' && (
-                        <PowerIcon color="primary" />
-                      )}
-                      {metric.metricType === 'MEMORY_USAGE' && (
-                        <MemoryIcon color="primary" />
-                      )}
-                      {metric.metricType === 'CPU_USAGE' && (
-                        <SpeedIcon color="primary" />
-                      )}
-                    </Box>
-                    <Typography variant="caption" color="textSecondary">
-                      {metric.timestamp ? new Date(metric.timestamp).toLocaleString() : 'No date available'}
-                    </Typography>
-                  </Paper>
+                    metric={metric}
+                    delay={0.25 + idx * 0.03}
+                  />
                 ))
               ) : (
-                <Typography variant="body2" color="textSecondary">
-                  No metrics available
-                </Typography>
+                <Box sx={{ padding: '24px', textAlign: 'center' }}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.875rem',
+                      color: 'var(--mono-500)',
+                    }}
+                  >
+                    No metrics available
+                  </Typography>
+                </Box>
               )}
-            </CardContent>
-          </Card>
+            </Box>
+          </Box>
 
-          <Card sx={{ mt: 3 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+          {/* Recent Alerts */}
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              '&:hover': {
+                boxShadow: 'var(--shadow-md)',
+                borderColor: 'var(--mono-300)',
+              },
+            }}
+          >
+            <Box sx={{ padding: '24px 24px 16px' }}>
+              <Typography
+                sx={{
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: 'var(--mono-950)',
+                  letterSpacing: '-0.01em',
+                }}
+              >
                 Recent Alerts
               </Typography>
-              <Divider sx={{ my: 2 }} />
+              <Typography
+                sx={{
+                  fontSize: '0.75rem',
+                  color: 'var(--mono-500)',
+                  marginTop: '4px',
+                }}
+              >
+                Last 5 notifications
+              </Typography>
+            </Box>
+            <Box>
               {stationNotifications.length > 0 ? (
-                stationNotifications.slice(0, 5).map((alert: Notification) => (
-                  <Box
+                stationNotifications.slice(0, 5).map((alert: Notification, idx: number) => (
+                  <AlertRow
                     key={alert.id}
-                    sx={{
-                      p: 2,
-                      mb: 1,
-                      borderRadius: 1,
-                      backgroundColor: alert.status === 'UNREAD' ? 'warning.light' : 'grey.50',
-                      borderLeft: `3px solid ${alert.type === 'ALERT' ? 'error.main' : 'warning.main'
-                        }`,
-                    }}
-                  >
-                    <Typography variant="body2" fontWeight={600}>
-                      {alert.type}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      {alert.message}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : 'No date available'}
-                    </Typography>
-                  </Box>
+                    alert={alert}
+                    delay={0.3 + idx * 0.03}
+                  />
                 ))
               ) : (
-                <Typography variant="body2" color="textSecondary">
-                  No alerts
-                </Typography>
+                <Box sx={{ padding: '24px', textAlign: 'center' }}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.875rem',
+                      color: 'var(--mono-500)',
+                    }}
+                  >
+                    No alerts
+                  </Typography>
+                </Box>
               )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
     </Box>
   )
 }
-

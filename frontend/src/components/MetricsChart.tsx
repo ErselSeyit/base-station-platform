@@ -13,6 +13,7 @@ import {
 } from 'recharts'
 import { metricsApi } from '../services/api'
 import { MetricData } from '../types'
+import LoadingSpinner from './LoadingSpinner'
 
 interface ChartDataPoint {
   date: string
@@ -39,7 +40,7 @@ export default function MetricsChart() {
   })
 
   if (isLoading) {
-    return <div>Loading chart data...</div>
+    return <LoadingSpinner />
   }
 
   const metrics = Array.isArray(data) ? data : []
@@ -90,37 +91,49 @@ export default function MetricsChart() {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="date" fontSize={12} />
-        <YAxis 
-          domain={[0, 100]} 
-          tickFormatter={(v) => `${v}%`} 
-          fontSize={12}
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--mono-200)" />
+        <XAxis
+          dataKey="date"
+          tick={{ fontSize: 12, fill: 'var(--mono-600)' }}
+          stroke="var(--mono-300)"
         />
-        <Tooltip 
+        <YAxis
+          domain={[0, 100]}
+          tickFormatter={(v) => `${v}%`}
+          tick={{ fontSize: 12, fill: 'var(--mono-600)' }}
+          stroke="var(--mono-300)"
+        />
+        <Tooltip
           formatter={(value: number, name: string) => {
             const label = name === 'cpuUsage' ? 'CPU Usage' : 'Memory Usage'
             return [`${value.toFixed(1)}%`, label]
           }}
-          labelStyle={{ fontWeight: 600 }}
-          contentStyle={{ borderRadius: 8 }}
+          labelStyle={{ fontWeight: 600, color: 'var(--mono-950)' }}
+          contentStyle={{
+            borderRadius: 8,
+            background: 'var(--surface-base)',
+            border: '1px solid var(--surface-border)',
+            color: 'var(--mono-950)',
+          }}
+          itemStyle={{ color: 'var(--mono-700)' }}
         />
-        <Legend 
-          formatter={(value) => value === 'cpuUsage' ? 'CPU Usage' : 'Memory Usage'} 
+        <Legend
+          formatter={(value) => value === 'cpuUsage' ? 'CPU Usage' : 'Memory Usage'}
+          wrapperStyle={{ color: 'var(--mono-700)' }}
         />
-        <Line 
-          type="monotone" 
-          dataKey="cpuUsage" 
-          stroke="#1976d2" 
-          strokeWidth={2} 
+        <Line
+          type="monotone"
+          dataKey="cpuUsage"
+          stroke="var(--status-active)"
+          strokeWidth={2}
           dot={false}
           connectNulls
         />
-        <Line 
-          type="monotone" 
-          dataKey="memoryUsage" 
-          stroke="#2e7d32" 
-          strokeWidth={2} 
+        <Line
+          type="monotone"
+          dataKey="memoryUsage"
+          stroke="var(--status-maintenance)"
+          strokeWidth={2}
           dot={false}
           connectNulls
         />

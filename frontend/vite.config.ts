@@ -25,7 +25,7 @@ export default defineConfig({
           'query-vendor': ['@tanstack/react-query'],
           'chart-vendor': ['recharts'],
           'map-vendor': ['leaflet', 'react-leaflet'],
-          'utils-vendor': ['axios', 'date-fns', 'zustand'],
+          'utils-vendor': ['axios', 'date-fns'],
         },
       },
     },

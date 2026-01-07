@@ -8,33 +8,36 @@ import {
 import {
   Box,
   Button,
-  Card,
-  CardContent,
-  Chip,
   IconButton,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tooltip,
   Typography,
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import StationFormDialog from '../components/StationFormDialog'
-import { useTheme } from '../contexts/ThemeContext'
 import { stationApi } from '../services/api'
 import { BaseStation, StationStatus, StationType } from '../types'
-import { getStatusColor } from '../utils/statusHelpers'
+
+// Helper function to get status color CSS variable
+function getStatusColor(status: string): string {
+  switch (status) {
+    case 'ACTIVE':
+      return 'var(--status-active)'
+    case 'MAINTENANCE':
+      return 'var(--status-maintenance)'
+    case 'OFFLINE':
+      return 'var(--status-offline)'
+    default:
+      return 'var(--status-offline)'
+  }
+}
 
 export default function Stations() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { mode } = useTheme()
   const [openDialog, setOpenDialog] = useState(false)
   const [editingStation, setEditingStation] = useState<BaseStation | null>(null)
   const [formData, setFormData] = useState<Partial<BaseStation>>({
@@ -135,183 +138,224 @@ export default function Stations() {
   }
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+      {/* Header - Minimalist */}
+      <Box
+        component={motion.div}
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: '32px',
+        }}
+      >
         <Box>
           <Typography
-            variant="h3"
+            variant="h1"
             sx={{
+              fontSize: '2.25rem',
               fontWeight: 700,
-              mb: 1,
-              background: mode === 'dark'
-                ? 'linear-gradient(135deg, #64b5f6 0%, #90caf9 50%, #ba68c8 100%)'
-                : 'linear-gradient(135deg, #1976d2 0%, #42a5f5 50%, #9c27b0 100%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              letterSpacing: '-0.025em',
+              color: 'var(--mono-950)',
+              marginBottom: '8px',
             }}
           >
-            Base Stations
+            Stations
           </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Manage and monitor your base station infrastructure
+          <Typography
+            sx={{
+              fontSize: '0.875rem',
+              color: 'var(--mono-500)',
+              letterSpacing: '0.01em',
+            }}
+          >
+            Manage and monitor infrastructure · {stations.length} total stations
           </Typography>
         </Box>
+
         <Button
+          component={motion.button}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
           sx={{
-            height: '48px',
-            px: 3,
+            background: 'var(--mono-950)',
+            color: 'var(--mono-50)',
+            borderRadius: '8px',
+            padding: '10px 20px',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            textTransform: 'none',
+            boxShadow: 'var(--shadow-sm)',
+            transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            '&:hover': {
+              background: 'var(--mono-800)',
+              color: 'var(--mono-50)',
+              boxShadow: 'var(--shadow-md)',
+            },
           }}
         >
           Add Station
         </Button>
       </Box>
 
-      <Card>
-        <CardContent sx={{ p: 0 }}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow
-                  sx={{
-                    background: mode === 'dark'
-                      ? 'linear-gradient(135deg, rgba(100, 181, 246, 0.1) 0%, rgba(66, 165, 245, 0.05) 100%)'
-                      : 'linear-gradient(135deg, rgba(25, 118, 210, 0.08) 0%, rgba(21, 101, 192, 0.05) 100%)',
-                  }}
-                >
-                  <TableCell sx={{ fontWeight: 600 }}>ID</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Station Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Location</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Power (kW)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {stations.length === 0 && !isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      <Typography variant="body2" color="text.secondary">
-                        {error ? `Error loading stations: ${error.message}` : 'No stations found. Click "Add Station" to create one.'}
+      {/* Stations Table - Minimalist Data Table */}
+      <Box
+        component={motion.div}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        sx={{
+          background: 'var(--surface-base)',
+          border: '1px solid var(--surface-border)',
+          borderRadius: '12px',
+          overflow: 'hidden',
+        }}
+      >
+        <Box sx={{ overflowX: 'auto' }}>
+          <Box component="table" className="data-table" sx={{ width: '100%' }}>
+            <Box component="thead">
+              <Box component="tr">
+                <Box component="th" sx={{ width: '60px' }}>ID</Box>
+                <Box component="th">Station Name</Box>
+                <Box component="th">Location</Box>
+                <Box component="th" sx={{ width: '140px' }}>Type</Box>
+                <Box component="th" sx={{ width: '120px' }}>Status</Box>
+                <Box component="th" sx={{ width: '100px', textAlign: 'right' }}>Power</Box>
+                <Box component="th" sx={{ width: '120px', textAlign: 'right' }}>Actions</Box>
+              </Box>
+            </Box>
+            <Box component="tbody">
+              {stations.length === 0 && !isLoading ? (
+                <Box component="tr">
+                  <Box component="td" colSpan={7} sx={{ textAlign: 'center', padding: '48px 24px' }}>
+                    <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                      {error ? `Error loading stations: ${error.message}` : 'No stations found. Click "Add Station" to create one.'}
+                    </Typography>
+                  </Box>
+                </Box>
+              ) : (
+                stations.map((station: BaseStation, idx: number) => (
+                  <Box
+                    component={motion.tr}
+                    key={station.id}
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.15 + idx * 0.03, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <Box component="td">
+                      <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', color: 'var(--mono-600)' }}>
+                        #{station.id}
                       </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  stations.map((station: BaseStation) => (
-                    <TableRow
-                      key={station.id}
-                      hover
-                      sx={{
-                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                        '&:hover': {
-                          background: mode === 'dark'
-                            ? 'rgba(100, 181, 246, 0.05)'
-                            : 'rgba(25, 118, 210, 0.04)',
-                          transform: 'scale(1.01)',
-                        },
-                      }}
-                    >
-                      <TableCell>{station.id}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={600}>
-                          {station.stationName}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <LocationIcon fontSize="small" color="action" />
+                    </Box>
+                    <Box component="td">
+                      <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--mono-950)' }}>
+                        {station.stationName}
+                      </Typography>
+                    </Box>
+                    <Box component="td">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <LocationIcon sx={{ fontSize: '16px', color: 'var(--mono-400)' }} />
+                        <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-700)' }}>
                           {station.location}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={station.stationType}
-                          size="small"
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box component="td">
+                      <Box className="badge" sx={{ display: 'inline-flex' }}>
+                        {station.stationType}
+                      </Box>
+                    </Box>
+                    <Box component="td">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Box
                           sx={{
-                            fontWeight: 500,
-                            background: mode === 'dark'
-                              ? 'rgba(100, 181, 246, 0.15)'
-                              : 'rgba(25, 118, 210, 0.1)',
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            background: getStatusColor(station.status),
                           }}
                         />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={station.status}
-                          color={getStatusColor(station.status)}
-                          size="small"
-                          sx={{ fontWeight: 600 }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{station.powerConsumption?.toFixed(1) || 'N/A'}</TableCell>
-                      <TableCell align="right">
-                        <Box display="flex" gap={1} justifyContent="flex-end">
-                          <Tooltip title="View Details">
-                            <IconButton
-                              size="small"
-                              onClick={() => navigate(`/stations/${station.id}`)}
-                              sx={{
-                                '&:hover': {
-                                  background: mode === 'dark'
-                                    ? 'rgba(100, 181, 246, 0.2)'
-                                    : 'rgba(25, 118, 210, 0.1)',
-                                  transform: 'scale(1.1)',
-                                },
-                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                              }}
-                            >
-                              <ViewIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Edit">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenDialog(station)}
-                              sx={{
-                                '&:hover': {
-                                  background: mode === 'dark'
-                                    ? 'rgba(100, 181, 246, 0.2)'
-                                    : 'rgba(25, 118, 210, 0.1)',
-                                  transform: 'scale(1.1)',
-                                },
-                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                              }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete">
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => handleDelete(station.id!)}
-                              sx={{
-                                '&:hover': {
-                                  background: mode === 'dark'
-                                    ? 'rgba(239, 83, 80, 0.2)'
-                                    : 'rgba(211, 47, 47, 0.1)',
-                                  transform: 'scale(1.1)',
-                                },
-                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                              }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+                        <Typography sx={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--mono-700)' }}>
+                          {station.status}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box component="td" sx={{ textAlign: 'right' }}>
+                      <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--mono-700)' }}>
+                        {station.powerConsumption?.toFixed(1) || 'N/A'} kW
+                      </Typography>
+                    </Box>
+                    <Box component="td" sx={{ textAlign: 'right' }}>
+                      <Box sx={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                        <Tooltip title="View Details">
+                          <IconButton
+                            size="small"
+                            onClick={() => navigate(`/stations/${station.id}`)}
+                            sx={{
+                              width: '28px',
+                              height: '28px',
+                              color: 'var(--mono-600)',
+                              transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                              '&:hover': {
+                                background: 'var(--mono-100)',
+                                color: 'var(--mono-950)',
+                              },
+                            }}
+                          >
+                            <ViewIcon sx={{ fontSize: '16px' }} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edit">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpenDialog(station)}
+                            sx={{
+                              width: '28px',
+                              height: '28px',
+                              color: 'var(--mono-600)',
+                              transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                              '&:hover': {
+                                background: 'var(--mono-100)',
+                                color: 'var(--mono-950)',
+                              },
+                            }}
+                          >
+                            <EditIcon sx={{ fontSize: '16px' }} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDelete(station.id!)}
+                            sx={{
+                              width: '28px',
+                              height: '28px',
+                              color: 'var(--mono-600)',
+                              transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                              '&:hover': {
+                                background: 'var(--accent-error)',
+                                color: 'white',
+                              },
+                            }}
+                          >
+                            <DeleteIcon sx={{ fontSize: '16px' }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                  </Box>
+                ))
+              )}
+            </Box>
+          </Box>
+        </Box>
+      </Box>
 
       <StationFormDialog
         open={openDialog}

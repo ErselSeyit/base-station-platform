@@ -1,0 +1,198 @@
+---
+# ============================================================================
+# Automated Database Backup CronJobs
+# ============================================================================
+# These CronJobs run daily backups for all databases and store them in
+# backup-pvc (50GB persistent volume).
+#
+# Schedule: 2 AM daily (UTC)
+# Retention: Handled by backup scripts (keep last 30 days)
+# ============================================================================
+
+# PostgreSQL Databases Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: basestation-platform
+spec:
+  schedule: "0 2 * * *"  # 2 AM daily
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: postgres-backup
+            image: postgres:17-alpine
+            command: ["/bin/sh", "-c"]
+            args:
+            - |
+              set -e
+              DATE=$(date +%Y%m%d_%H%M%S)
+              echo "Starting PostgreSQL backups at $DATE"
+
+              # Backup auth database
+              echo "Backing up authdb..."
+              PGPASSWORD=$POSTGRES_AUTH_PASSWORD pg_dump -h postgres-auth -U postgres authdb | \
+                gzip > /backups/authdb_${DATE}.sql.gz
+              echo "✓ authdb backed up"
+
+              # Backup base station database
+              echo "Backing up basestationdb..."
+              PGPASSWORD=$POSTGRES_BASESTATION_PASSWORD pg_dump -h postgres-basestation -U postgres basestationdb | \
+                gzip > /backups/basestationdb_${DATE}.sql.gz
+              echo "✓ basestationdb backed up"
+
+              # Backup notification database
+              echo "Backing up notificationdb..."
+              PGPASSWORD=$POSTGRES_NOTIFICATION_PASSWORD pg_dump -h postgres-notification -U postgres notificationdb | \
+                gzip > /backups/notificationdb_${DATE}.sql.gz
+              echo "✓ notificationdb backed up"
+
+              # Cleanup old backups (keep last 30 days)
+              echo "Cleaning up backups older than 30 days..."
+              find /backups -name "*.sql.gz" -mtime +30 -delete
+              find /backups -name "*.archive.gz" -mtime +30 -delete
+
+              echo "✓ PostgreSQL backups complete"
+              ls -lh /backups/*.sql.gz | tail -10
+            env:
+            - name: POSTGRES_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: auth-password
+            - name: POSTGRES_BASESTATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: basestation-password
+            - name: POSTGRES_NOTIFICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: notification-password
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: backup-pvc
+---
+# MongoDB Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongodb-backup
+  namespace: basestation-platform
+spec:
+  schedule: "30 2 * * *"  # 2:30 AM daily (30 mins after postgres)
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: mongodb-backup
+            image: mongo:latest
+            command: ["/bin/sh", "-c"]
+            args:
+            - |
+              set -e
+              DATE=$(date +%Y%m%d_%H%M%S)
+              echo "Starting MongoDB backup at $DATE"
+
+              # Backup monitoringdb
+              mongodump --host=mongodb --port=27017 \
+                --username=admin --password=$MONGODB_PASSWORD \
+                --authenticationDatabase=admin \
+                --db=monitoringdb \
+                --archive=/backups/monitoringdb_${DATE}.archive | gzip > /backups/monitoringdb_${DATE}.archive.gz
+
+              echo "✓ MongoDB backup complete"
+              ls -lh /backups/*.archive.gz | tail -5
+            env:
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: password
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: backup-pvc
+---
+# Backup Verification CronJob (runs weekly)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-verification
+  namespace: basestation-platform
+spec:
+  schedule: "0 3 * * 0"  # 3 AM every Sunday
+  successfulJobsHistoryLimit: 4
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: backup-verification
+            image: alpine:latest
+            command: ["/bin/sh", "-c"]
+            args:
+            - |
+              set -e
+              echo "=== Backup Verification Report ==="
+              echo ""
+
+              # Check backup storage usage
+              echo "Backup Storage Usage:"
+              df -h /backups
+              echo ""
+
+              # List recent PostgreSQL backups
+              echo "Recent PostgreSQL Backups:"
+              ls -lht /backups/*.sql.gz | head -10
+              echo ""
+
+              # List recent MongoDB backups
+              echo "Recent MongoDB Backups:"
+              ls -lht /backups/*.archive.gz | head -5
+              echo ""
+
+              # Count total backups
+              POSTGRES_COUNT=$(ls /backups/*.sql.gz 2>/dev/null | wc -l)
+              MONGODB_COUNT=$(ls /backups/*.archive.gz 2>/dev/null | wc -l)
+              echo "Total Backups: $POSTGRES_COUNT PostgreSQL, $MONGODB_COUNT MongoDB"
+              echo ""
+
+              # Check for backups in last 24 hours
+              RECENT_POSTGRES=$(find /backups -name "*.sql.gz" -mtime -1 | wc -l)
+              RECENT_MONGODB=$(find /backups -name "*.archive.gz" -mtime -1 | wc -l)
+              echo "Backups in last 24 hours: $RECENT_POSTGRES PostgreSQL, $RECENT_MONGODB MongoDB"
+
+              if [ "$RECENT_POSTGRES" -lt "3" ] || [ "$RECENT_MONGODB" -lt "1" ]; then
+                echo "⚠️  WARNING: Missing recent backups!"
+                exit 1
+              fi
+
+              echo ""
+              echo "✓ Backup verification passed"
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: backup-pvc

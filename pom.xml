@@ -41,8 +41,8 @@
         <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
         <testcontainers.version>1.20.4</testcontainers.version>
         <awaitility.version>4.2.2</awaitility.version>
-        <!-- Fabric8 for Kubernetes YAML generation -->
-        <fabric8.version>0.16.2</fabric8.version>
+        <!-- Eclipse JKube for Kubernetes deployment -->
+        <fabric8.version>1.17.0</fabric8.version>
     </properties>
 
     <dependencyManagement>

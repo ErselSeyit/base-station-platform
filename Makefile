@@ -1,21 +1,24 @@
 # Base Station Platform - Makefile
 # One-command deployment and management
 
-.PHONY: help docker_start docker_stop docker_restart docker_logs docker_init_db k8s_deploy k8s_undeploy k8s_status k8s_logs test build clean
+.PHONY: help docker_start docker_stop docker_restart docker_logs docker_init_db docker_cleanup docker_safe_restart k8s_deploy k8s_undeploy k8s_status k8s_logs test build clean
 
 # Default target
 help:
 	@echo "Base Station Platform - Available Commands:"
 	@echo ""
 	@echo "Docker Compose (Local Development):"
-	@echo "  make docker_start     - Start all services with Docker Compose"
-	@echo "  make docker_stop      - Stop all services"
-	@echo "  make docker_restart   - Restart all services"
-	@echo "  make docker_logs      - Follow all container logs"
-	@echo "  make docker_init_db   - Initialize databases manually"
+	@echo "  make docker_start        - Start all services with Docker Compose"
+	@echo "  make docker_stop         - Stop all services"
+	@echo "  make docker_restart      - Restart all services"
+	@echo "  make docker_safe_restart - Safe restart with cleanup (RECOMMENDED)"
+	@echo "  make docker_cleanup      - Clean up zombie containers and ports"
+	@echo "  make docker_logs         - Follow all container logs"
+	@echo "  make docker_init_db      - Initialize databases manually"
 	@echo ""
 	@echo "Kubernetes (Production):"
 	@echo "  make k8s_deploy       - One-click deploy to Kubernetes"
+	@echo "  make k8s_init_db      - Initialize all K8s databases (REQUIRED after first deploy)"
 	@echo "  make k8s_undeploy     - Remove from Kubernetes"
 	@echo "  make k8s_status       - Show deployment status"
 	@echo "  make k8s_logs         - Tail all pod logs"
@@ -31,6 +34,9 @@ help:
 # ============================================
 
 docker_start:
+	@echo "🔍 Pre-start validation..."
+	@./scripts/validate-clean-state.sh
+	@echo ""
 	@echo "Starting all services with Docker Compose..."
 	docker compose up -d
 	@echo "Waiting for services to initialize..."
@@ -58,6 +64,14 @@ docker_init_db:
 	docker exec mongodb mongosh --username admin --password admin --authenticationDatabase admin --file /tmp/mongodb-seed.js
 	@echo "✓ Database initialization complete"
 
+docker_cleanup:
+	@echo "Cleaning up zombie containers and port conflicts..."
+	@./scripts/cleanup-zombies.sh
+
+docker_safe_restart:
+	@echo "Performing safe restart with cleanup..."
+	@./scripts/safe-restart.sh
+
 # ============================================
 # Kubernetes Commands
 # ============================================
@@ -82,6 +96,10 @@ k8s_status:
 
 k8s_logs:
 	kubectl logs -f -l app.kubernetes.io/part-of=basestation-platform -n basestation-platform --all-containers=true
+
+k8s_init_db:
+	@echo "Initializing all Kubernetes databases..."
+	@./init-db/k8s-init-all-databases.sh
 
 # ============================================
 # Development Commands

@@ -5,25 +5,23 @@ import { formatDistanceToNow } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import { notificationsApi } from '../services/api'
 import { Notification } from '../types'
-import { useTheme } from '../contexts/ThemeContext'
 import PulsingStatus from './PulsingStatus'
 
 function getSeverityColor(severity?: string): string {
-  if (!severity) return '#64748b'
+  if (!severity) return 'var(--status-info)'
   switch (severity.toUpperCase()) {
     case 'CRITICAL':
-      return '#ef4444'
+      return 'var(--status-offline)'
     case 'WARNING':
-      return '#f59e0b'
+      return 'var(--status-maintenance)'
     case 'INFO':
-      return '#3b82f6'
+      return 'var(--status-info)'
     default:
-      return '#64748b'
+      return 'var(--status-info)'
   }
 }
 
 export default function LiveActivityFeed() {
-  const { mode } = useTheme()
   const { data: notifications } = useQuery({
     queryKey: ['recent-notifications'],
     queryFn: async () => {
@@ -47,9 +45,10 @@ export default function LiveActivityFeed() {
           display: 'flex',
           alignItems: 'center',
           gap: 1,
+          color: 'var(--mono-950)',
         }}
       >
-        <Circle sx={{ fontSize: 8, color: '#10b981', animation: 'pulse 2s infinite' }} />
+        <Circle sx={{ fontSize: 8, color: 'var(--status-active)', animation: 'pulse 2s infinite' }} />
         Live Activity Feed
       </Typography>
 
@@ -60,7 +59,7 @@ export default function LiveActivityFeed() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body2" sx={{ textAlign: 'center', py: 4, color: 'var(--mono-500)' }}>
               No recent activity
             </Typography>
           </motion.div>
@@ -85,17 +84,13 @@ export default function LiveActivityFeed() {
                   p: 2,
                   mb: 1.5,
                   borderRadius: 2,
-                  background: mode === 'dark'
-                    ? 'rgba(255, 255, 255, 0.03)'
-                    : 'rgba(0, 0, 0, 0.02)',
+                  background: 'var(--mono-50)',
                   borderLeft: '3px solid',
                   borderColor: getSeverityColor(notification.severity),
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   '&:hover': {
-                    background: mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.06)'
-                      : 'rgba(0, 0, 0, 0.04)',
+                    background: 'var(--mono-100)',
                     transform: 'translateX(4px)',
                   },
                 }}
@@ -116,11 +111,12 @@ export default function LiveActivityFeed() {
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
+                      color: 'var(--mono-950)',
                     }}
                   >
                     {notification.message}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
                     {notification.createdAt
                       ? formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })
                       : 'Just now'}
