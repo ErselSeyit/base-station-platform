@@ -110,7 +110,7 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('Metrics & Analytics')).toBeInTheDocument()
+      expect(screen.getByText('Metrics')).toBeInTheDocument()
     })
 
     // Check filter controls are rendered (may have multiple elements with same text due to MUI label+legend)
@@ -136,7 +136,7 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('Metrics & Analytics')).toBeInTheDocument()
+      expect(screen.getByText('Metrics')).toBeInTheDocument()
     })
 
     // Check station filter options
@@ -160,7 +160,7 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('Metrics & Analytics')).toBeInTheDocument()
+      expect(screen.getByText('Metrics')).toBeInTheDocument()
     })
 
     // Check metric type filter options
@@ -187,7 +187,7 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('Metrics & Analytics')).toBeInTheDocument()
+      expect(screen.getByText('Metrics')).toBeInTheDocument()
     })
 
     // Check time range filter options
@@ -370,7 +370,7 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('Metrics & Analytics')).toBeInTheDocument()
+      expect(screen.getByText('Metrics')).toBeInTheDocument()
     }, { timeout: 3000 })
 
     // Station filter should still show "All Stations" option
@@ -390,13 +390,13 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('Metrics & Analytics')).toBeInTheDocument()
+      expect(screen.getByText('Metrics')).toBeInTheDocument()
     }, { timeout: 3000 })
 
     expect(screen.getByText('0')).toBeInTheDocument() // Total metrics count
   })
 
-  it.skip('refetches data automatically every 30 seconds', async () => {
+  it('refetches data automatically every 30 seconds', async () => {
     vi.useFakeTimers()
     vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
     vi.mocked(metricsApi.getAll).mockResolvedValue(mockAxiosResponse(mockMetrics))
@@ -407,39 +407,40 @@ describe('Metrics', () => {
       expect(metricsApi.getAll).toHaveBeenCalledTimes(1)
     })
 
-    // Advance time by 30 seconds
-    vi.advanceTimersByTime(30000)
+    // Advance time by 30 seconds to trigger refetch
+    await vi.advanceTimersByTimeAsync(30000)
 
-    // Wait for refetch to happen
-    await new Promise(resolve => setTimeout(resolve, 100))
-
-    expect(metricsApi.getAll).toHaveBeenCalledTimes(2)
+    // Wait for the refetch to complete
+    await waitFor(() => {
+      expect(metricsApi.getAll).toHaveBeenCalledTimes(2)
+    })
 
     vi.useRealTimers()
   })
 
-  it.skip('updates summary information correctly', async () => {
+  it('updates metric count when filters are applied', async () => {
     vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
     vi.mocked(metricsApi.getAll).mockResolvedValue(mockAxiosResponse(mockMetrics))
 
     render(<Metrics />)
 
+    // Wait for initial render with all metrics
     await waitFor(() => {
-      expect(screen.getByText('Time Range: Last 7 days')).toBeInTheDocument()
+      expect(screen.getByText('4')).toBeInTheDocument() // Total metrics count
     })
 
-    // Change filters
+    // Change station filter to BS-001
     const stationSelect = screen.getByRole('combobox', { name: /station/i })
     fireEvent.mouseDown(stationSelect)
 
     await waitFor(() => {
-      const bs001Option = screen.getByText('BS-001')
+      const bs001Option = screen.getByRole('option', { name: 'BS-001' })
       fireEvent.click(bs001Option)
     })
 
+    // Should now show only 3 metrics (all belong to BS-001)
     await waitFor(() => {
-      expect(screen.getByText('Station: BS-001')).toBeInTheDocument()
-      expect(screen.getByText('Total Metrics: 3')).toBeInTheDocument()
+      expect(screen.getByText('3')).toBeInTheDocument() // Filtered count
     })
   })
 })

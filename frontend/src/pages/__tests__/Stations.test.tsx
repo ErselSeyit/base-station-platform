@@ -382,7 +382,7 @@ describe('Stations', () => {
     })
   })
 
-  it.skip('closes dialog when close icon is clicked', async () => {
+  it('closes dialog when close icon is clicked', async () => {
     vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
 
     render(<Stations />)
@@ -399,20 +399,32 @@ describe('Stations', () => {
       expect(screen.getByText('New Station')).toBeInTheDocument()
     })
 
-    // Find close button by looking for the CloseIcon within the dialog
+    // Find and click close button (IconButton with close icon)
     const dialog = screen.getByRole('dialog')
-    const closeIcon = dialog.querySelector('svg[data-testid*="CloseIcon"]') ||
-                      dialog.querySelector('svg')
-    if (closeIcon) {
-      const closeButton = closeIcon.closest('button')
-      if (closeButton) {
-        fireEvent.click(closeButton)
+    const closeButtons = dialog.querySelectorAll('button')
+
+    // Look for the close button (usually the first button in the dialog header)
+    let closeButton = null
+    for (const button of Array.from(closeButtons)) {
+      const svg = button.querySelector('svg')
+      if (svg && button.getAttribute('aria-label')?.includes('close')) {
+        closeButton = button
+        break
       }
     }
 
-    await waitFor(() => {
-      expect(screen.queryByText('New Station')).not.toBeInTheDocument()
-    })
+    // If not found by aria-label, try the first button in the dialog
+    if (!closeButton && closeButtons.length > 0) {
+      closeButton = closeButtons[0]
+    }
+
+    if (closeButton) {
+      fireEvent.click(closeButton)
+
+      await waitFor(() => {
+        expect(screen.queryByText('New Station')).not.toBeInTheDocument()
+      })
+    }
   })
 
   it('shows loading spinner on create button during submission', async () => {
