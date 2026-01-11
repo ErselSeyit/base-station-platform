@@ -15,9 +15,10 @@ spec:
       labels:
         app: eureka-server
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: eureka-server
-        image: base-station-platform-eureka-server:latest
+        image: base-station-platform-eureka-server:1.0.0
         imagePullPolicy: Never
         ports:
         - containerPort: 8762
@@ -49,9 +50,11 @@ spec:
           limits:
             cpu: "1"
             memory: 1Gi
+            ephemeral-storage: "2Gi"
           requests:
             cpu: "500m"
             memory: 512Mi
+            ephemeral-storage: "1Gi"
 ---
 apiVersion: v1
 kind: Service
@@ -81,9 +84,10 @@ spec:
       labels:
         app: auth-service
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: auth-service
-        image: base-station-platform-auth-service:latest
+        image: base-station-platform-auth-service:1.0.0
         imagePullPolicy: Never
         ports:
         - containerPort: 8084
@@ -140,9 +144,11 @@ spec:
           limits:
             cpu: "1"
             memory: 1Gi
+            ephemeral-storage: "2Gi"
           requests:
             cpu: "500m"
             memory: 512Mi
+            ephemeral-storage: "1Gi"
 ---
 apiVersion: v1
 kind: Service
@@ -172,9 +178,10 @@ spec:
       labels:
         app: base-station-service
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: base-station-service
-        image: base-station-platform-base-station-service:latest
+        image: base-station-platform-base-station-service:1.0.0
         imagePullPolicy: Never
         ports:
         - containerPort: 8081
@@ -233,9 +240,11 @@ spec:
           limits:
             cpu: "1"
             memory: 1Gi
+            ephemeral-storage: "2Gi"
           requests:
             cpu: "500m"
             memory: 512Mi
+            ephemeral-storage: "1Gi"
 ---
 apiVersion: v1
 kind: Service
@@ -265,9 +274,10 @@ spec:
       labels:
         app: monitoring-service
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: monitoring-service
-        image: base-station-platform-monitoring-service:latest
+        image: base-station-platform-monitoring-service:1.0.0
         imagePullPolicy: Never
         ports:
         - containerPort: 8082
@@ -330,9 +340,11 @@ spec:
           limits:
             cpu: "1"
             memory: 1Gi
+            ephemeral-storage: "2Gi"
           requests:
             cpu: "500m"
             memory: 512Mi
+            ephemeral-storage: "1Gi"
 ---
 apiVersion: v1
 kind: Service
@@ -362,9 +374,10 @@ spec:
       labels:
         app: notification-service
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: notification-service
-        image: base-station-platform-notification-service:latest
+        image: base-station-platform-notification-service:1.0.0
         imagePullPolicy: Never
         ports:
         - containerPort: 8083
@@ -423,9 +436,11 @@ spec:
           limits:
             cpu: "1"
             memory: 1Gi
+            ephemeral-storage: "2Gi"
           requests:
             cpu: "500m"
             memory: 512Mi
+            ephemeral-storage: "1Gi"
 ---
 apiVersion: v1
 kind: Service
@@ -455,9 +470,10 @@ spec:
       labels:
         app: api-gateway
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: api-gateway
-        image: base-station-platform-api-gateway:latest
+        image: base-station-platform-api-gateway:1.0.0
         imagePullPolicy: Never
         ports:
         - containerPort: 8080
@@ -503,9 +519,11 @@ spec:
           limits:
             cpu: "1"
             memory: 1Gi
+            ephemeral-storage: "2Gi"
           requests:
             cpu: "500m"
             memory: 512Mi
+            ephemeral-storage: "1Gi"
 ---
 apiVersion: v1
 kind: Service
@@ -537,9 +555,10 @@ spec:
       labels:
         app: frontend
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: frontend
-        image: base-station-platform-frontend:latest
+        image: base-station-platform-frontend:1.0.0
         imagePullPolicy: Never
         ports:
         - containerPort: 80
@@ -547,9 +566,11 @@ spec:
           limits:
             cpu: "500m"
             memory: 256Mi
+            ephemeral-storage: "2Gi"
           requests:
             cpu: "250m"
             memory: 128Mi
+            ephemeral-storage: "1Gi"
 ---
 apiVersion: v1
 kind: Service
