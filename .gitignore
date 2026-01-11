@@ -64,6 +64,11 @@ credentials.*
 config/secrets.*
 sonar-project.properties
 
+# Kubernetes secrets (use Sealed Secrets instead)
+k8s/secrets.yaml
+k8s/*-secrets.yaml
+!k8s/sealed-secrets.yaml
+
 # Docker
 *.log
 
@@ -74,6 +79,7 @@ coverage/
 effective-pom.xml
 .claude/
 *.sh
+!scripts/generate-secrets.sh
 node_modules
 
 # Mermaid CLI
