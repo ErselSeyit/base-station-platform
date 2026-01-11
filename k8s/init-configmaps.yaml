@@ -1,0 +1,114 @@
+---
+# ============================================================================
+# Database Initialization ConfigMaps
+# ============================================================================
+# These ConfigMaps contain SQL and JS scripts that are mounted into
+# init containers to automatically seed databases on first pod start.
+#
+# The init containers check for a .initialized marker file to avoid
+# re-seeding on subsequent restarts.
+# ============================================================================
+
+# PostgreSQL Unified Seed Script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: basestation-platform
+data:
+  # Combined seed script for all PostgreSQL databases
+  unified-seed.sql: |
+    -- ============================================================================
+    -- Base Station Platform - Unified PostgreSQL Seed Script
+    -- ============================================================================
+
+    -- Auth Database Seed (Users)
+    CREATE TABLE IF NOT EXISTS users (
+        id BIGSERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        enabled BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Admin user (password: admin)
+    INSERT INTO users (username, password_hash, role, enabled)
+    VALUES (
+        'admin',
+        '$2a$10$MdnzbYWc5/PVAWi4EBQNm.IHRyPvbDYC8A970.6Jf/yRoq7SQJXpG',
+        'ROLE_ADMIN',
+        true
+    ) ON CONFLICT (username) DO NOTHING;
+
+    -- Regular user (password: user)
+    INSERT INTO users (username, password_hash, role, enabled)
+    VALUES (
+        'user',
+        '$2a$10$2tqN0AqG7/szcAjnzQNxoOeqrVtp/eiVJiaW5TdDA62b3BHE91j7S',
+        'ROLE_USER',
+        true
+    ) ON CONFLICT (username) DO NOTHING;
+
+    \echo 'Auth database seeded successfully'
+---
+# MongoDB Initialization Script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-init-scripts
+  namespace: basestation-platform
+data:
+  mongodb-seed.js: |
+    // Switch to monitoring database
+    db = db.getSiblingDB('monitoringdb');
+
+    // Generate sample metrics data
+    const stationIds = Array.from({length: 26}, (_, i) => i + 1);
+    const metricTypes = ['cpu', 'memory', 'power', 'temperature', 'signal_strength'];
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7); // 7 days ago
+
+    const metrics = [];
+
+    for (let day = 0; day < 7; day++) {
+      for (let hour = 0; hour < 24; hour++) {
+        for (const stationId of stationIds) {
+          for (const metricType of metricTypes) {
+            const timestamp = new Date(startDate);
+            timestamp.setDate(timestamp.getDate() + day);
+            timestamp.setHours(hour);
+
+            let value;
+            switch(metricType) {
+              case 'cpu': value = 20 + Math.random() * 60; break;
+              case 'memory': value = 30 + Math.random() * 50; break;
+              case 'power': value = 1500 + Math.random() * 1000; break;
+              case 'temperature': value = 25 + Math.random() * 20; break;
+              case 'signal_strength': value = -80 + Math.random() * 30; break;
+            }
+
+            metrics.push({
+              station_id: stationId,
+              metric_type: metricType,
+              value: parseFloat(value.toFixed(2)),
+              timestamp: timestamp,
+              unit: metricType === 'temperature' ? '°C' :
+                     metricType === 'power' ? 'W' :
+                     metricType === 'signal_strength' ? 'dBm' : '%'
+            });
+          }
+        }
+      }
+    }
+
+    // Insert in batches
+    const batchSize = 1000;
+    for (let i = 0; i < metrics.length; i += batchSize) {
+      const batch = metrics.slice(i, i + batchSize);
+      db.metric_data.insertMany(batch);
+    }
+
+    print('MongoDB seeded with ' + metrics.length + ' metric records');
