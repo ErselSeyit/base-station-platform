@@ -1,0 +1,831 @@
+---
+# ============================================================================
+# Kubernetes Network Policies for Base Station Platform
+# ============================================================================
+# These policies implement defense-in-depth by restricting network traffic
+# between pods to only what's necessary for the application to function.
+#
+# Security Benefits:
+# - Prevents lateral movement in case of pod compromise
+# - Enforces least-privilege network access
+# - Reduces attack surface
+#
+# Requirements:
+# - Kubernetes cluster with NetworkPolicy support (Calico, Cilium, Weave, etc.)
+# - NOT supported by default in many cloud providers (enable CNI plugin)
+#
+# Testing:
+#   kubectl get networkpolicies -n basestation-platform
+#   kubectl describe networkpolicy <name> -n basestation-platform
+# ============================================================================
+
+# Default Deny All Ingress Traffic
+# This policy denies all incoming traffic by default
+# Other policies will explicitly allow required traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: basestation-platform
+spec:
+  podSelector: {}  # Applies to all pods in namespace
+  policyTypes:
+  - Ingress
+---
+# Allow Frontend to API Gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-to-gateway
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from outside cluster (NodePort/LoadBalancer)
+  - from:
+    - podSelector: {}  # Allow from any pod (for health checks)
+    ports:
+    - protocol: TCP
+      port: 80
+  egress:
+  # Allow DNS lookups
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow to API Gateway
+  - to:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 8080
+---
+# Allow API Gateway to Backend Services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-gateway-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from frontend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow from outside cluster (NodePort)
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow to backend services
+  - to:
+    - podSelector:
+        matchLabels:
+          app: auth-service
+    ports:
+    - protocol: TCP
+      port: 8084
+  - to:
+    - podSelector:
+        matchLabels:
+          app: base-station-service
+    ports:
+    - protocol: TCP
+      port: 8081
+  - to:
+    - podSelector:
+        matchLabels:
+          app: monitoring-service
+    ports:
+    - protocol: TCP
+      port: 8082
+  - to:
+    - podSelector:
+        matchLabels:
+          app: notification-service
+    ports:
+    - protocol: TCP
+      port: 8083
+  # Allow to Redis (for rate limiting)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow to Zipkin (for tracing)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: zipkin
+    ports:
+    - protocol: TCP
+      port: 9411
+---
+# Allow Auth Service to PostgreSQL and Eureka
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-service-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from API Gateway
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 8084
+  # Allow from Prometheus (metrics scraping)
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8084
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # PostgreSQL Auth DB
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres-auth
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Eureka (if using service discovery)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: eureka-server
+    ports:
+    - protocol: TCP
+      port: 8761
+  # Zipkin (tracing)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: zipkin
+    ports:
+    - protocol: TCP
+      port: 9411
+---
+# Allow Base Station Service to PostgreSQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: base-station-service-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: base-station-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from API Gateway
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 8081
+  # Allow from Prometheus
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8081
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # PostgreSQL Base Station DB
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres-basestation
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Eureka
+  - to:
+    - podSelector:
+        matchLabels:
+          app: eureka-server
+    ports:
+    - protocol: TCP
+      port: 8761
+  # RabbitMQ (for event publishing)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: rabbitmq
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Zipkin
+  - to:
+    - podSelector:
+        matchLabels:
+          app: zipkin
+    ports:
+    - protocol: TCP
+      port: 9411
+---
+# Allow Monitoring Service to MongoDB
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-service-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: monitoring-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from API Gateway
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 8082
+  # Allow from Prometheus
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8082
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # MongoDB
+  - to:
+    - podSelector:
+        matchLabels:
+          app: mongodb
+    ports:
+    - protocol: TCP
+      port: 27017
+  # Eureka
+  - to:
+    - podSelector:
+        matchLabels:
+          app: eureka-server
+    ports:
+    - protocol: TCP
+      port: 8761
+  # RabbitMQ (consume events)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: rabbitmq
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Zipkin
+  - to:
+    - podSelector:
+        matchLabels:
+          app: zipkin
+    ports:
+    - protocol: TCP
+      port: 9411
+---
+# Allow Notification Service to PostgreSQL and RabbitMQ
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notification-service-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: notification-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from API Gateway
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 8083
+  # Allow from Prometheus
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8083
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # PostgreSQL Notification DB
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres-notification
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Eureka
+  - to:
+    - podSelector:
+        matchLabels:
+          app: eureka-server
+    ports:
+    - protocol: TCP
+      port: 8761
+  # RabbitMQ
+  - to:
+    - podSelector:
+        matchLabels:
+          app: rabbitmq
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Zipkin
+  - to:
+    - podSelector:
+        matchLabels:
+          app: zipkin
+    ports:
+    - protocol: TCP
+      port: 9411
+---
+# Database Network Policies
+# PostgreSQL Auth - Only auth-service can connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-auth-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres-auth
+  policyTypes:
+  - Ingress
+  ingress:
+  # Only auth-service can connect
+  - from:
+    - podSelector:
+        matchLabels:
+          app: auth-service
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow backup jobs
+  - from:
+    - podSelector:
+        matchLabels:
+          job-name: postgres-backup
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+# PostgreSQL Base Station - Only base-station-service can connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-basestation-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres-basestation
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: base-station-service
+    ports:
+    - protocol: TCP
+      port: 5432
+  - from:
+    - podSelector:
+        matchLabels:
+          job-name: postgres-backup
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+# PostgreSQL Notification - Only notification-service can connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-notification-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres-notification
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: notification-service
+    ports:
+    - protocol: TCP
+      port: 5432
+  - from:
+    - podSelector:
+        matchLabels:
+          job-name: postgres-backup
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+# MongoDB - Only monitoring-service can connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: monitoring-service
+    ports:
+    - protocol: TCP
+      port: 27017
+  - from:
+    - podSelector:
+        matchLabels:
+          job-name: mongodb-backup
+    ports:
+    - protocol: TCP
+      port: 27017
+---
+# Redis - Only API Gateway can connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 6379
+---
+# RabbitMQ - Only backend services can connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rabbitmq-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: rabbitmq
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from services that publish/consume messages
+  - from:
+    - podSelector:
+        matchLabels:
+          app: base-station-service
+    - podSelector:
+        matchLabels:
+          app: monitoring-service
+    - podSelector:
+        matchLabels:
+          app: notification-service
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Allow management UI access (NodePort)
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 15672
+---
+# Monitoring Stack Network Policies
+# Prometheus - Can scrape all services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow Grafana to query Prometheus
+  - from:
+    - podSelector:
+        matchLabels:
+          app: grafana
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow external access (NodePort)
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow scraping all application services
+  - to:
+    - podSelector:
+        matchLabels:
+          app: auth-service
+    - podSelector:
+        matchLabels:
+          app: base-station-service
+    - podSelector:
+        matchLabels:
+          app: monitoring-service
+    - podSelector:
+        matchLabels:
+          app: notification-service
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8081
+    - protocol: TCP
+      port: 8082
+    - protocol: TCP
+      port: 8083
+    - protocol: TCP
+      port: 8084
+  # Kubernetes API for service discovery
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+---
+# Grafana - Allow access from users and to Prometheus/Loki
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow external access (NodePort)
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Query Prometheus
+  - to:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Query Loki
+  - to:
+    - podSelector:
+        matchLabels:
+          app: loki
+    ports:
+    - protocol: TCP
+      port: 3100
+---
+# Loki - Allow from Promtail and Grafana
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: loki-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: loki
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from Promtail (log shipping)
+  - from:
+    - podSelector:
+        matchLabels:
+          app: promtail
+    ports:
+    - protocol: TCP
+      port: 3100
+    - protocol: TCP
+      port: 9096
+  # Allow from Grafana (queries)
+  - from:
+    - podSelector:
+        matchLabels:
+          app: grafana
+    ports:
+    - protocol: TCP
+      port: 3100
+---
+# Promtail - Can read logs from all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: promtail-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: promtail
+  policyTypes:
+  - Egress
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Send logs to Loki
+  - to:
+    - podSelector:
+        matchLabels:
+          app: loki
+    ports:
+    - protocol: TCP
+      port: 3100
+  # Kubernetes API (for pod discovery)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+---
+# Zipkin - Allow from all services (tracing)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zipkin-policy
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: zipkin
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from all application services
+  - from:
+    - podSelector:
+        matchLabels:
+          app: auth-service
+    - podSelector:
+        matchLabels:
+          app: base-station-service
+    - podSelector:
+        matchLabels:
+          app: monitoring-service
+    - podSelector:
+        matchLabels:
+          app: notification-service
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 9411
+  # Allow external access (NodePort UI)
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 9411

@@ -34,6 +34,8 @@ buildNumber.properties
 .classpath
 .project
 .settings/
+.factorypath
+**/.factorypath
 *.swp
 *.swo
 *~
@@ -87,3 +89,9 @@ package.json
 package-lock.json
 node_modules/
 *.backup
+
+# Database backups (contain sensitive data)
+backups/
+
+# Testing scripts and tools (keep in repo)
+# testing/ is tracked for integration testing tools
