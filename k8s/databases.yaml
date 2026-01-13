@@ -15,6 +15,7 @@ spec:
       labels:
         app: postgres-basestation
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: postgres
         image: postgres:18-alpine
@@ -40,9 +41,11 @@ spec:
           limits:
             cpu: "1"
             memory: 512Mi
+            ephemeral-storage: "4Gi"
           requests:
             cpu: "500m"
             memory: 256Mi
+            ephemeral-storage: "2Gi"
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
@@ -79,6 +82,7 @@ spec:
       labels:
         app: postgres-notification
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: postgres
         image: postgres:18-alpine
@@ -104,9 +108,11 @@ spec:
           limits:
             cpu: "1"
             memory: 512Mi
+            ephemeral-storage: "4Gi"
           requests:
             cpu: "500m"
             memory: 256Mi
+            ephemeral-storage: "2Gi"
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
@@ -143,6 +149,7 @@ spec:
       labels:
         app: postgres-auth
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: postgres
         image: postgres:18-alpine
@@ -168,9 +175,11 @@ spec:
           limits:
             cpu: "1"
             memory: 512Mi
+            ephemeral-storage: "4Gi"
           requests:
             cpu: "500m"
             memory: 256Mi
+            ephemeral-storage: "2Gi"
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
@@ -207,9 +216,10 @@ spec:
       labels:
         app: mongodb
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: mongodb
-        image: mongo:latest
+        image: mongo:8.2
         ports:
         - containerPort: 27017
         env:
@@ -227,9 +237,11 @@ spec:
           limits:
             cpu: "1"
             memory: 1Gi
+            ephemeral-storage: "4Gi"
           requests:
             cpu: "500m"
             memory: 512Mi
+            ephemeral-storage: "2Gi"
         volumeMounts:
         - name: mongodb-data
           mountPath: /data/db
@@ -266,6 +278,7 @@ spec:
       labels:
         app: redis
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: redis
         image: redis:alpine
@@ -275,9 +288,11 @@ spec:
           limits:
             cpu: "500m"
             memory: 256Mi
+            ephemeral-storage: "4Gi"
           requests:
             cpu: "250m"
             memory: 128Mi
+            ephemeral-storage: "2Gi"
         volumeMounts:
         - name: redis-data
           mountPath: /data
@@ -314,6 +329,7 @@ spec:
       labels:
         app: rabbitmq
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: rabbitmq
         image: rabbitmq:4.0-management-alpine
@@ -337,9 +353,11 @@ spec:
           limits:
             cpu: "1"
             memory: 1Gi
+            ephemeral-storage: "4Gi"
           requests:
             cpu: "500m"
             memory: 512Mi
+            ephemeral-storage: "2Gi"
         volumeMounts:
         - name: rabbitmq-data
           mountPath: /var/lib/rabbitmq
