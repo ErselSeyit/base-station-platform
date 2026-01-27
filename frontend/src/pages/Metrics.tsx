@@ -50,6 +50,7 @@ const METRIC_CONFIGS = {
   UPTIME: { color: 'var(--status-maintenance)', unit: '%', domain: [0, 100] as [number, number] },
   CONNECTION_COUNT: { color: 'var(--status-info)', unit: '', domain: [0, 'auto'] as [number, string] },
   DATA_THROUGHPUT: { color: 'var(--status-active)', unit: ' Mbps', domain: [0, 'auto'] as [number, string] },
+  FAN_SPEED: { color: '#f97316', unit: ' RPM', domain: [0, 'auto'] as [number, string] },
 }
 
 interface MetricCardProps {

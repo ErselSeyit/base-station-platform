@@ -21,6 +21,7 @@ export enum MetricType {
   UPTIME = 'UPTIME',
   CONNECTION_COUNT = 'CONNECTION_COUNT',
   DATA_THROUGHPUT = 'DATA_THROUGHPUT',
+  FAN_SPEED = 'FAN_SPEED',
 }
 
 export enum NotificationType {

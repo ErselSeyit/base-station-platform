@@ -1,0 +1,24 @@
+# Edge Bridge Configuration
+
+bridge:
+  station_id: "BS-001"
+  poll_interval: 10s
+  metrics_interval: 30s
+  log_level: info
+
+device:
+  transport: "tcp"  # "serial" or "tcp"
+  serial:
+    port: "/dev/ttyS0"
+    baud: 115200
+  tcp:
+    host: "127.0.0.1"
+    port: 9999
+
+cloud:
+  base_url: "http://localhost:8080"
+  auth:
+    username: "bridge-user"
+    password: "${BRIDGE_PASSWORD}"
+  timeout: 30s
+  retry_attempts: 3
