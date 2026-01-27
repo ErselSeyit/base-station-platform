@@ -76,9 +76,5 @@
         <!-- Hibernate: WARN to avoid SQL spam -->
         <logger name="org.hibernate.SQL" level="WARN"/>
         <logger name="org.hibernate.type.descriptor.sql" level="WARN"/>
-        
-        <!-- Eureka -->
-        <logger name="com.netflix.discovery" level="INFO"/>
-        <logger name="com.netflix.eureka" level="INFO"/>
     </springProfile>
 </configuration>

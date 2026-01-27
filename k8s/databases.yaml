@@ -1,19 +1,19 @@
 ---
-# PostgreSQL for Base Station Service
+# PostgreSQL (Consolidated - Multiple Databases)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres-basestation
+  name: postgres
   namespace: basestation-platform
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: postgres-basestation
+      app: postgres
   template:
     metadata:
       labels:
-        app: postgres-basestation
+        app: postgres
     spec:
       automountServiceAccountToken: false
       containers:
@@ -22,183 +22,94 @@ spec:
         ports:
         - containerPort: 5432
         env:
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secrets
-              key: basestation-db
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
               name: postgres-secrets
-              key: basestation-user
+              key: username
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
               name: postgres-secrets
-              key: basestation-password
+              key: password
+        - name: POSTGRES_MULTIPLE_DATABASES
+          value: basestationdb,notificationdb,authdb
         resources:
           limits:
-            cpu: "1"
-            memory: 512Mi
-            ephemeral-storage: "4Gi"
+            cpu: "1.5"
+            memory: 768Mi
+            ephemeral-storage: "8Gi"
           requests:
             cpu: "500m"
             memory: 256Mi
-            ephemeral-storage: "2Gi"
+            ephemeral-storage: "4Gi"
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
       volumes:
       - name: postgres-data
         persistentVolumeClaim:
-          claimName: postgres-basestation-pvc
+          claimName: postgres-pvc
+      - name: init-scripts
+        configMap:
+          name: postgres-init-scripts
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres-basestation
+  name: postgres
   namespace: basestation-platform
 spec:
   selector:
-    app: postgres-basestation
+    app: postgres
   ports:
   - port: 5432
     targetPort: 5432
 ---
-# PostgreSQL for Notification Service
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: postgres-notification
-  namespace: basestation-platform
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres-notification
-  template:
-    metadata:
-      labels:
-        app: postgres-notification
-    spec:
-      automountServiceAccountToken: false
-      containers:
-      - name: postgres
-        image: postgres:18-alpine
-        ports:
-        - containerPort: 5432
-        env:
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secrets
-              key: notification-db
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secrets
-              key: notification-user
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secrets
-              key: notification-password
-        resources:
-          limits:
-            cpu: "1"
-            memory: 512Mi
-            ephemeral-storage: "4Gi"
-          requests:
-            cpu: "500m"
-            memory: 256Mi
-            ephemeral-storage: "2Gi"
-        volumeMounts:
-        - name: postgres-data
-          mountPath: /var/lib/postgresql/data
-      volumes:
-      - name: postgres-data
-        persistentVolumeClaim:
-          claimName: postgres-notification-pvc
----
+# ConfigMap for PostgreSQL init script
 apiVersion: v1
-kind: Service
+kind: ConfigMap
 metadata:
-  name: postgres-notification
+  name: postgres-init-scripts
   namespace: basestation-platform
-spec:
-  selector:
-    app: postgres-notification
-  ports:
-  - port: 5432
-    targetPort: 5432
----
-# PostgreSQL for Auth Service
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: postgres-auth
-  namespace: basestation-platform
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres-auth
-  template:
-    metadata:
-      labels:
-        app: postgres-auth
-    spec:
-      automountServiceAccountToken: false
-      containers:
-      - name: postgres
-        image: postgres:18-alpine
-        ports:
-        - containerPort: 5432
-        env:
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secrets
-              key: auth-db
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secrets
-              key: auth-user
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secrets
-              key: auth-password
-        resources:
-          limits:
-            cpu: "1"
-            memory: 512Mi
-            ephemeral-storage: "4Gi"
-          requests:
-            cpu: "500m"
-            memory: 256Mi
-            ephemeral-storage: "2Gi"
-        volumeMounts:
-        - name: postgres-data
-          mountPath: /var/lib/postgresql/data
-      volumes:
-      - name: postgres-data
-        persistentVolumeClaim:
-          claimName: postgres-auth-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres-auth
-  namespace: basestation-platform
-spec:
-  selector:
-    app: postgres-auth
-  ports:
-  - port: 5432
-    targetPort: 5432
+data:
+  init-multiple-dbs.sh: |
+    #!/bin/bash
+    set -e
+    set -u
+
+    create_database() {
+        local database=$1
+        echo "Creating database: $database"
+        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+            SELECT 'CREATE DATABASE $database'
+            WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$database')\gexec
+    EOSQL
+    }
+
+    if [ -n "${POSTGRES_MULTIPLE_DATABASES:-}" ]; then
+        for db in $(echo "$POSTGRES_MULTIPLE_DATABASES" | tr ',' ' '); do
+            create_database "$db"
+        done
+    fi
 ---
 # MongoDB for Metrics
 apiVersion: apps/v1
@@ -245,6 +156,22 @@ spec:
         volumeMounts:
         - name: mongodb-data
           mountPath: /data/db
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 5
+          periodSeconds: 5
       volumes:
       - name: mongodb-data
         persistentVolumeClaim:
@@ -281,21 +208,35 @@ spec:
       automountServiceAccountToken: false
       containers:
       - name: redis
-        image: redis:alpine
+        image: redis:8-alpine
         ports:
         - containerPort: 6379
         resources:
           limits:
             cpu: "500m"
-            memory: 256Mi
-            ephemeral-storage: "4Gi"
-          requests:
-            cpu: "250m"
             memory: 128Mi
             ephemeral-storage: "2Gi"
+          requests:
+            cpu: "250m"
+            memory: 64Mi
+            ephemeral-storage: "1Gi"
         volumeMounts:
         - name: redis-data
           mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
       volumes:
       - name: redis-data
         persistentVolumeClaim:
@@ -332,7 +273,7 @@ spec:
       automountServiceAccountToken: false
       containers:
       - name: rabbitmq
-        image: rabbitmq:4.0-management-alpine
+        image: rabbitmq:4-management-alpine
         ports:
         - containerPort: 5672
           name: amqp
@@ -351,16 +292,30 @@ spec:
               key: password
         resources:
           limits:
-            cpu: "1"
-            memory: 1Gi
-            ephemeral-storage: "4Gi"
-          requests:
             cpu: "500m"
-            memory: 512Mi
+            memory: 256Mi
             ephemeral-storage: "2Gi"
+          requests:
+            cpu: "250m"
+            memory: 128Mi
+            ephemeral-storage: "1Gi"
         volumeMounts:
         - name: rabbitmq-data
           mountPath: /var/lib/rabbitmq
+        livenessProbe:
+          exec:
+            command:
+            - rabbitmq-diagnostics
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - rabbitmq-diagnostics
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 5
       volumes:
       - name: rabbitmq-data
         persistentVolumeClaim:

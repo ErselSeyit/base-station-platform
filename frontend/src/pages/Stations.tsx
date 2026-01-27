@@ -138,8 +138,8 @@ export default function Stations() {
   }
 
   return (
-    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
-      {/* Header - Minimalist */}
+    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px', sm: '24px', md: '32px 24px' } }}>
+      {/* Header - Responsive */}
       <Box
         component={motion.div}
         initial={{ opacity: 0, y: -16 }}
@@ -147,16 +147,18 @@ export default function Stations() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
         sx={{
           display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          marginBottom: '32px',
+          alignItems: { xs: 'stretch', sm: 'flex-start' },
+          gap: { xs: 2, sm: 0 },
+          marginBottom: { xs: '24px', md: '32px' },
         }}
       >
         <Box>
           <Typography
             variant="h1"
             sx={{
-              fontSize: '2.25rem',
+              fontSize: { xs: '1.75rem', sm: '2rem', md: '2.25rem' },
               fontWeight: 700,
               letterSpacing: '-0.025em',
               color: 'var(--mono-950)',
@@ -167,7 +169,7 @@ export default function Stations() {
           </Typography>
           <Typography
             sx={{
-              fontSize: '0.875rem',
+              fontSize: { xs: '0.8125rem', sm: '0.875rem' },
               color: 'var(--mono-500)',
               letterSpacing: '0.01em',
             }}
@@ -187,11 +189,12 @@ export default function Stations() {
             background: 'var(--mono-950)',
             color: 'var(--mono-50)',
             borderRadius: '8px',
-            padding: '10px 20px',
+            padding: { xs: '12px 16px', sm: '10px 20px' },
             fontSize: '0.875rem',
             fontWeight: 600,
             textTransform: 'none',
             boxShadow: 'var(--shadow-sm)',
+            width: { xs: '100%', sm: 'auto' },
             transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
             '&:hover': {
               background: 'var(--mono-800)',
@@ -204,13 +207,160 @@ export default function Stations() {
         </Button>
       </Box>
 
-      {/* Stations Table - Minimalist Data Table */}
+      {/* Mobile Card View - shown on small screens */}
       <Box
         component={motion.div}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         sx={{
+          display: { xs: 'flex', md: 'none' },
+          flexDirection: 'column',
+          gap: 2,
+        }}
+      >
+        {stations.length === 0 && !isLoading ? (
+          <Box
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '12px',
+              padding: '48px 24px',
+              textAlign: 'center',
+            }}
+          >
+            <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+              {error ? `Error loading stations: ${error.message}` : 'No stations found. Click "Add Station" to create one.'}
+            </Typography>
+          </Box>
+        ) : (
+          stations.map((station: BaseStation, idx: number) => (
+            <Box
+              component={motion.div}
+              key={station.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 + idx * 0.05, duration: 0.3 }}
+              sx={{
+                background: 'var(--surface-base)',
+                border: '1px solid var(--surface-border)',
+                borderRadius: '12px',
+                padding: '16px',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  boxShadow: 'var(--shadow-md)',
+                  borderColor: 'var(--mono-300)',
+                },
+              }}
+            >
+              {/* Card Header */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box>
+                  <Typography sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--mono-950)', mb: 0.5 }}>
+                    {station.stationName}
+                  </Typography>
+                  <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', color: 'var(--mono-500)' }}>
+                    #{station.id}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Box
+                    sx={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: getStatusColor(station.status),
+                    }}
+                  />
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--mono-700)' }}>
+                    {station.status}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Card Details */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <LocationIcon sx={{ fontSize: '16px', color: 'var(--mono-400)' }} />
+                  <Typography sx={{ fontSize: '0.8125rem', color: 'var(--mono-700)' }}>
+                    {station.location}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box className="badge" sx={{ display: 'inline-flex' }}>
+                    {station.stationType}
+                  </Box>
+                  <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--mono-700)' }}>
+                    {station.powerConsumption?.toFixed(1) || 'N/A'} kW
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Card Actions */}
+              <Box sx={{ display: 'flex', gap: 1, pt: 2, borderTop: '1px solid var(--surface-border)' }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<ViewIcon sx={{ fontSize: '16px' }} />}
+                  onClick={() => navigate(`/stations/${station.id}`)}
+                  sx={{
+                    flex: 1,
+                    textTransform: 'none',
+                    fontSize: '0.8125rem',
+                    borderColor: 'var(--surface-border)',
+                    color: 'var(--mono-700)',
+                    '&:hover': {
+                      borderColor: 'var(--mono-300)',
+                      background: 'var(--mono-50)',
+                    },
+                  }}
+                >
+                  View
+                </Button>
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenDialog(station)}
+                  sx={{
+                    border: '1px solid var(--surface-border)',
+                    borderRadius: '8px',
+                    color: 'var(--mono-600)',
+                    '&:hover': {
+                      background: 'var(--mono-100)',
+                    },
+                  }}
+                >
+                  <EditIcon sx={{ fontSize: '16px' }} />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => handleDelete(station.id!)}
+                  sx={{
+                    border: '1px solid var(--surface-border)',
+                    borderRadius: '8px',
+                    color: 'var(--mono-600)',
+                    '&:hover': {
+                      background: 'var(--accent-error)',
+                      color: 'white',
+                      borderColor: 'var(--accent-error)',
+                    },
+                  }}
+                >
+                  <DeleteIcon sx={{ fontSize: '16px' }} />
+                </IconButton>
+              </Box>
+            </Box>
+          ))
+        )}
+      </Box>
+
+      {/* Desktop Table View - hidden on small screens */}
+      <Box
+        component={motion.div}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        sx={{
+          display: { xs: 'none', md: 'block' },
           background: 'var(--surface-base)',
           border: '1px solid var(--surface-border)',
           borderRadius: '12px',
@@ -218,7 +368,7 @@ export default function Stations() {
         }}
       >
         <Box sx={{ overflowX: 'auto' }}>
-          <Box component="table" className="data-table" sx={{ width: '100%' }}>
+          <Box component="table" className="data-table" sx={{ width: '100%', minWidth: '800px' }}>
             <Box component="thead">
               <Box component="tr">
                 <Box component="th" sx={{ width: '60px' }}>ID</Box>

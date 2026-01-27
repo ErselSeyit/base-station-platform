@@ -303,7 +303,7 @@ export default function Metrics() {
   }
 
   return (
-    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
       {/* Header */}
       <Box
         component={motion.div}
@@ -315,7 +315,7 @@ export default function Metrics() {
         <Typography
           variant="h1"
           sx={{
-            fontSize: '2.25rem',
+            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.25rem' },
             fontWeight: 700,
             letterSpacing: '-0.025em',
             color: 'var(--mono-950)',
@@ -557,7 +557,7 @@ export default function Metrics() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(400px, 1fr))' },
           gap: '16px',
         }}
       >

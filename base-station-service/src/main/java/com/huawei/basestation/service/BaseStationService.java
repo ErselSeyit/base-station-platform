@@ -11,16 +11,23 @@ import com.huawei.basestation.model.BaseStation;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.repository.BaseStationRepository;
+import com.huawei.common.audit.AuditLogger;
+import com.huawei.common.audit.AuditLogger.AuditAction;
 
 @Service
 @Transactional
 @SuppressWarnings("null") // All return values from repository and stream operations are guaranteed non-null
 public class BaseStationService {
 
-    private final BaseStationRepository repository;
+    private static final String AUDIT_ACTOR = "SYSTEM";
+    private static final String AUDIT_RESOURCE_PREFIX = "station:";
 
-    public BaseStationService(BaseStationRepository repository) {
+    private final BaseStationRepository repository;
+    private final AuditLogger auditLogger;
+
+    public BaseStationService(BaseStationRepository repository, AuditLogger auditLogger) {
         this.repository = repository;
+        this.auditLogger = auditLogger;
     }
 
     public BaseStationDTO createStation(BaseStationDTO dto) {
@@ -29,7 +36,10 @@ public class BaseStationService {
             throw new IllegalArgumentException("Station with name " + dto.getStationName() + " already exists");
         }
         BaseStation station = convertToEntity(dto);
-        return convertToDTO(repository.save(station));
+        BaseStationDTO saved = convertToDTO(repository.save(station));
+        auditLogger.log(AuditAction.STATION_CREATED, AUDIT_ACTOR,
+                AUDIT_RESOURCE_PREFIX + saved.getId(), "name=" + saved.getStationName());
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -77,7 +87,10 @@ public class BaseStationService {
         station.setPowerConsumption(dto.getPowerConsumption());
         station.setDescription(dto.getDescription());
 
-        return convertToDTO(repository.save(station));
+        BaseStationDTO updated = convertToDTO(repository.save(station));
+        auditLogger.log(AuditAction.STATION_UPDATED, AUDIT_ACTOR,
+                AUDIT_RESOURCE_PREFIX + id, "name=" + updated.getStationName());
+        return updated;
     }
 
     public void deleteStation(Long id) {
@@ -85,6 +98,7 @@ public class BaseStationService {
             throw new IllegalArgumentException("Station not found with id: " + id);
         }
         repository.deleteById(id);
+        auditLogger.log(AuditAction.STATION_DELETED, AUDIT_ACTOR, AUDIT_RESOURCE_PREFIX + id, null);
     }
 
     @Transactional(readOnly = true)

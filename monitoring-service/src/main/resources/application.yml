@@ -21,30 +21,6 @@ spring:
 server:
   port: 8082
 
-# ============================================
-# EUREKA CLIENT CONFIGURATION
-# ============================================
-# This service registers with Eureka for service discovery.
-# Other services can find this service by name: 'monitoring-service'
-# ============================================
-eureka:
-  client:
-    # service-url.defaultZone: Eureka server URL for registration.
-    # Use 'eureka-server' service name in Docker/K8s, localhost for local dev.
-    service-url:
-      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
-
-    # register-with-eureka: true to register this service.
-    register-with-eureka: true
-
-    # fetch-registry: true to discover other services.
-    fetch-registry: true
-  instance:
-    # Use hostname instead of IP to avoid network routing issues
-    prefer-ip-address: false
-    hostname: monitoring-service
-    instance-id: ${spring.application.name}:${random.uuid}
-
 management:
   endpoints:
     web:
@@ -58,27 +34,16 @@ management:
       prometheus:
         enabled: true
 
-# ============================================
-# WEBSOCKET CONFIGURATION
-# ============================================
-# Allowed origins for WebSocket connections.
-# In production, specify actual frontend domains.
-# ============================================
 websocket:
-  allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://frontend:80,http://localhost:3000}
+  allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://frontend:80}
 
-# ============================================
-# AI DIAGNOSTIC SERVICE CONFIGURATION
-# ============================================
-# Configuration for the AI-powered diagnostic service
-# that provides automated problem analysis and solutions.
-# ============================================
 diagnostic:
   service:
-    url: ${DIAGNOSTIC_SERVICE_URL:http://localhost:9091}
+    url: ${DIAGNOSTIC_SERVICE_URL:http://ai-diagnostic:9091}
     enabled: ${DIAGNOSTIC_SERVICE_ENABLED:true}
+    secret: ${SECURITY_INTERNAL_SECRET:}
 
 logging:
   level:
-    com.huawei.monitoring: DEBUG
-
+    root: INFO
+    com.huawei.monitoring: INFO

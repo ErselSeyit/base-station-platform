@@ -138,8 +138,8 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
      */
     private String generateInternalAuthToken(String username, String role) {
         if (internalSecret == null || internalSecret.isBlank()) {
-            log.error("SECURITY_INTERNAL_SECRET not configured - internal auth disabled!");
-            return "MISSING_SECRET";
+            log.error("SECURITY_INTERNAL_SECRET not configured - this is a critical security misconfiguration!");
+            throw new IllegalStateException("SECURITY_INTERNAL_SECRET environment variable is required for secure operation");
         }
 
         long timestamp = System.currentTimeMillis();

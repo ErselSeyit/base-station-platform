@@ -106,7 +106,7 @@ export default function MapView() {
   }
 
   return (
-    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
       {/* Header - Brutally minimal */}
       <Box
         component={motion.div}
@@ -118,7 +118,7 @@ export default function MapView() {
         <Typography
           variant="h1"
           sx={{
-            fontSize: '2.25rem',
+            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.25rem' },
             fontWeight: 700,
             letterSpacing: '-0.025em',
             color: 'var(--mono-950)',
@@ -231,8 +231,8 @@ export default function MapView() {
           border: '1px solid var(--surface-border)',
           borderRadius: '12px',
           overflow: 'hidden',
-          height: 'calc(100vh - 280px)',
-          minHeight: '600px',
+          height: { xs: 'calc(100vh - 200px)', sm: 'calc(100vh - 240px)', md: 'calc(100vh - 280px)' },
+          minHeight: { xs: '400px', sm: '500px', md: '600px' },
           transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           '&:hover': {
             boxShadow: 'var(--shadow-md)',

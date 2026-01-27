@@ -3,8 +3,16 @@
 # Core
 pyserial>=3.5          # Serial/UART communication
 
+# HTTP/REST API
+flask>=2.3.0           # HTTP REST API
+
+# Tracing (OpenTelemetry)
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+opentelemetry-exporter-zipkin>=1.20.0
+opentelemetry-instrumentation-flask>=0.41b0
+
 # Optional - Install based on your needs:
 # paho-mqtt>=1.6.1     # MQTT IoT protocol
-# flask>=2.3.0         # HTTP REST API
 # websockets>=10.0     # WebSocket support
 # requests>=2.28.0     # HTTP client for Ollama

@@ -23,7 +23,7 @@ jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:18-alpine
@@ -38,7 +38,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      
+
       mongodb:
         image: mongo:8.2
         ports:
@@ -132,7 +132,6 @@ jobs:
     strategy:
       matrix:
         service:
-          - eureka-server
           - api-gateway
           - base-station-service
           - monitoring-service
@@ -165,4 +164,3 @@ jobs:
           IMAGE_NAME=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest" | tr '[:upper:]' '[:lower:]')
           docker build -f ${{ matrix.service }}/Dockerfile -t $IMAGE_NAME .
           docker push $IMAGE_NAME
-

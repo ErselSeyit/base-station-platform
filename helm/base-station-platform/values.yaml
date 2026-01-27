@@ -47,10 +47,6 @@ rabbitmq:
 mongodb:
   enabled: true
 
-eureka:
-  enabled: true
-  replicaCount: 1
-
 prometheus:
   enabled: true
 
@@ -60,3 +56,5 @@ grafana:
 zipkin:
   enabled: true
 
+aiDiagnostic:
+  enabled: true

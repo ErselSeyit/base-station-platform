@@ -54,7 +54,6 @@ class MonitoringServiceResilienceTest {
         wireMockServer.start();
 
         registry.add("monitoring.service.url", () -> "http://127.0.0.1:45171");
-        registry.add("eureka.client.enabled", () -> "false");
         registry.add("spring.cache.type", () -> "none");
         registry.add("spring.data.redis.host", () -> "localhost");
         registry.add("spring.datasource.url", () -> "jdbc:h2:mem:testdb");

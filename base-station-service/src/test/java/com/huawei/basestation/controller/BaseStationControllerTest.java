@@ -39,7 +39,6 @@ import com.huawei.basestation.service.BaseStationService;
         "spring.data.jpa.repositories.enabled=false",
         "spring.jpa.hibernate.ddl-auto=none",
         "spring.datasource.url=jdbc:h2:mem:testdb",
-        "eureka.client.enabled=false",
         "spring.cache.type=none"
 })
 class BaseStationControllerTest {

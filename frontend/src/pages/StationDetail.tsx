@@ -274,7 +274,7 @@ export default function StationDetail() {
   const statusColor = STATUS_COLORS[stationData.status as keyof typeof STATUS_COLORS] || STATUS_COLORS.OFFLINE
 
   return (
-    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
       {/* Header with Back Button */}
       <Box
         component={motion.div}
@@ -309,7 +309,7 @@ export default function StationDetail() {
           <Typography
             variant="h1"
             sx={{
-              fontSize: '2.25rem',
+              fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.25rem' },
               fontWeight: 700,
               letterSpacing: '-0.025em',
               color: 'var(--mono-950)',

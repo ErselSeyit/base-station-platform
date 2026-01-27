@@ -1,25 +1,15 @@
 spring:
   application:
     name: monitoring-service-test
-
-# Disable internal authentication for tests
-security:
-  internal:
-    enabled: false
-
-# Use embedded MongoDB for tests
-spring:
   data:
     mongodb:
       database: test-monitoring
       port: 0  # Random port
 
-# Disable Eureka for tests
-eureka:
-  client:
+# Disable internal authentication for tests
+security:
+  internal:
     enabled: false
-    register-with-eureka: false
-    fetch-registry: false
 
 # Enable demo mode for tests
 demo:

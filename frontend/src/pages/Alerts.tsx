@@ -207,7 +207,7 @@ export default function Alerts() {
   }
 
   return (
-    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
       {/* Header - Brutally minimal */}
       <Box
         component={motion.div}
@@ -219,7 +219,7 @@ export default function Alerts() {
         <Typography
           variant="h1"
           sx={{
-            fontSize: '2.25rem',
+            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.25rem' },
             fontWeight: 700,
             letterSpacing: '-0.025em',
             color: 'var(--mono-950)',
@@ -247,14 +247,15 @@ export default function Alerts() {
         transition={{ delay: 0.05, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         sx={{
           display: 'flex',
-          gap: '16px',
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: { xs: '12px', sm: '16px' },
           marginBottom: '24px',
         }}
       >
         <Box
           sx={{
             flex: 1,
-            padding: '16px 20px',
+            padding: { xs: '12px 16px', sm: '16px 20px' },
             background: 'var(--surface-base)',
             border: '1px solid var(--surface-border)',
             borderRadius: '12px',

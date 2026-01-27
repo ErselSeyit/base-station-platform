@@ -14,7 +14,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.huawei.common.dto.AlertEvent;
-import com.huawei.common.dto.DiagnosticResponse;
 import com.huawei.monitoring.client.DiagnosticClient;
 import com.huawei.monitoring.config.RabbitMQConfig;
 import com.huawei.monitoring.dto.MetricDataDTO;

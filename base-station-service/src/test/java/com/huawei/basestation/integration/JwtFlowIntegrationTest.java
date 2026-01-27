@@ -52,7 +52,6 @@ import io.jsonwebtoken.security.Keys;
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         classes = {IntegrationTestApplication.class},
         properties = {
-                "eureka.client.enabled=false",
                 "spring.cache.type=none",
                 "spring.main.allow-bean-definition-overriding=true",
                 "spring.profiles.active=integration-test"
@@ -92,9 +91,7 @@ class JwtFlowIntegrationTest {
         // Set JWT secret for testing
         registry.add("jwt.secret", () -> JWT_SECRET);
         registry.add("jwt.simulate-validation", () -> "false");
-        
-        // Disable Eureka for tests
-        registry.add("eureka.client.enabled", () -> "false");
+
         // Disable Redis for tests
         registry.add("spring.data.redis.host", () -> "localhost");
         registry.add("spring.cache.type", () -> "none");

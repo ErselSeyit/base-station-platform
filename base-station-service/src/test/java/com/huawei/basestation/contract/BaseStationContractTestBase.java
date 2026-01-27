@@ -42,7 +42,6 @@ public abstract class BaseStationContractTestBase {
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.H2Dialect");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("spring.jpa.show-sql", () -> "false");
-        registry.add("eureka.client.enabled", () -> "false");
         registry.add("spring.cache.type", () -> "none");
         registry.add("spring.data.redis.host", () -> "localhost");
         registry.add("spring.jpa.properties.hibernate.globally_quoted_identifiers", () -> "true");

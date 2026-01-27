@@ -1,73 +1,4 @@
 ---
-# Eureka Server
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: eureka-server
-  namespace: basestation-platform
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: eureka-server
-  template:
-    metadata:
-      labels:
-        app: eureka-server
-    spec:
-      automountServiceAccountToken: false
-      containers:
-      - name: eureka-server
-        image: base-station-platform-eureka-server:1.0.0
-        imagePullPolicy: Never
-        ports:
-        - containerPort: 8762
-        livenessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8762
-          initialDelaySeconds: 90
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /actuator/health/readiness
-            port: 8762
-          initialDelaySeconds: 60
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
-        startupProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8762
-          initialDelaySeconds: 0
-          periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 30
-        resources:
-          limits:
-            cpu: "1"
-            memory: 1Gi
-            ephemeral-storage: "2Gi"
-          requests:
-            cpu: "500m"
-            memory: 512Mi
-            ephemeral-storage: "1Gi"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: eureka-server
-  namespace: basestation-platform
-spec:
-  selector:
-    app: eureka-server
-  ports:
-  - port: 8762
-    targetPort: 8762
----
 # Auth Service
 apiVersion: apps/v1
 kind: Deployment
@@ -88,24 +19,22 @@ spec:
       containers:
       - name: auth-service
         image: base-station-platform-auth-service:1.0.0
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8084
         env:
         - name: SPRING_DATASOURCE_URL
-          value: jdbc:postgresql://postgres-auth:5432/authdb
+          value: jdbc:postgresql://postgres:5432/authdb
         - name: SPRING_DATASOURCE_USERNAME
           valueFrom:
             secretKeyRef:
               name: postgres-secrets
-              key: auth-user
+              key: username
         - name: SPRING_DATASOURCE_PASSWORD
           valueFrom:
             secretKeyRef:
               name: postgres-secrets
-              key: auth-password
-        - name: EUREKA_CLIENT_ENABLED
-          value: "false"
+              key: password
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
@@ -182,36 +111,29 @@ spec:
       containers:
       - name: base-station-service
         image: base-station-platform-base-station-service:1.0.0
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8081
         env:
         - name: SPRING_DATASOURCE_URL
-          value: jdbc:postgresql://postgres-basestation:5432/basestationdb
+          value: jdbc:postgresql://postgres:5432/basestationdb
         - name: SPRING_DATASOURCE_USERNAME
           valueFrom:
             secretKeyRef:
               name: postgres-secrets
-              key: basestation-user
+              key: username
         - name: SPRING_DATASOURCE_PASSWORD
           valueFrom:
             secretKeyRef:
               name: postgres-secrets
-              key: basestation-password
-        - name: SPRING_RABBITMQ_HOST
-          value: rabbitmq
-        - name: SPRING_RABBITMQ_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: rabbitmq-secret
-              key: username
-        - name: SPRING_RABBITMQ_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: rabbitmq-secret
               key: password
-        - name: EUREKA_CLIENT_ENABLED
-          value: "false"
+        - name: SECURITY_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: security-internal-secret
+              key: secret
+        - name: MANAGEMENT_TRACING_ENDPOINT
+          value: http://zipkin:9411
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -278,7 +200,7 @@ spec:
       containers:
       - name: monitoring-service
         image: base-station-platform-monitoring-service:1.0.0
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8082
         env:
@@ -310,8 +232,15 @@ spec:
             secretKeyRef:
               name: rabbitmq-secret
               key: password
-        - name: EUREKA_CLIENT_ENABLED
-          value: "false"
+        - name: SECURITY_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: security-internal-secret
+              key: secret
+        - name: DIAGNOSTIC_SERVICE_URL
+          value: http://ai-diagnostic:9091
+        - name: DIAGNOSTIC_SERVICE_ENABLED
+          value: "true"
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -378,22 +307,22 @@ spec:
       containers:
       - name: notification-service
         image: base-station-platform-notification-service:1.0.0
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8083
         env:
         - name: SPRING_DATASOURCE_URL
-          value: jdbc:postgresql://postgres-notification:5432/notificationdb
+          value: jdbc:postgresql://postgres:5432/notificationdb
         - name: SPRING_DATASOURCE_USERNAME
           valueFrom:
             secretKeyRef:
               name: postgres-secrets
-              key: notification-user
+              key: username
         - name: SPRING_DATASOURCE_PASSWORD
           valueFrom:
             secretKeyRef:
               name: postgres-secrets
-              key: notification-password
+              key: password
         - name: SPRING_RABBITMQ_HOST
           value: rabbitmq
         - name: SPRING_RABBITMQ_USERNAME
@@ -406,8 +335,11 @@ spec:
             secretKeyRef:
               name: rabbitmq-secret
               key: password
-        - name: EUREKA_CLIENT_ENABLED
-          value: "false"
+        - name: SECURITY_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: security-internal-secret
+              key: secret
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -454,6 +386,67 @@ spec:
   - port: 8083
     targetPort: 8083
 ---
+# AI Diagnostic Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-diagnostic
+  namespace: basestation-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-diagnostic
+  template:
+    metadata:
+      labels:
+        app: ai-diagnostic
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: ai-diagnostic
+        image: base-station-platform-ai-diagnostic:1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9091
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9091
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9091
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          limits:
+            cpu: "500m"
+            memory: 256Mi
+            ephemeral-storage: "1Gi"
+          requests:
+            cpu: "250m"
+            memory: 128Mi
+            ephemeral-storage: "500Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-diagnostic
+  namespace: basestation-platform
+spec:
+  selector:
+    app: ai-diagnostic
+  ports:
+  - port: 9091
+    targetPort: 9091
+---
 # API Gateway
 apiVersion: apps/v1
 kind: Deployment
@@ -474,47 +467,58 @@ spec:
       containers:
       - name: api-gateway
         image: base-station-platform-api-gateway:1.0.0
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
         env:
-        - name: SPRING_REDIS_HOST
+        - name: SPRING_DATA_REDIS_HOST
           value: redis
-        - name: EUREKA_CLIENT_ENABLED
-          value: "false"
-        - name: SPRING_CLOUD_DISCOVERY_ENABLED
-          value: "false"
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_0_ID
-          value: auth-service
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_0_URI
+        - name: ROUTE_AUTH_URL
           value: http://auth-service:8084
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0
-          value: Path=/api/v1/auth/**
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_1_ID
-          value: base-station-service
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_1_URI
+        - name: ROUTE_BASESTATION_URL
           value: http://base-station-service:8081
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0
-          value: Path=/api/v1/stations/**
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_2_ID
-          value: monitoring-service
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_2_URI
+        - name: ROUTE_MONITORING_URL
           value: http://monitoring-service:8082
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0
-          value: Path=/api/v1/metrics/**
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_3_ID
-          value: notification-service
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_3_URI
+        - name: ROUTE_NOTIFICATION_URL
           value: http://notification-service:8083
-        - name: SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0
-          value: Path=/api/v1/notifications/**
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
               name: jwt-secret
               key: secret
+        - name: SECURITY_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: security-internal-secret
+              key: secret
         - name: CORS_ALLOWED_ORIGINS
-          value: http://localhost:3000,http://localhost:80,http://localhost,http://localhost:30000
+          value: http://frontend:80
+        - name: MANAGEMENT_TRACING_ENDPOINT
+          value: http://zipkin:9411
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 90
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
         resources:
           limits:
             cpu: "1"
@@ -559,7 +563,7 @@ spec:
       containers:
       - name: frontend
         image: base-station-platform-frontend:1.0.0
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
         resources:

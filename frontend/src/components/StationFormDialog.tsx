@@ -15,8 +15,13 @@ import {
   DialogActions,
   DialogContent,
   Divider,
+  FormControl,
   IconButton,
   InputAdornment,
+  InputLabel,
+  MenuItem,
+  Select,
+  SelectChangeEvent,
   Slide,
   TextField,
   Typography,
@@ -117,7 +122,41 @@ export default function StationFormDialog({
         </IconButton>
       </Box>
 
-      <DialogContent sx={{ px: 3, py: 3 }}>
+      <DialogContent
+        sx={{
+          px: 3,
+          py: 3,
+          '& .MuiTextField-root': {
+            '& .MuiOutlinedInput-root': {
+              '& fieldset': {
+                borderColor: 'var(--surface-border)',
+              },
+              '&:hover fieldset': {
+                borderColor: 'var(--mono-400)',
+              },
+              '&.Mui-focused fieldset': {
+                borderColor: 'var(--mono-600)',
+              },
+            },
+            '& .MuiInputBase-input': {
+              color: 'var(--mono-950)',
+              '&::placeholder': {
+                color: 'var(--mono-400)',
+                opacity: 1,
+              },
+            },
+            '& .MuiInputLabel-root': {
+              color: 'var(--mono-500)',
+              '&.Mui-focused': {
+                color: 'var(--mono-700)',
+              },
+            },
+            '& .MuiFormHelperText-root': {
+              color: 'var(--mono-500)',
+            },
+          },
+        }}
+      >
         <form
           id="station-form"
           name="stationForm"
@@ -256,63 +295,133 @@ export default function StationFormDialog({
               </Typography>
             </Box>
             <Box display="flex" gap={2} mb={2}>
-              <TextField
-                id="station-type-select"
-                name="stationType"
-                fullWidth
-                select
-                label="Station Type"
-                value={formData.stationType}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setFormData({ ...formData, stationType: e.target.value as StationType })
-                }
-                inputProps={{
-                  name: 'stationType',
-                  id: 'station-type-select',
-                  autoComplete: 'off',
-                  'aria-label': 'Station Type',
-                }}
-                SelectProps={{
-                  native: true,
-                  name: 'stationType',
-                  id: 'station-type-select',
-                }}
-              >
-                {Object.values(StationType).map((type) => (
-                  <option key={type} value={type}>
-                    {type.replace('_', ' ')}
-                  </option>
-                ))}
-              </TextField>
+              <FormControl fullWidth>
+                <InputLabel
+                  id="station-type-label"
+                  sx={{
+                    color: 'var(--mono-500)',
+                    '&.Mui-focused': { color: 'var(--mono-700)' },
+                  }}
+                >
+                  Station Type
+                </InputLabel>
+                <Select
+                  labelId="station-type-label"
+                  id="station-type-select"
+                  name="stationType"
+                  value={formData.stationType || ''}
+                  label="Station Type"
+                  onChange={(e: SelectChangeEvent) =>
+                    setFormData({ ...formData, stationType: e.target.value as StationType })
+                  }
+                  sx={{
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'var(--surface-border)',
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'var(--mono-400)',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'var(--mono-600)',
+                    },
+                    '& .MuiSelect-select': {
+                      color: 'var(--mono-950)',
+                    },
+                  }}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        background: 'var(--surface-base)',
+                        border: '1px solid var(--surface-border)',
+                        borderRadius: '8px',
+                        boxShadow: 'var(--shadow-lg)',
+                        '& .MuiMenuItem-root': {
+                          color: 'var(--mono-950)',
+                          '&:hover': {
+                            background: 'var(--mono-100)',
+                          },
+                          '&.Mui-selected': {
+                            background: 'var(--mono-200)',
+                            '&:hover': {
+                              background: 'var(--mono-200)',
+                            },
+                          },
+                        },
+                      },
+                    },
+                  }}
+                >
+                  {Object.values(StationType).map((type) => (
+                    <MenuItem key={type} value={type}>
+                      {type.replace('_', ' ')}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-              <TextField
-                id="station-status-select"
-                name="status"
-                fullWidth
-                select
-                label="Status"
-                value={formData.status}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setFormData({ ...formData, status: e.target.value as StationStatus })
-                }
-                inputProps={{
-                  name: 'status',
-                  id: 'station-status-select',
-                  autoComplete: 'off',
-                  'aria-label': 'Status',
-                }}
-                SelectProps={{
-                  native: true,
-                  name: 'status',
-                  id: 'station-status-select',
-                }}
-              >
-                {Object.values(StationStatus).map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </TextField>
+              <FormControl fullWidth>
+                <InputLabel
+                  id="station-status-label"
+                  sx={{
+                    color: 'var(--mono-500)',
+                    '&.Mui-focused': { color: 'var(--mono-700)' },
+                  }}
+                >
+                  Status
+                </InputLabel>
+                <Select
+                  labelId="station-status-label"
+                  id="station-status-select"
+                  name="status"
+                  value={formData.status || ''}
+                  label="Status"
+                  onChange={(e: SelectChangeEvent) =>
+                    setFormData({ ...formData, status: e.target.value as StationStatus })
+                  }
+                  sx={{
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'var(--surface-border)',
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'var(--mono-400)',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'var(--mono-600)',
+                    },
+                    '& .MuiSelect-select': {
+                      color: 'var(--mono-950)',
+                    },
+                  }}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        background: 'var(--surface-base)',
+                        border: '1px solid var(--surface-border)',
+                        borderRadius: '8px',
+                        boxShadow: 'var(--shadow-lg)',
+                        '& .MuiMenuItem-root': {
+                          color: 'var(--mono-950)',
+                          '&:hover': {
+                            background: 'var(--mono-100)',
+                          },
+                          '&.Mui-selected': {
+                            background: 'var(--mono-200)',
+                            '&:hover': {
+                              background: 'var(--mono-200)',
+                            },
+                          },
+                        },
+                      },
+                    },
+                  }}
+                >
+                  {Object.values(StationStatus).map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {status}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Box>
             <TextField
               id="station-power-consumption"

@@ -8,6 +8,8 @@ import {
   Map as MapIcon,
   Menu as MenuIcon,
   Notifications as NotificationsIcon,
+  Psychology as AIIcon,
+  Assessment as ReportIcon,
 } from '@mui/icons-material'
 import {
   AppBar,
@@ -43,6 +45,8 @@ const getMenuItems = (unreadCount: number) => [
   { text: 'Map View', icon: <MapIcon />, path: '/map' },
   { text: 'Alerts', icon: <NotificationsIcon />, path: '/alerts', badge: unreadCount },
   { text: 'Metrics', icon: <BarChartIcon />, path: '/metrics' },
+  { text: 'AI Diagnostics', icon: <AIIcon />, path: '/ai-diagnostics' },
+  { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
 ]
 
 const handleLogout = (navigate: ReturnType<typeof useNavigate>) => {
@@ -287,7 +291,7 @@ export default function Layout({ children }: LayoutProps) {
           open={mobileOpen}
           onClose={handleDrawerToggle}
           ModalProps={{
-            keepMounted: true,
+            keepMounted: false, // Don't keep modal mounted to prevent click blocking
           }}
           sx={{
             display: { xs: 'block', sm: 'none' },
@@ -296,6 +300,9 @@ export default function Layout({ children }: LayoutProps) {
               width: drawerWidth,
               background: 'var(--surface-base)',
               borderRight: '1px solid var(--surface-border)',
+            },
+            '& .MuiBackdrop-root': {
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
             },
           }}
         >
@@ -323,10 +330,12 @@ export default function Layout({ children }: LayoutProps) {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 1.5, sm: 2, md: 3 },
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           backgroundColor: 'var(--surface-base)',
           minHeight: '100vh',
+          position: 'relative',
+          zIndex: 1,
         }}
       >
         <Toolbar />
