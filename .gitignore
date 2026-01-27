@@ -81,6 +81,7 @@ coverage/
 effective-pom.xml
 *.sh
 !scripts/generate-secrets.sh
+!scripts/init-multiple-dbs.sh
 node_modules
 
 # Mermaid CLI
