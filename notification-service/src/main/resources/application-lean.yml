@@ -1,0 +1,13 @@
+# Lean Profile - No Eureka
+# Use: SPRING_PROFILES_ACTIVE=lean
+
+# Disable Eureka client
+eureka:
+  client:
+    enabled: false
+
+# Production logging level
+logging:
+  level:
+    root: INFO
+    com.huawei: INFO
