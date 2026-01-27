@@ -180,7 +180,72 @@ public class MonitoringController {
     }
 
     /**
-     * Request DTO for batch metrics endpoint.
+     * Batch endpoint to record multiple metrics at once.
+     * Used by edge bridges to upload metrics from MIPS devices efficiently.
+     *
+     * <p>Request body example:
+     * <pre>
+     * {
+     *   "stationId": "BS-001",
+     *   "metrics": [
+     *     {"type": "TEMPERATURE", "value": 55.2, "timestamp": "2026-01-28T12:00:00"},
+     *     {"type": "CPU_USAGE", "value": 25.5, "timestamp": "2026-01-28T12:00:00"}
+     *   ]
+     * }
+     * </pre>
+     *
+     * @param request the batch record request
+     * @return response with count of recorded metrics
+     */
+    @PostMapping("/batch")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    public ResponseEntity<BatchRecordResponse> recordMetricsBatch(
+            @Valid @RequestBody BatchRecordRequest request) {
+        Objects.requireNonNull(request, "Request cannot be null");
+
+        log.info("Recording batch of {} metrics for station {}",
+                request.getMetrics().size(), request.getStationId());
+
+        int recorded = 0;
+        for (BatchMetricEntry entry : request.getMetrics()) {
+            try {
+                MetricDataDTO dto = new MetricDataDTO();
+                dto.setStationId(parseStationId(request.getStationId()));
+                dto.setMetricType(MetricType.valueOf(entry.getType()));
+                dto.setValue(entry.getValue());
+                if (entry.getTimestamp() != null) {
+                    dto.setTimestamp(entry.getTimestamp());
+                }
+                service.recordMetric(dto);
+                recorded++;
+            } catch (Exception e) {
+                log.warn("Failed to record metric {}: {}", entry.getType(), e.getMessage());
+            }
+        }
+
+        log.info("Successfully recorded {} out of {} metrics for station {}",
+                recorded, request.getMetrics().size(), request.getStationId());
+
+        BatchRecordResponse response = new BatchRecordResponse();
+        response.setReceived(recorded);
+        response.setStatus(recorded > 0 ? "OK" : "FAILED");
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    private Long parseStationId(String stationId) {
+        if (stationId == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(stationId);
+        } catch (NumberFormatException e) {
+            String numericPart = stationId.replaceAll("\\D", "");
+            return numericPart.isEmpty() ? 1L : Long.parseLong(numericPart);
+        }
+    }
+
+    /**
+     * Request DTO for batch metrics fetch endpoint.
      */
     public static class BatchMetricsRequest {
         @NotEmpty(message = "Station IDs list cannot be empty")
@@ -192,6 +257,94 @@ public class MonitoringController {
 
         public void setStationIds(List<Long> stationIds) {
             this.stationIds = stationIds;
+        }
+    }
+
+    /**
+     * Request DTO for batch metrics recording endpoint.
+     */
+    public static class BatchRecordRequest {
+        @jakarta.validation.constraints.NotNull(message = "Station ID is required")
+        private String stationId;
+
+        @NotEmpty(message = "Metrics list cannot be empty")
+        private List<BatchMetricEntry> metrics;
+
+        public String getStationId() {
+            return stationId;
+        }
+
+        public void setStationId(String stationId) {
+            this.stationId = stationId;
+        }
+
+        public List<BatchMetricEntry> getMetrics() {
+            return metrics;
+        }
+
+        public void setMetrics(List<BatchMetricEntry> metrics) {
+            this.metrics = metrics;
+        }
+    }
+
+    /**
+     * Single metric entry for batch recording.
+     */
+    public static class BatchMetricEntry {
+        @jakarta.validation.constraints.NotNull(message = "Metric type is required")
+        private String type;
+
+        @jakarta.validation.constraints.NotNull(message = "Value is required")
+        private Double value;
+
+        private LocalDateTime timestamp;
+
+        public String getType() {
+            return type;
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
+
+        public Double getValue() {
+            return value;
+        }
+
+        public void setValue(Double value) {
+            this.value = value;
+        }
+
+        public LocalDateTime getTimestamp() {
+            return timestamp;
+        }
+
+        public void setTimestamp(LocalDateTime timestamp) {
+            this.timestamp = timestamp;
+        }
+    }
+
+    /**
+     * Response DTO for batch recording.
+     */
+    public static class BatchRecordResponse {
+        private int received;
+        private String status;
+
+        public int getReceived() {
+            return received;
+        }
+
+        public void setReceived(int received) {
+            this.received = received;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
         }
     }
 

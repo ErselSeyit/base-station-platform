@@ -8,6 +8,7 @@ public enum MetricType {
     TEMPERATURE,
     UPTIME,
     CONNECTION_COUNT,
-    DATA_THROUGHPUT
+    DATA_THROUGHPUT,
+    FAN_SPEED
 }
 

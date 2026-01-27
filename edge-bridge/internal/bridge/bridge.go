@@ -1,0 +1,275 @@
+package bridge
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/huawei/edge-bridge/internal/cloud"
+	"github.com/huawei/edge-bridge/internal/config"
+	"github.com/huawei/edge-bridge/internal/device"
+	"github.com/huawei/edge-bridge/internal/protocol"
+	"github.com/huawei/edge-bridge/internal/transport"
+)
+
+// Bridge orchestrates communication between device and cloud.
+type Bridge struct {
+	config      *config.Config
+	transport   transport.Transport
+	deviceMgr   *device.Manager
+	cloudAuth   *cloud.Authenticator
+	cloudClient *cloud.Client
+	cmdExecutor *CommandExecutor
+
+	metrics     []protocol.Metric
+	metricsLock sync.RWMutex
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+}
+
+// New creates a new bridge instance.
+func New(cfg *config.Config) (*Bridge, error) {
+	// Create transport based on config
+	var t transport.Transport
+	switch cfg.Device.Transport {
+	case "serial":
+		t = transport.NewSerialTransport(cfg.Device.Serial.Port, cfg.Device.Serial.Baud)
+	case "tcp":
+		t = transport.NewTCPTransport(cfg.Device.TCP.Host, cfg.Device.TCP.Port)
+	default:
+		return nil, fmt.Errorf("unknown transport type: %s", cfg.Device.Transport)
+	}
+
+	// Create device manager
+	deviceMgr := device.NewManager(t, nil)
+
+	// Create cloud authenticator
+	authConfig := &cloud.AuthConfig{
+		Username: cfg.Cloud.Auth.Username,
+		Password: cfg.Cloud.Auth.Password,
+	}
+	cloudAuth := cloud.NewAuthenticator(cfg.Cloud.BaseURL, authConfig)
+
+	// Create cloud client
+	clientConfig := &cloud.ClientConfig{
+		BaseURL:       cfg.Cloud.BaseURL,
+		Timeout:       cfg.Cloud.Timeout,
+		RetryAttempts: cfg.Cloud.RetryAttempts,
+	}
+	cloudClient := cloud.NewClient(clientConfig, cloudAuth)
+
+	// Create command executor
+	cmdExecutor := NewCommandExecutor(deviceMgr, cloudClient, cfg.Bridge.StationID)
+
+	return &Bridge{
+		config:      cfg,
+		transport:   t,
+		deviceMgr:   deviceMgr,
+		cloudAuth:   cloudAuth,
+		cloudClient: cloudClient,
+		cmdExecutor: cmdExecutor,
+	}, nil
+}
+
+// Start starts the bridge.
+func (b *Bridge) Start(ctx context.Context) error {
+	b.ctx, b.cancel = context.WithCancel(ctx)
+
+	// Setup metric handler
+	b.deviceMgr.Handler().OnMetrics(func(metrics []protocol.Metric) {
+		b.metricsLock.Lock()
+		b.metrics = metrics
+		b.metricsLock.Unlock()
+	})
+
+	// Setup alert handler
+	b.deviceMgr.Handler().OnAlert(func(msgType protocol.MessageType, payload []byte) {
+		b.handleAlert(msgType, payload)
+	})
+
+	// Connect to device
+	log.Printf("Connecting to device via %s...", b.config.Device.Transport)
+	if err := b.deviceMgr.Start(b.ctx); err != nil {
+		return fmt.Errorf("failed to start device manager: %w", err)
+	}
+
+	// Authenticate with cloud
+	log.Printf("Authenticating with cloud...")
+	if err := b.cloudAuth.Login(); err != nil {
+		log.Printf("Warning: Cloud authentication failed: %v", err)
+		// Continue without cloud - will retry later
+	} else {
+		log.Printf("Cloud authentication successful")
+	}
+
+	// Start metrics collection loop
+	b.wg.Add(1)
+	go b.metricsLoop()
+
+	// Start command polling loop
+	b.wg.Add(1)
+	go b.commandLoop()
+
+	log.Printf("Bridge started for station %s", b.config.Bridge.StationID)
+	return nil
+}
+
+// Stop stops the bridge gracefully.
+func (b *Bridge) Stop() error {
+	log.Printf("Stopping bridge...")
+
+	if b.cancel != nil {
+		b.cancel()
+	}
+
+	b.wg.Wait()
+
+	if err := b.deviceMgr.Stop(); err != nil {
+		log.Printf("Error stopping device manager: %v", err)
+	}
+
+	log.Printf("Bridge stopped")
+	return nil
+}
+
+func (b *Bridge) metricsLoop() {
+	defer b.wg.Done()
+
+	ticker := time.NewTicker(b.config.Bridge.MetricsInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-b.ctx.Done():
+			return
+		case <-ticker.C:
+			b.collectAndUploadMetrics()
+		}
+	}
+}
+
+func (b *Bridge) collectAndUploadMetrics() {
+	// Request metrics from device
+	metrics, err := b.deviceMgr.RequestMetrics(nil)
+	if err != nil {
+		log.Printf("Failed to collect metrics: %v", err)
+		return
+	}
+
+	log.Printf("Collected %d metrics from device", len(metrics))
+
+	// Store locally
+	b.metricsLock.Lock()
+	b.metrics = metrics
+	b.metricsLock.Unlock()
+
+	// Upload to cloud
+	if !b.cloudAuth.IsAuthenticated() {
+		if err := b.cloudAuth.Login(); err != nil {
+			log.Printf("Cloud authentication failed, skipping upload")
+			return
+		}
+	}
+
+	cloudMetrics := make([]cloud.MetricData, len(metrics))
+	for i, m := range metrics {
+		cloudMetrics[i] = cloud.MetricData{
+			Type:      protocol.MetricTypeString(m.Type),
+			Value:     float64(m.Value),
+			Timestamp: time.Now(),
+		}
+	}
+
+	resp, err := b.cloudClient.UploadMetrics(b.config.Bridge.StationID, cloudMetrics)
+	if err != nil {
+		log.Printf("Failed to upload metrics: %v", err)
+		return
+	}
+
+	log.Printf("Uploaded %d metrics to cloud (status: %s)", resp.Received, resp.Status)
+}
+
+func (b *Bridge) commandLoop() {
+	defer b.wg.Done()
+
+	ticker := time.NewTicker(b.config.Bridge.PollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-b.ctx.Done():
+			return
+		case <-ticker.C:
+			if !b.cloudAuth.IsAuthenticated() {
+				continue
+			}
+			if err := b.cmdExecutor.ProcessPendingCommands(); err != nil {
+				log.Printf("Error processing commands: %v", err)
+			}
+		}
+	}
+}
+
+func (b *Bridge) handleAlert(msgType protocol.MessageType, payload []byte) {
+	alertType := "UNKNOWN"
+	severity := "INFO"
+
+	switch msgType {
+	case protocol.MsgThresholdExceeded:
+		alertType = "THRESHOLD_EXCEEDED"
+		severity = "WARNING"
+	case protocol.MsgDeviceStateChange:
+		alertType = "STATE_CHANGE"
+		severity = "INFO"
+	case protocol.MsgError:
+		alertType = "ERROR"
+		severity = "ERROR"
+	}
+
+	alert := &cloud.AlertEvent{
+		StationID: b.config.Bridge.StationID,
+		Type:      alertType,
+		Severity:  severity,
+		Message:   string(payload),
+		Timestamp: time.Now(),
+	}
+
+	if b.cloudAuth.IsAuthenticated() {
+		if _, err := b.cloudClient.SendAlert(alert); err != nil {
+			log.Printf("Failed to send alert: %v", err)
+		}
+	}
+}
+
+// GetMetrics returns the latest collected metrics.
+func (b *Bridge) GetMetrics() []protocol.Metric {
+	b.metricsLock.RLock()
+	defer b.metricsLock.RUnlock()
+	result := make([]protocol.Metric, len(b.metrics))
+	copy(result, b.metrics)
+	return result
+}
+
+// GetDeviceStatus returns the current device status.
+func (b *Bridge) GetDeviceStatus() (*protocol.StatusPayload, error) {
+	return b.deviceMgr.RequestStatus()
+}
+
+// IsDeviceConnected returns true if connected to the device.
+func (b *Bridge) IsDeviceConnected() bool {
+	return b.deviceMgr.IsConnected()
+}
+
+// IsCloudConnected returns true if authenticated with the cloud.
+func (b *Bridge) IsCloudConnected() bool {
+	return b.cloudAuth.IsAuthenticated()
+}
+
+// StationID returns the configured station ID.
+func (b *Bridge) StationID() string {
+	return b.config.Bridge.StationID
+}
