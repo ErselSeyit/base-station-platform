@@ -1,0 +1,10 @@
+# AI Diagnostic Service Dependencies
+
+# Core
+pyserial>=3.5          # Serial/UART communication
+
+# Optional - Install based on your needs:
+# paho-mqtt>=1.6.1     # MQTT IoT protocol
+# flask>=2.3.0         # HTTP REST API
+# websockets>=10.0     # WebSocket support
+# requests>=2.28.0     # HTTP client for Ollama
