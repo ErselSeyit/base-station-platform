@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.huawei.common.dto.AlertEvent;
+import com.huawei.common.dto.DiagnosticResponse;
+import com.huawei.monitoring.client.DiagnosticClient;
 import com.huawei.monitoring.config.RabbitMQConfig;
 import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.AlertRule;
@@ -38,10 +40,12 @@ public class AlertingService {
 
     private final Map<String, AlertRule> rules = new ConcurrentHashMap<>();
     private final RabbitTemplate rabbitTemplate;
+    private final DiagnosticClient diagnosticClient;
 
     @Autowired(required = false)
-    public AlertingService(RabbitTemplate rabbitTemplate) {
+    public AlertingService(RabbitTemplate rabbitTemplate, DiagnosticClient diagnosticClient) {
         this.rabbitTemplate = rabbitTemplate; // Optional - will be null if RabbitMQ not configured
+        this.diagnosticClient = diagnosticClient; // AI diagnostic service client
         // Initialize default rules - in production, these would be from DB/config
         initializeDefaultRules();
     }
@@ -163,17 +167,53 @@ public class AlertingService {
                         alertEvent
                 );
                 
-                log.debug("Alert event published to RabbitMQ: ruleId={}, stationId={}", 
+                log.debug("Alert event published to RabbitMQ: ruleId={}, stationId={}",
                         rule.getId(), metric.getStationId());
+
+                // Request AI diagnosis asynchronously (non-blocking)
+                requestDiagnosis(alertEvent);
             } catch (AmqpException e) {
-                log.error("Failed to publish alert event to RabbitMQ: ruleId={}, stationId={}", 
+                log.error("Failed to publish alert event to RabbitMQ: ruleId={}, stationId={}",
                         rule.getId(), metric.getStationId(), e);
                 // Continue execution even if RabbitMQ fails - alert is still logged
             }
         } else {
-            log.debug("RabbitMQ not available, alert logged only: ruleId={}, stationId={}", 
+            log.debug("RabbitMQ not available, alert logged only: ruleId={}, stationId={}",
                     rule.getId(), metric.getStationId());
         }
+    }
+
+    /**
+     * Request AI diagnosis for an alert asynchronously.
+     * Logs the recommended action without blocking the alert flow.
+     */
+    private void requestDiagnosis(AlertEvent alert) {
+        if (diagnosticClient == null || !diagnosticClient.isEnabled()) {
+            return;
+        }
+
+        diagnosticClient.diagnoseAsync(alert)
+                .thenAccept(diagnosis -> {
+                    if (diagnosis.isActionable()) {
+                        log.info("AI DIAGNOSIS for alert {}: action='{}', confidence={}%, risk={}",
+                                alert.getAlertRuleId(),
+                                diagnosis.getAction(),
+                                Math.round(diagnosis.getConfidence() * 100),
+                                diagnosis.getRiskLevel());
+                        if (!diagnosis.getCommands().isEmpty()) {
+                            log.info("  Recommended commands: {}", diagnosis.getCommands());
+                        }
+                        log.info("  Expected outcome: {}", diagnosis.getExpectedOutcome());
+                    } else {
+                        log.debug("No actionable diagnosis for alert {}: {}",
+                                alert.getAlertRuleId(), diagnosis.getReasoning());
+                    }
+                })
+                .exceptionally(ex -> {
+                    log.debug("Diagnostic request failed for alert {}: {}",
+                            alert.getAlertRuleId(), ex.getMessage());
+                    return null;
+                });
     }
 
     // ========================================

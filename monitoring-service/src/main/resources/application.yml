@@ -67,6 +67,17 @@ management:
 websocket:
   allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://frontend:80,http://localhost:3000}
 
+# ============================================
+# AI DIAGNOSTIC SERVICE CONFIGURATION
+# ============================================
+# Configuration for the AI-powered diagnostic service
+# that provides automated problem analysis and solutions.
+# ============================================
+diagnostic:
+  service:
+    url: ${DIAGNOSTIC_SERVICE_URL:http://localhost:9091}
+    enabled: ${DIAGNOSTIC_SERVICE_ENABLED:true}
+
 logging:
   level:
     com.huawei.monitoring: DEBUG
