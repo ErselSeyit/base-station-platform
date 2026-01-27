@@ -5,7 +5,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.cloud.netflix.eureka.EurekaClientAutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
@@ -14,8 +13,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication(
         exclude = {
                 RedisAutoConfiguration.class,
-                RedisRepositoriesAutoConfiguration.class,
-                EurekaClientAutoConfiguration.class
+                RedisRepositoriesAutoConfiguration.class
         })
 @ComponentScan(
         basePackages = "com.huawei.basestation",
@@ -37,4 +35,3 @@ public class ContractTestApplication {
         SpringApplication.run(ContractTestApplication.class, args);
     }
 }
-

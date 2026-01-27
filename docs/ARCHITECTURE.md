@@ -9,15 +9,17 @@ graph LR
 
     Client --> GW
 
-    GW --> BS[Base Station<br/>:8084]
-    GW --> MS[Monitoring<br/>:8085]
-    GW --> NS[Notifications<br/>:8086]
-    GW --> AS[Auth<br/>:8087]
+    GW --> AS[Auth<br/>:8084]
+    GW --> BS[Base Station<br/>:8081]
+    GW --> MS[Monitoring<br/>:8082]
+    GW --> NS[Notifications<br/>:8083]
 
-    BS --> PG1[(PostgreSQL)]
+    MS --> AI[AI Diagnostic<br/>:9091]
+
+    BS --> PG[(PostgreSQL)]
+    AS --> PG
+    NS --> PG
     MS --> MDB[(MongoDB)]
-    NS --> PG2[(PostgreSQL)]
-    AS --> PG3[(PostgreSQL)]
 
     GW --> Redis[(Redis)]
     MS -.-> RMQ[RabbitMQ]
@@ -29,6 +31,7 @@ graph LR
     style MS fill:#f44336,color:#fff
     style NS fill:#00bcd4,color:#fff
     style AS fill:#ff9800,color:#fff
+    style AI fill:#667eea,color:#fff
 ```
 
 ## Services
@@ -36,71 +39,85 @@ graph LR
 | Service | Port | Database | Purpose |
 |---------|------|----------|---------|
 | **Frontend** | 3000 | - | React dashboard with real-time updates |
-| **API Gateway** | 8080 | Redis | Central routing, rate limiting, auth |
-| **Eureka Server** | 8762 | - | Service discovery |
-| **Base Station** | 8084 | PostgreSQL | Station CRUD, geo-search |
-| **Monitoring** | 8085 | MongoDB | Real-time metrics, WebSocket streaming |
-| **Notification** | 8086 | PostgreSQL | Alerts, notifications |
-| **Auth** | 8087 | PostgreSQL | JWT authentication |
+| **API Gateway** | 8080 | Redis | Central routing, rate limiting, JWT validation |
+| **Auth Service** | 8084 | PostgreSQL | JWT authentication, user management |
+| **Base Station** | 8081 | PostgreSQL | Station CRUD, geospatial search |
+| **Monitoring** | 8082 | MongoDB | Real-time metrics, WebSocket streaming |
+| **Notification** | 8083 | PostgreSQL | Alerts, event-driven notifications |
+| **AI Diagnostic** | 9091 | - | Python AI engine for problem detection |
+
+## Service Discovery
+
+The platform uses **Docker DNS** for service discovery (container names as hostnames). This approach:
+- Eliminates Eureka overhead
+- Simplifies deployment
+- Works identically in Docker Compose and Kubernetes
+
+Services reference each other by container name (e.g., `http://auth-service:8084`).
 
 ## Technology Stack
 
-### Backend
-| Technology | Version | Why |
-|------------|---------|-----|
-| **Java 21** | LTS | Virtual threads for high-concurrency WebSocket handling; records for immutable DTOs |
-| **Spring Boot 3.4** | Latest | Auto-configuration reduces boilerplate; native observability with Actuator |
-| **Spring Cloud Gateway** | 2024.0.x | Non-blocking reverse proxy; built-in rate limiting with Redis; JWT validation at edge |
-| **Spring Data JPA/MongoDB** | - | Repository abstraction for polyglot persistence; query derivation reduces boilerplate |
-| **Resilience4j** | 2.x | Lightweight circuit breakers; decorators integrate cleanly with Spring |
+### Backend (Java)
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **Java 21** | LTS | Virtual threads for high-concurrency WebSocket handling |
+| **Spring Boot 3.4** | Latest | Auto-configuration, native observability with Actuator |
+| **Spring Cloud Gateway** | 2024.0.x | Non-blocking reverse proxy, rate limiting, JWT validation |
+| **Spring Data JPA/MongoDB** | - | Repository abstraction for polyglot persistence |
+| **Resilience4j** | 2.x | Circuit breakers, retry logic |
+
+### AI Service (Python)
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **Python** | 3.12 | AI diagnostic engine |
+| **FastAPI** | 0.115+ | Async HTTP server |
+| **OpenTelemetry** | Latest | Distributed tracing with Zipkin |
+| **HMAC Authentication** | - | Service-to-service security |
 
 ### Frontend
-| Technology | Version | Why |
-|------------|---------|-----|
-| **React 18** | Latest | Concurrent rendering for smooth real-time updates; hooks for clean state management |
-| **TypeScript** | 5.x | Compile-time type safety catches bugs early; better IDE support |
-| **Material-UI** | 5.x | Production-ready components; consistent design system; accessibility built-in |
-| **Recharts** | 2.x | Composable chart components; responsive by default |
-| **React Query** | 5.x | Server state management with caching; automatic background refetching |
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **React** | 18 | Concurrent rendering, hooks |
+| **TypeScript** | 5.x | Compile-time type safety |
+| **Material-UI** | 5.x | Component library |
+| **TanStack Query** | 5.x | Server state management |
+| **Recharts** | 2.x | Data visualization |
+| **Leaflet** | 1.9+ | Interactive maps |
+| **Framer Motion** | 11+ | Animations |
 
 ### Infrastructure
-| Technology | Version | Why |
-|------------|---------|-----|
-| **PostgreSQL** | 18 | ACID transactions for station inventory; geospatial with PostGIS potential |
-| **MongoDB** | 8.2 | Time-series optimized storage; horizontal scaling for high-volume metrics |
-| **Redis** | 8 | Sub-millisecond rate limiting at gateway; could extend to session/cache |
-| **RabbitMQ** | 4 | Reliable async messaging with DLQ; decouples alerting from notification delivery |
-
-### DevOps
-| Technology | Why |
-|------------|-----|
-| **Docker Compose** | Single-command local stack; mirrors production topology |
-| **GitHub Actions** | Native GitHub integration; matrix builds for parallel testing |
-| **Prometheus + Grafana** | Industry standard observability; PromQL for alerting rules |
-| **Testcontainers** | Real databases in tests; no mocking data layer behavior |
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **PostgreSQL** | 18 | Consolidated database for stations, auth, notifications |
+| **MongoDB** | 8.2 | Time-series metrics storage |
+| **Redis** | 8 | Rate limiting, caching |
+| **RabbitMQ** | 3.13 | Async messaging for alerts |
+| **Prometheus** | Latest | Metrics collection |
+| **Grafana** | Latest | Dashboards and visualization |
+| **Zipkin** | Latest | Distributed tracing |
 
 ## Design Decisions
 
-### Why Microservices?
+### Consolidated PostgreSQL
 
-This project intentionally uses microservices to demonstrate:
-- Service discovery with Eureka
-- API gateway patterns (routing, rate limiting, auth)
-- Polyglot persistence (right database for each use case)
-- Async messaging for decoupled alerting
-- Circuit breakers for resilience
+Previously used 3 separate PostgreSQL instances. Now consolidated to single instance with separate schemas:
+- Reduces resource usage
+- Simplifies backup/restore
+- Appropriate for current scale
 
-For production MVP, starting with a modular monolith and extracting services only when scaling demands it is more appropriate. The microservices architecture here showcases patterns applicable selectively in production environments.
+### Docker DNS vs Service Discovery
 
-### Why Multiple Databases?
+Removed Eureka service discovery in favor of Docker DNS:
+- Container names serve as hostnames
+- No additional infrastructure
+- Works seamlessly with Docker Compose and Kubernetes
 
-| Database | Service | Reason |
-|----------|---------|--------|
-| PostgreSQL | Stations, Auth, Notifications | ACID transactions, relational integrity |
-| MongoDB | Metrics | Time-series optimized, high write throughput |
-| Redis | Gateway | Sub-ms rate limiting lookups |
+### AI Diagnostic Integration
 
-This demonstrates polyglot persistence where each store matches its workload.
+Python AI service communicates with Java services via:
+- HMAC-SHA256 authenticated REST API
+- OpenTelemetry for distributed tracing
+- Health checks via `/health` endpoint
 
 ## Key Features
 
@@ -109,17 +126,42 @@ This demonstrates polyglot persistence where each store matches its workload.
 - **Event-Driven Alerts**: Automatic threshold monitoring via RabbitMQ
 - **Auto-Refresh**: Charts update every 30 seconds
 
+### AI Diagnostics
+- Automated problem detection for temperature, CPU, memory, signal
+- Confidence-scored remediation suggestions
+- Device communication protocol for MIPS-based stations
+- Real-time event visualization in frontend
+
 ### Geographic Search
-PostGIS-ready architecture for finding stations within radius (e.g., "find all stations within 10km").
+PostGIS-ready architecture for geospatial queries (stations within radius).
 
 ### Resilience
 - Circuit breakers prevent cascade failures
-- Rate limiting at gateway protects backend services
-- Retry logic for transient failures
+- Rate limiting at gateway (10 req/s, 20-token burst)
+- Retry logic with exponential backoff
+
+### Security
+- Database-backed JWT authentication
+- HMAC-SHA256 service-to-service auth
+- Brute-force protection with account lockout
+- Configurable CORS policies
 
 ## Observability
 
-- **Metrics**: Prometheus scrapes `/actuator/prometheus` endpoints
-- **Dashboards**: Grafana pre-configured with service health panels
-- **Logs**: Centralized via Docker Compose logging driver
-- **Tracing**: Zipkin for distributed tracing across microservices
+| Component | Purpose |
+|-----------|---------|
+| **Prometheus** | Scrapes `/actuator/prometheus` endpoints |
+| **Grafana** | Pre-configured dashboards |
+| **Zipkin** | Distributed tracing across services |
+| **Structured Logging** | JSON logs with logstash-logback-encoder |
+| **Health Checks** | Custom health indicators for dependencies |
+
+## Container Overview
+
+```
+14 containers total:
+- 6 application services (gateway, auth, base-station, monitoring, notification, frontend)
+- 1 AI service (ai-diagnostic)
+- 4 databases (postgres, mongodb, redis, rabbitmq)
+- 3 observability (prometheus, grafana, zipkin)
+```

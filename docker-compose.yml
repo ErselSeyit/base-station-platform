@@ -1,116 +1,65 @@
 # Base Station Operations & Maintenance Platform - Docker Compose
 #
-# SECURITY WARNING:
-# This file uses default passwords for development convenience.
-# For production deployment, ALWAYS set environment variables with strong passwords.
-# 
-# To use environment variables:
-# 1. Copy .env.example to .env
-# 2. Update .env with strong, unique passwords
-# 3. Docker Compose will automatically use values from .env file
+# Production-optimized stack:
+#   - Single PostgreSQL with multiple databases
+#   - Direct service routing (no Eureka)
+#   - HMAC authentication (no Keycloak)
+#   - Distributed tracing with Zipkin
 #
-# Default values (used if .env not set):
-# - PostgreSQL passwords: "postgres"
-# - RabbitMQ credentials: "admin/admin"
-# - These defaults are INSECURE and should NOT be used in production
+# Container count: 11 services
+# Required environment variables - copy .env.example to .env and configure
+#
+# REQUIRED VARIABLES (will fail without these):
+#   POSTGRES_USER, POSTGRES_PASSWORD
+#   MONGODB_USER, MONGODB_PASSWORD
+#   RABBITMQ_USER, RABBITMQ_PASSWORD
+#   GRAFANA_PASSWORD
+#   JWT_SECRET (min 32 chars)
+#   SECURITY_INTERNAL_SECRET
 #
 services:
-  postgres-basestation:
+  # ============================================
+  # DATABASES
+  # ============================================
+  postgres:
     image: postgres:18-alpine
-    container_name: postgres-basestation
+    container_name: postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_BASESTATION_DB:-basestationdb}
-      POSTGRES_USER: ${POSTGRES_BASESTATION_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_MULTIPLE_DATABASES: basestationdb,notificationdb,authdb
     ports:
-      - "5434:5432"
+      - "5432:5432"
     volumes:
-      - postgres-basestation-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
     networks:
       - database-network
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 512M
+          cpus: '1.5'
+          memory: 768M
         reservations:
           cpus: '0.5'
           memory: 256M
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 60s
-
-  postgres-notification:
-    image: postgres:18-alpine
-    container_name: postgres-notification
-    environment:
-      POSTGRES_DB: ${POSTGRES_NOTIFICATION_DB:-notificationdb}
-      POSTGRES_USER: ${POSTGRES_NOTIFICATION_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_NOTIFICATION_PASSWORD:-postgres}
-    ports:
-      - "5435:5432"
-    volumes:
-      - postgres-notification-data:/var/lib/postgresql/data
-    networks:
-      - database-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-
-  postgres-auth:
-    image: postgres:18-alpine
-    container_name: postgres-auth
-    environment:
-      POSTGRES_DB: ${POSTGRES_AUTH_DB:-authdb}
-      POSTGRES_USER: ${POSTGRES_AUTH_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_AUTH_PASSWORD:-postgres}
-    ports:
-      - "5436:5432"
-    volumes:
-      - postgres-auth-data:/var/lib/postgresql/data
-    networks:
-      - database-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
+      start_period: 30s
 
   mongodb:
     image: mongo:8.2
     container_name: mongodb
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-admin}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER:?MONGODB_USER is required}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:?MONGODB_PASSWORD is required}
       MONGO_INITDB_DATABASE: monitoringdb
     ports:
-      - "27018:27017"
+      - "27017:27017"
     volumes:
       - mongodb-data:/data/db
     networks:
@@ -119,21 +68,22 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 1024M
-        reservations:
-          cpus: '0.75'
+          cpus: '1.0'
           memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
     healthcheck:
-      test: ["CMD", "mongosh", "--username", "${MONGODB_USER:-admin}", "--password", "${MONGODB_PASSWORD:-admin}", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 30s
 
   redis:
     image: redis:8-alpine
     container_name: redis
+    # Note: Only set password via config if REDIS_PASSWORD is non-empty
     ports:
       - "6379:6379"
     volumes:
@@ -145,9 +95,6 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.25'
           memory: 128M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -155,56 +102,12 @@ services:
       timeout: 5s
       retries: 5
 
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    container_name: keycloak
-    environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres-auth:5432/${POSTGRES_AUTH_DB:-authdb}
-      KC_DB_USERNAME: ${POSTGRES_AUTH_USER:-postgres}
-      KC_DB_PASSWORD: ${POSTGRES_AUTH_PASSWORD:-postgres}
-      KC_HOSTNAME_STRICT: "false"
-      KC_HTTP_ENABLED: "true"
-      KC_PROXY: edge
-      JAVA_OPTS: "-Xms384m -Xmx768m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC"
-    command:
-      - start-dev
-      - --import-realm
-    ports:
-      - "8090:8080"
-    volumes:
-      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
-    networks:
-      - app-network
-      - database-network
-      - frontend-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 768M
-        reservations:
-          cpus: '0.5'
-          memory: 384M
-    depends_on:
-      postgres-auth:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
   rabbitmq:
     image: rabbitmq:4-management-alpine
     container_name: rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER is required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -216,9 +119,6 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
           cpus: '0.5'
           memory: 256M
     healthcheck:
@@ -227,11 +127,14 @@ services:
       timeout: 5s
       retries: 5
 
+  # ============================================
+  # OBSERVABILITY
+  # ============================================
   zipkin:
     image: openzipkin/zipkin:3.5
     container_name: zipkin
     environment:
-      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC"
+      JAVA_OPTS: "-Xms128m -Xmx256m -XX:+UseG1GC"
     ports:
       - "9411:9411"
     networks:
@@ -242,10 +145,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+          memory: 384M
 
   prometheus:
     image: prom/prometheus:latest
@@ -253,11 +153,12 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
     networks:
       - monitoring-network
       - app-network
@@ -266,9 +167,6 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
           memory: 256M
 
   grafana:
@@ -277,11 +175,11 @@ services:
     ports:
       - "3001:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD is required}
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     networks:
       - monitoring-network
     restart: unless-stopped
@@ -290,38 +188,37 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
     depends_on:
       - prometheus
 
-  eureka-server:
+  # ============================================
+  # APPLICATION SERVICES
+  # ============================================
+  ai-diagnostic:
     build:
-      context: .
-      dockerfile: eureka-server/Dockerfile
-    container_name: eureka-server
+      context: ./ai-diagnostic
+      dockerfile: Dockerfile
+    container_name: ai-diagnostic
     environment:
-      JAVA_OPTS: "-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+      DIAGNOSTIC_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     ports:
-      - "8762:8761"
+      - "9091:9091"
     networks:
       - app-network
+      - monitoring-network
     restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: '0.5'
-          memory: 384M
-        reservations:
-          cpus: '0.25'
-          memory: 192M
+          memory: 128M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9091/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 90s
+      start_period: 10s
 
   base-station-service:
     build:
@@ -329,21 +226,22 @@ services:
       dockerfile: base-station-service/Dockerfile
     container_name: base-station-service
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-basestation:5432/${POSTGRES_BASESTATION_DB:-basestationdb}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_BASESTATION_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_BASESTATION_PASSWORD:-postgres}
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/basestationdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 10
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
       MANAGEMENT_TRACING_ENDPOINT: http://zipkin:9411
       SECURITY_INTERNAL_ENABLED: "true"
-      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
-      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
+      JAVA_OPTS: "-Xms256m -Xmx384m -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
     ports:
-      - "8084:8081"
+      - "8081:8081"
     depends_on:
-      postgres-basestation:
+      postgres:
         condition: service_healthy
-      eureka-server:
-        condition: service_started
     networks:
       - app-network
       - database-network
@@ -353,36 +251,7 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 640M
-        reservations:
-          cpus: '0.5'
-          memory: 320M
-
-  ai-diagnostic:
-    build:
-      context: ./ai-diagnostic
-      dockerfile: Dockerfile
-    container_name: ai-diagnostic
-    ports:
-      - "9091:9091"
-      - "9095:9090"
-    networks:
-      - app-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+          memory: 512M
 
   monitoring-service:
     build:
@@ -393,28 +262,25 @@ services:
       SPRING_DATA_MONGODB_HOST: mongodb
       SPRING_DATA_MONGODB_PORT: 27017
       SPRING_DATA_MONGODB_DATABASE: monitoringdb
-      SPRING_DATA_MONGODB_USERNAME: ${MONGODB_USER:-admin}
-      SPRING_DATA_MONGODB_PASSWORD: ${MONGODB_PASSWORD:-admin}
+      SPRING_DATA_MONGODB_USERNAME: ${MONGODB_USER:?MONGODB_USER is required}
+      SPRING_DATA_MONGODB_PASSWORD: ${MONGODB_PASSWORD:?MONGODB_PASSWORD is required}
       SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: admin
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
-      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin}
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:?RABBITMQ_USER is required}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       SECURITY_INTERNAL_ENABLED: "true"
-      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
       DIAGNOSTIC_SERVICE_URL: http://ai-diagnostic:9091
       DIAGNOSTIC_SERVICE_ENABLED: "true"
-      JAVA_OPTS: "-Xms512m -Xmx768m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
     ports:
-      - "8085:8082"
+      - "8082:8082"
     depends_on:
       mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      eureka-server:
-        condition: service_started
       ai-diagnostic:
         condition: service_healthy
     networks:
@@ -426,39 +292,35 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 960M
-        reservations:
-          cpus: '0.5'
-          memory: 480M
+          memory: 640M
 
   notification-service:
     build:
       context: .
       dockerfile: notification-service/Dockerfile
     container_name: notification-service
-    command: ["java", "-Dspring.main.allow-circular-references=true", "-jar", "/app/app.jar"]
     environment:
-      SPRING_MAIN_ALLOW_CIRCULAR_REFERENCES: "true"
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-notification:5432/${POSTGRES_NOTIFICATION_DB:-notificationdb}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_NOTIFICATION_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_NOTIFICATION_PASSWORD:-postgres}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notificationdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 10
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
-      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin}
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:?RABBITMQ_USER is required}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       SECURITY_INTERNAL_ENABLED: "true"
-      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
-      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
+      JAVA_OPTS: "-Xms256m -Xmx384m -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
     ports:
-      - "8086:8083"
+      - "8083:8083"
     depends_on:
-      postgres-notification:
+      postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      eureka-server:
-        condition: service_started
     networks:
       - app-network
       - database-network
@@ -468,10 +330,7 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 640M
-        reservations:
-          cpus: '0.5'
-          memory: 320M
+          memory: 512M
 
   auth-service:
     build:
@@ -479,21 +338,23 @@ services:
       dockerfile: auth-service/Dockerfile
     container_name: auth-service
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/${POSTGRES_AUTH_DB:-authdb}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_AUTH_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_AUTH_PASSWORD:-postgres}
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET environment variable is required}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 10
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      AUTH_ADMIN_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
       SECURITY_INTERNAL_ENABLED: "true"
-      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
-      JAVA_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
+      JAVA_OPTS: "-Xms256m -Xmx384m -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
     ports:
-      - "8087:8084"
+      - "8084:8084"
     depends_on:
-      postgres-auth:
+      postgres:
         condition: service_healthy
-      eureka-server:
-        condition: service_started
     networks:
       - app-network
       - database-network
@@ -503,10 +364,7 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 640M
-        reservations:
-          cpus: '0.5'
-          memory: 320M
+          memory: 512M
 
   api-gateway:
     build:
@@ -514,15 +372,19 @@ services:
       dockerfile: api-gateway/Dockerfile
     container_name: api-gateway
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       MANAGEMENT_TRACING_ENDPOINT: http://zipkin:9411
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_SIMULATE_VALIDATION: "true"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       SECURITY_INTERNAL_ENABLED: "true"
-      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET environment variable is required}
-      JAVA_OPTS: "-Xms512m -Xmx1024m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      # Direct service URLs
+      ROUTE_BASESTATION_URL: http://base-station-service:8081
+      ROUTE_MONITORING_URL: http://monitoring-service:8082
+      ROUTE_NOTIFICATION_URL: http://notification-service:8083
+      ROUTE_AUTH_URL: http://auth-service:8084
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
     ports:
       - "8080:8080"
     depends_on:
@@ -530,7 +392,6 @@ services:
       - monitoring-service
       - notification-service
       - auth-service
-      - eureka-server
       - redis
     networks:
       - frontend-network
@@ -540,10 +401,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 1280M
-        reservations:
-          cpus: '0.75'
+          cpus: '1.0'
           memory: 640M
 
   frontend:
@@ -551,6 +409,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: frontend
+    environment:
+      API_URL: ${API_URL:-http://api-gateway:8080}
     ports:
       - "3000:80"
     depends_on:
@@ -563,15 +423,10 @@ services:
       resources:
         limits:
           cpus: '0.25'
-          memory: 128M
-        reservations:
-          cpus: '0.1'
           memory: 64M
 
 volumes:
-  postgres-basestation-data:
-  postgres-notification-data:
-  postgres-auth-data:
+  postgres-data:
   mongodb-data:
   redis-data:
   rabbitmq-data:
@@ -579,20 +434,11 @@ volumes:
   grafana-data:
 
 networks:
-  # Public-facing network - Only gateway and frontend
   frontend-network:
     driver: bridge
-
-  # Application services network - Gateway communicates with services
   app-network:
     driver: bridge
-    internal: false  # Gateway needs external access
-
-  # Database network - Isolated for data layer
   database-network:
     driver: bridge
-    internal: false  # Changed to false to allow service-to-database communication
-
-  # Monitoring network - Observability stack
   monitoring-network:
     driver: bridge

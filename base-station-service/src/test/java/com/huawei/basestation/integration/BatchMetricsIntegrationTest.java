@@ -65,7 +65,6 @@ import com.huawei.basestation.repository.BaseStationRepository;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         classes = {IntegrationTestApplication.class},
         properties = {
-                "eureka.client.enabled=false",
                 "spring.cache.type=none",
                 "spring.main.allow-bean-definition-overriding=true",
                 "spring.profiles.active=integration-test"
@@ -116,9 +115,7 @@ class BatchMetricsIntegrationTest {
 
         String monitoringServiceUrl = wireMockServer.baseUrl();
         registry.add("monitoring.service.url", () -> monitoringServiceUrl);
-        
-        // Disable Eureka for tests
-        registry.add("eureka.client.enabled", () -> "false");
+
         // Disable Redis for tests
         registry.add("spring.data.redis.host", () -> "localhost");
         registry.add("spring.cache.type", () -> "none");

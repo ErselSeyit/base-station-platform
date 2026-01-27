@@ -74,9 +74,5 @@
         
         <!-- Reactor Netty: WARN to avoid connection spam -->
         <logger name="reactor.netty" level="WARN"/>
-        
-        <!-- Eureka -->
-        <logger name="com.netflix.discovery" level="INFO"/>
-        <logger name="com.netflix.eureka" level="INFO"/>
     </springProfile>
 </configuration>

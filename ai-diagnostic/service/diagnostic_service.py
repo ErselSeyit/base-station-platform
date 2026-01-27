@@ -25,7 +25,23 @@ import json
 import logging
 import threading
 import socket
+import os
+import hmac
+import hashlib
+from functools import wraps
 from abc import ABC, abstractmethod
+
+# OpenTelemetry tracing (optional)
+try:
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.exporter.zipkin.json import ZipkinExporter
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+    OTEL_AVAILABLE = True
+except ImportError:
+    OTEL_AVAILABLE = False
 
 # Optional serial support
 try:
@@ -535,13 +551,76 @@ class MQTTAdapter(ProtocolAdapter):
 
 
 class HTTPAdapter(ProtocolAdapter):
-    """HTTP/REST API adapter"""
+    """HTTP/REST API adapter with HMAC authentication and OpenTelemetry tracing"""
 
     def __init__(self, on_problem: Callable, host: str = "0.0.0.0", port: int = 9091):
         super().__init__(on_problem)
         self.host = host
         self.port = port
         self.app = None
+        self.secret = os.environ.get("DIAGNOSTIC_SECRET", "")
+        self.tracer = None
+        require_auth = os.environ.get("DIAGNOSTIC_REQUIRE_AUTH", "false").lower() == "true"
+        if not self.secret:
+            if require_auth:
+                raise ValueError("DIAGNOSTIC_SECRET is required when DIAGNOSTIC_REQUIRE_AUTH=true")
+            logger.warning("DIAGNOSTIC_SECRET not set - authentication disabled (set DIAGNOSTIC_REQUIRE_AUTH=true in production)")
+
+    def _setup_tracing(self):
+        """Initialize OpenTelemetry tracing"""
+        if not OTEL_AVAILABLE:
+            logger.info("OpenTelemetry not available - tracing disabled")
+            return
+
+        zipkin_endpoint = os.environ.get("ZIPKIN_ENDPOINT", "http://zipkin:9411/api/v2/spans")
+
+        try:
+            resource = Resource.create({"service.name": "ai-diagnostic"})
+            provider = TracerProvider(resource=resource)
+            exporter = ZipkinExporter(endpoint=zipkin_endpoint)
+            provider.add_span_processor(BatchSpanProcessor(exporter))
+            trace.set_tracer_provider(provider)
+            self.tracer = trace.get_tracer(__name__)
+
+            # Instrument Flask app
+            if self.app:
+                FlaskInstrumentor().instrument_app(self.app)
+
+            logger.info(f"OpenTelemetry tracing enabled, exporting to {zipkin_endpoint}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize tracing: {e}")
+
+    def _verify_hmac(self, body: bytes, signature: str) -> bool:
+        """Verify HMAC signature of request body"""
+        if not self.secret:
+            return True  # Auth disabled if no secret configured
+
+        expected = hmac.new(
+            self.secret.encode(),
+            body,
+            hashlib.sha256
+        ).hexdigest()
+
+        return hmac.compare_digest(expected, signature)
+
+    def _require_auth(self, f):
+        """Decorator to require HMAC authentication"""
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if not self.secret:
+                return f(*args, **kwargs)
+
+            signature = request.headers.get("X-HMAC-Signature", "")
+            if not signature:
+                logger.warning("Missing X-HMAC-Signature header")
+                return jsonify({"error": "Missing authentication"}), 401
+
+            if not self._verify_hmac(request.get_data(), signature):
+                logger.warning("Invalid HMAC signature from %s", request.remote_addr)
+                return jsonify({"error": "Invalid authentication"}), 403
+
+            return f(*args, **kwargs)
+        return decorated
 
     def start(self):
         if not FLASK_AVAILABLE:
@@ -551,7 +630,11 @@ class HTTPAdapter(ProtocolAdapter):
         self.running = True
         self.app = Flask(__name__)
 
+        # Setup OpenTelemetry tracing
+        self._setup_tracing()
+
         @self.app.route('/diagnose', methods=['POST'])
+        @self._require_auth
         def diagnose():
             problem_data = request.json
             problem = Problem(**problem_data, source_protocol="http")
@@ -560,7 +643,11 @@ class HTTPAdapter(ProtocolAdapter):
 
         @self.app.route('/health', methods=['GET'])
         def health():
-            return jsonify({"status": "ok"})
+            return jsonify({
+                "status": "ok",
+                "authenticated": bool(self.secret),
+                "tracing": OTEL_AVAILABLE and self.tracer is not None
+            })
 
         threading.Thread(
             target=lambda: self.app.run(host=self.host, port=self.port, threaded=True),

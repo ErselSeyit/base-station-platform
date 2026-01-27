@@ -1,5 +1,7 @@
 package com.huawei.monitoring.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.common.dto.AlertEvent;
 import com.huawei.common.dto.DiagnosticRequest;
 import com.huawei.common.dto.DiagnosticResponse;
@@ -8,10 +10,17 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.HexFormat;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,14 +38,18 @@ import java.util.concurrent.atomic.AtomicInteger;
  * - Fallback responses when service unavailable
  */
 @Component
+@SuppressWarnings("null") // Duration.ofMillis, MediaType.APPLICATION_JSON are never null
 public class DiagnosticClient {
 
     private static final Logger log = LoggerFactory.getLogger(DiagnosticClient.class);
     private static final int MAX_FAILURES = 5;
     private static final Duration CIRCUIT_RESET_TIME = Duration.ofSeconds(30);
+    private static final String HMAC_ALGORITHM = "HmacSHA256";
 
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
     private final String diagnosticServiceUrl;
+    private final String secret;
     private final boolean enabled;
 
     // Simple circuit breaker state
@@ -46,15 +59,50 @@ public class DiagnosticClient {
 
     public DiagnosticClient(
             RestClient.Builder restClientBuilder,
+            ObjectMapper objectMapper,
             @Value("${diagnostic.service.url:http://localhost:9091}") String diagnosticServiceUrl,
-            @Value("${diagnostic.service.enabled:true}") boolean enabled) {
+            @Value("${diagnostic.service.secret:}") String secret,
+            @Value("${diagnostic.service.enabled:true}") boolean enabled,
+            @Value("${diagnostic.service.timeout-ms:5000}") int timeoutMs) {
         this.diagnosticServiceUrl = diagnosticServiceUrl;
+        this.objectMapper = objectMapper;
+        this.secret = secret;
         this.enabled = enabled;
+
+        // Configure timeout for HTTP requests
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofMillis(timeoutMs));
+        requestFactory.setReadTimeout(Duration.ofMillis(timeoutMs));
+
         this.restClient = restClientBuilder
                 .baseUrl(diagnosticServiceUrl)
+                .requestFactory(requestFactory)
                 .build();
 
-        log.info("DiagnosticClient initialized: url={}, enabled={}", diagnosticServiceUrl, enabled);
+        if (secret == null || secret.isBlank()) {
+            log.warn("DiagnosticClient: No secret configured - requests will not be authenticated");
+        }
+        log.info("DiagnosticClient initialized: url={}, enabled={}, authenticated={}, timeout={}ms",
+                diagnosticServiceUrl, enabled, secret != null && !secret.isBlank(), timeoutMs);
+    }
+
+    /**
+     * Compute HMAC-SHA256 signature for request body.
+     */
+    private String computeHmac(String body) {
+        if (secret == null || secret.isBlank()) {
+            return "";
+        }
+        try {
+            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
+            SecretKeySpec keySpec = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM);
+            mac.init(keySpec);
+            byte[] hmacBytes = mac.doFinal(body.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hmacBytes);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            log.error("Failed to compute HMAC: {}", e.getMessage());
+            return "";
+        }
     }
 
     /**
@@ -101,9 +149,20 @@ public class DiagnosticClient {
         log.info("Requesting diagnosis for problem: {} (code={})", request.getId(), request.getCode());
 
         try {
-            DiagnosticResponse response = restClient.post()
+            // Serialize request body for HMAC computation
+            String requestBody = objectMapper.writeValueAsString(request);
+            String hmacSignature = computeHmac(requestBody);
+
+            var requestSpec = restClient.post()
                     .uri("/diagnose")
-                    .contentType(MediaType.APPLICATION_JSON)
+                    .contentType(MediaType.APPLICATION_JSON);
+
+            // Add HMAC header if secret is configured
+            if (!hmacSignature.isEmpty()) {
+                requestSpec = requestSpec.header("X-HMAC-Signature", hmacSignature);
+            }
+
+            DiagnosticResponse response = requestSpec
                     .body(request)
                     .retrieve()
                     .body(DiagnosticResponse.class);
@@ -119,6 +178,9 @@ public class DiagnosticClient {
 
             return DiagnosticResponse.fallback(request.getId(), "Empty response from service");
 
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize request: {}", e.getMessage());
+            return DiagnosticResponse.fallback(request.getId(), "Serialization error: " + e.getMessage());
         } catch (RestClientException e) {
             onFailure();
             log.warn("Diagnostic service call failed: {}", e.getMessage());

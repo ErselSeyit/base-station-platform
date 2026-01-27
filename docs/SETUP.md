@@ -6,6 +6,7 @@
 - Maven 3.9+
 - Docker 20.10+
 - Docker Compose 2.0+
+- Node.js 18+ (for frontend development)
 
 ## Quick Start
 
@@ -17,7 +18,7 @@ docker compose up -d
 Access the application:
 - **Dashboard**: http://localhost:3000
 - **API Gateway**: http://localhost:8080
-- **Eureka Dashboard**: http://localhost:8762
+- **AI Diagnostics**: http://localhost:9091
 
 Stop services:
 ```bash
@@ -42,9 +43,9 @@ mvn spring-boot:run
 ```
 
 ### Seed Data
-Generate realistic test data (10 stations, 7 days of metrics):
+Initialize databases with demo data:
 ```bash
-python3 scripts/seed_realistic_data.py
+make docker_init_db
 ```
 
 ### View Logs
@@ -56,96 +57,68 @@ docker compose logs -f
 docker compose logs -f monitoring-service
 ```
 
-### Restart Service
+### Rebuild Service
 ```bash
-# Rebuild and restart
-docker compose build monitoring-service
-docker compose restart monitoring-service
+docker compose build monitoring-service --no-cache
+docker compose up -d monitoring-service
 ```
 
 ## Security Configuration
 
-This is a **portfolio demonstration** project. The architecture supports production upgrades:
+All credentials are provided via environment variables - no hardcoded defaults.
 
-| Current State | Production Upgrade |
-|---------------|-------------------|
-| Static JWT secret | Vault/AWS Secrets Manager with rotation |
-| Simulated tokens for dev | OAuth2/OIDC with real IdP (Keycloak, Auth0) |
-| No token revocation | Redis blacklist or short-lived + refresh tokens |
-| Basic gateway validation | JWKS endpoint discovery |
-| **Environment-based credentials** | **✅ Kubernetes Secrets (ready)** |
+### Required Environment Variables
 
-### Credential Management
+| Variable | Description |
+|----------|-------------|
+| `POSTGRES_USER` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | PostgreSQL password |
+| `MONGODB_USER` | MongoDB username |
+| `MONGODB_PASSWORD` | MongoDB password |
+| `RABBITMQ_USER` | RabbitMQ username |
+| `RABBITMQ_PASSWORD` | RabbitMQ password |
+| `JWT_SECRET` | JWT signing secret (min 32 chars) |
+| `AUTH_ADMIN_PASSWORD` | Admin user password (min 12 chars) |
+| `SECURITY_INTERNAL_SECRET` | HMAC secret for service auth |
+| `GRAFANA_PASSWORD` | Grafana admin password |
 
-**All credentials are provided via environment variables** - no hardcoded defaults in application.yml files.
+### Optional Environment Variables
 
-For Docker Compose (local development):
-```bash
-# Credentials defined in docker-compose.yml
-SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-admin}
-SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-admin}
-SPRING_DATA_MONGODB_USERNAME=${MONGODB_USER:-admin}
-SPRING_DATA_MONGODB_PASSWORD=${MONGODB_PASSWORD:-admin}
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SPRING_JPA_HIBERNATE_DDL_AUTO` | validate | JPA schema mode (use 'update' for dev) |
+| `CORS_ALLOWED_ORIGINS` | http://frontend:80 | API Gateway CORS |
+| `WEBSOCKET_ALLOWED_ORIGINS` | * | WebSocket CORS |
+| `TRACING_SAMPLE_PROBABILITY` | 0.1 | Tracing sample rate (0-1) |
+| `DIAGNOSTIC_REQUIRE_AUTH` | false | Enforce HMAC on AI diagnostic |
 
-For Kubernetes (production):
-```bash
-# Credentials from Kubernetes Secrets
-kubectl create secret generic rabbitmq-credentials \
-  --from-literal=username=admin \
-  --from-literal=password=<secure-password>
-```
+## Service Discovery
 
-See [Service Discovery & Security](SERVICE_DISCOVERY_FIX.md) for details.
+The platform uses **Docker DNS** for service discovery. Services reference each other by container name:
+- `http://auth-service:8084`
+- `http://base-station-service:8081`
+- `http://monitoring-service:8082`
+- `http://notification-service:8083`
+- `http://ai-diagnostic:9091`
 
-### Development Setup
+## Database Architecture
 
-```yaml
-# API Gateway (application.yml)
-jwt:
-  secret: ${JWT_SECRET:}  # >= 32 chars for HS256
-  simulate-validation: ${JWT_SIMULATE_VALIDATION:false}
-```
+Single PostgreSQL instance with multiple databases:
+- `authdb` - User authentication
+- `basestationdb` - Base station data
+- `notificationdb` - Notifications
 
-- **Quick start**: Set `JWT_SIMULATE_VALIDATION=true` to bypass tokens
-- **Production-like**: Set `JWT_SECRET` to `openssl rand -base64 64` output
-- Tokens need `sub` (subject) and `exp` (expiration); expired/invalid tokens are rejected
+MongoDB for metrics:
+- `monitoringdb` - Time-series metrics
 
 ## Troubleshooting
 
 ### Services won't start
 ```bash
-# Check status
 docker compose ps
-
-# View logs
 docker compose logs -f
-
-# Restart everything
 docker compose restart
 ```
-
-### Metrics/Alerts endpoints timeout
-
-**Symptom**: API Gateway returns 500 errors or timeouts when accessing `/api/v1/metrics` or `/api/v1/notifications`
-
-**Cause**: Services registered with unreachable IP addresses in Eureka
-
-**Solution**: Verify services are using hostname-based registration:
-```bash
-# Check Eureka registry
-curl http://localhost:8762/eureka/apps/MONITORING-SERVICE | grep hostName
-
-# Should show: <hostName>monitoring-service</hostName>
-# NOT: <hostName>172.18.0.9</hostName>
-```
-
-If services show IP addresses, restart them to re-register with hostnames:
-```bash
-docker compose restart monitoring-service notification-service
-```
-
-See [Service Discovery Fix](SERVICE_DISCOVERY_FIX.md) for details.
 
 ### Port conflicts
 ```bash
@@ -156,18 +129,18 @@ lsof -i :8080
 netstat -ano | findstr :8080
 ```
 
-### Clear and reseed data
+### Clear and restart
 ```bash
-# Stop services
-docker compose down
-
-# Remove volumes
-docker volume rm base-station-platform_mongodb-data
-docker volume rm base-station-platform_postgres-basestation-data
-
-# Restart
+docker compose down -v
 docker compose up -d
+make docker_init_db
+```
 
-# Wait 30 seconds, then seed
-python3 scripts/seed_realistic_data.py
+### Database connection issues
+```bash
+# Check PostgreSQL
+docker compose exec postgres psql -U postgres -c '\l'
+
+# Check MongoDB
+docker compose exec mongodb mongosh -u admin -p admin --eval "show dbs"
 ```

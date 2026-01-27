@@ -28,7 +28,6 @@ class MonitoringServiceClientFallbackTest {
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("monitoring.service.url", () -> "http://localhost:8082");
-        registry.add("eureka.client.enabled", () -> "false");
         registry.add("spring.cache.type", () -> "none");
         registry.add("spring.data.redis.host", () -> "localhost");
         registry.add("spring.datasource.url", () -> "jdbc:h2:mem:testdb");

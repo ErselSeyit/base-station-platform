@@ -9,27 +9,25 @@
 
 </div>
 
-Educational microservices platform demonstrating distributed systems trade-offs with measured performance data. Current scale: 26 base stations, 1,365 synthetic metrics - intentionally over-engineered to quantify costs. Benchmarks show **6.7× slower startup, 3× more memory** vs modular monolith.
-
+A microservices platform for base station operations and maintenance with AI-powered diagnostics. Built with Spring Boot, React, and Python for real-time monitoring, automated problem detection, and comprehensive reporting.
 
 [![CI/CD](https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4-6DB33F?logo=springboot&logoColor=white)
-![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2024.0.0-6DB33F?logo=spring&logoColor=white)
 ![React](https://img.shields.io/badge/React-18.2-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-316192?logo=postgresql&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-8.2-47A248?logo=mongodb&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-8-DC382D?logo=redis&logoColor=white)
-![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3.13-FF6600?logo=rabbitmq&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
 ---
 
 ## Quick Start
 
-### Docker Compose (Local Development)
+### Docker Compose (Recommended)
 
 ```bash
 # One-command startup with Makefile
@@ -41,16 +39,16 @@ docker compose up -d
 # Initialize databases with seed data
 make docker_init_db
 
-# Dashboard: http://localhost:3000 (admin/admin)
+# Dashboard: http://localhost:3000 (admin / AUTH_ADMIN_PASSWORD from .env)
 # API Gateway: http://localhost:8080
-# Eureka: http://localhost:8762
 # Grafana: http://localhost:3001
+# AI Diagnostics: http://localhost:9091
 ```
 
 ### Kubernetes (Production)
 
 ```bash
-# One-click deployment with Fabric8
+# Deploy to Kubernetes
 make k8s_deploy
 
 # Check status
@@ -60,235 +58,118 @@ make k8s_status
 make k8s_logs
 ```
 
-**Architecture:** 6 services (API Gateway, Auth, Base Station, Monitoring, Notification, Eureka) • 5 databases (PostgreSQL×3, MongoDB, Redis) • RabbitMQ messaging • **Resource optimized for 12-core CPU**
+---
 
-**Features:**
-- Database-backed JWT authentication with RBAC + HMAC-SHA256 service auth
-- **NEW:** Keycloak OAuth2/OIDC integration available ([setup guide](docs/KEYCLOAK_INTEGRATION.md))
-- Real-time metrics via WebSocket
-- Geospatial search (Haversine formula)
-- Event-driven alerting (RabbitMQ)
-- Redis-backed rate limiting (tested with 6,500+ requests)
-- **FIXED:** Container crash issues with resource optimization ([details](docs/CONTAINER_CRASH_FIXES.md))
-- **NEW:** Kubernetes deployment with Fabric8/JKube auto-generated manifests ([guide](docs/FABRIC8_KUBERNETES.md))
-- **OPTIMIZED:** CPU usage reduced from 1300% spike to 60% peak / 7% stable ([optimization guide](docs/RESOURCE_OPTIMIZATION.md))
+## Architecture
 
-**Production Gaps:**
-- Keycloak IdP available but not enabled by default • Demo credentials in seed scripts • Haversine doesn't scale beyond 10k rows • Multiple database types where one suffices • Eureka in containers (redundant with Kubernetes)
+**Services:** 5 Java microservices + 1 Python AI service + React frontend
 
-📖 [Architecture details](docs/ARCHITECTURE.md) • [Setup guide](docs/SETUP.md) • [Production requirements](docs/IMPROVEMENTS.md) • [Makefile commands](Makefile)
+| Service | Port | Description |
+|---------|------|-------------|
+| **Frontend** | 3000 | React dashboard with real-time metrics |
+| **API Gateway** | 8080 | Routing, rate limiting, JWT validation |
+| **Auth Service** | 8084 | Database-backed JWT authentication |
+| **Base Station Service** | 8081 | Station CRUD, geospatial search |
+| **Monitoring Service** | 8082 | Real-time metrics, WebSocket streaming |
+| **Notification Service** | 8083 | Event-driven alerting via RabbitMQ |
+| **AI Diagnostic** | 9091 | Python service for automated problem detection |
+
+**Infrastructure:** PostgreSQL, MongoDB, Redis, RabbitMQ, Prometheus, Grafana, Zipkin
 
 ---
 
-## Performance Analysis
+## Key Features
 
-### Microservices vs Monolith Costs
+### AI-Powered Diagnostics
+- Automated problem detection for temperature, CPU, memory, and signal issues
+- Real-time remediation suggestions with confidence scores
+- Device communication protocol for MIPS-based base stations
+- Diagnostic event logging with frontend visualization
 
-<table>
-<thead>
-<tr>
-<th>Metric</th>
-<th align="center">Microservices</th>
-<th align="center">Monolith</th>
-<th align="center">Overhead</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><b>Startup time</b></td>
-<td align="center">~120s</td>
-<td align="center">~18s</td>
-<td align="center"><b>6.7× slower</b></td>
-</tr>
-<tr>
-<td><b>Memory usage</b></td>
-<td align="center">~2.3 GB</td>
-<td align="center">~768 MB</td>
-<td align="center"><b>3× more</b></td>
-</tr>
-<tr>
-<td><b>Cross-service call</b></td>
-<td align="center">Network HTTP</td>
-<td align="center">In-process</td>
-<td align="center"><b>~50× slower (estimated)</b></td>
-</tr>
-</tbody>
-</table>
+### Real-Time Monitoring
+- WebSocket streaming for live metrics updates
+- Customizable dashboards with Recharts visualization
+- Threshold-based alerting with RabbitMQ
+- Historical metrics storage in MongoDB
 
-**Recommendation:** Start with modular monolith, split only when monitoring shows bottlenecks unsolvable by vertical scaling.
+### Security
+- Database-backed JWT authentication with RBAC
+- HMAC-SHA256 service-to-service authentication
+- Rate limiting at API Gateway (Redis-backed)
+- Brute-force protection with exponential backoff
 
-**Scale threshold:** 10,000+ stations, 500,000+ metrics/day, 4+ teams, heterogeneous traffic patterns requiring independent scaling.
-
-📊 [Full comparison](docs/MONOLITH_VS_MICROSERVICES.md) • [Kubernetes migration](docs/K8S_MIGRATION.md)
+### Responsive UI
+- Mobile-optimized dashboard with card layouts
+- Dark/light theme support
+- Interactive map view with Leaflet
+- Comprehensive reports with PDF export
 
 ---
 
-### Geospatial Search Performance
+## Frontend Pages
 
-<table>
-<thead>
-<tr>
-<th>Implementation</th>
-<th align="center">Query Time (100k rows)</th>
-<th align="center">Method</th>
-<th align="center">Scalability</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><b>Current:</b> Haversine</td>
-<td align="center">8,000ms</td>
-<td align="center">Full table scan</td>
-<td align="center">❌ Does not scale</td>
-</tr>
-<tr>
-<td><b>Alternative:</b> PostGIS</td>
-<td align="center">4.6ms</td>
-<td align="center">GIST spatial index</td>
-<td align="center">✅ Production-ready</td>
-</tr>
-</tbody>
-</table>
-
-PostGIS with GIST indexes: **1,750× faster** at 100k rows. [Migration guide](docs/POSTGIS_MIGRATION.md)
-
----
-
-### Rate Limiting Validation
-
-Redis-backed `RequestRateLimiter` tested with comprehensive load scenarios.
-
-<table>
-<thead>
-<tr>
-<th>Test Scenario</th>
-<th align="center">Load Profile</th>
-<th align="center">Result</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><b>Burst Attack</b></td>
-<td align="center">500 concurrent requests</td>
-<td align="center">~96% blocked (429)</td>
-</tr>
-<tr>
-<td><b>Sustained Load</b></td>
-<td align="center">6,000 req over 60s (100 req/s)</td>
-<td align="center">~90% blocked, stable</td>
-</tr>
-<tr>
-<td><b>Gateway Health</b></td>
-<td align="center">All scenarios</td>
-<td align="center">✅ No crashes or degradation</td>
-</tr>
-</tbody>
-</table>
-
-Configuration: 10 req/s limit, 20-token burst capacity, IP-based. [Test results](docs/STRESS_TEST_RESULTS.md)
-
----
-
-### Security Implementation
-
-Original vulnerability: Services trusted `X-User-Role` headers, allowing gateway bypass.
-
-<table>
-<thead>
-<tr>
-<th>Attack Vector</th>
-<th align="center">Before HMAC</th>
-<th align="center">After HMAC</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><b>Forged admin headers</b></td>
-<td align="center">❌ Succeeds</td>
-<td align="center">✅ Blocked (403)</td>
-</tr>
-<tr>
-<td><b>Gateway bypass</b></td>
-<td align="center">❌ Full access</td>
-<td align="center">✅ Blocked (403)</td>
-</tr>
-<tr>
-<td><b>Replay attacks</b></td>
-<td align="center">❌ Possible</td>
-<td align="center">✅ Blocked (30s TTL)</td>
-</tr>
-</tbody>
-</table>
-
-Mitigation: HMAC-SHA256 signatures with timestamp validation. Remaining gap: No mutual TLS. [Security details](docs/HEADER_SPOOFING_BLOCKED.md)
-
----
-
-## Testing
-
-<table>
-<thead>
-<tr>
-<th>Layer</th>
-<th align="center">Coverage</th>
-<th>Implementation</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><b>Backend unit</b></td>
-<td align="center">100%</td>
-<td>19 test classes, service layer</td>
-</tr>
-<tr>
-<td><b>Frontend unit</b></td>
-<td align="center">~87%</td>
-<td>103 tests, Vitest + React Testing Library</td>
-</tr>
-<tr>
-<td><b>Integration</b></td>
-<td align="center">✅ Yes</td>
-<td>Testcontainers (PostgreSQL, MongoDB, Redis)</td>
-</tr>
-<tr>
-<td><b>Contract</b></td>
-<td align="center">✅ Yes</td>
-<td>Service boundary verification</td>
-</tr>
-<tr>
-<td><b>E2E</b></td>
-<td align="center">Partial</td>
-<td>Playwright, critical flows</td>
-</tr>
-</tbody>
-</table>
-
-```bash
-mvn test                  # Backend
-cd frontend && npm test   # Frontend
-```
-
-CI: GitHub Actions, matrix builds, Testcontainers. [Testing strategy](docs/TESTING.md)
+| Page | Description |
+|------|-------------|
+| **Dashboard** | Overview with KPIs, charts, and activity feed |
+| **Stations** | Station management with CRUD operations |
+| **Station Detail** | Individual station metrics and configuration |
+| **Map View** | Geographic visualization with Leaflet |
+| **Metrics** | Performance charts and historical data |
+| **Alerts** | Notification management with status tracking |
+| **AI Diagnostics** | AI system performance and diagnostic events |
+| **Reports** | Downloadable reports and exports |
 
 ---
 
 ## Technology Stack
 
+### Backend
+- **Java 21** - Virtual threads for high-concurrency
+- **Spring Boot 3.4** - Microservices framework
+- **Spring Cloud Gateway** - API gateway with rate limiting
+- **Spring Data JPA/MongoDB** - Polyglot persistence
+- **Resilience4j** - Circuit breakers and retry
+
+### AI Service
+- **Python 3.12** - AI diagnostic engine
+- **FastAPI** - Async HTTP server
+- **OpenTelemetry** - Distributed tracing
+
+### Frontend
+- **React 18** - UI framework with hooks
+- **TypeScript** - Type-safe development
+- **Material-UI** - Component library
+- **TanStack Query** - Server state management
+- **Recharts** - Data visualization
+- **Leaflet** - Interactive maps
+
+### Infrastructure
+- **PostgreSQL 18** - Primary database (consolidated)
+- **MongoDB 8.2** - Time-series metrics storage
+- **Redis 8** - Caching and rate limiting
+- **RabbitMQ 3.13** - Message broker
+- **Prometheus + Grafana** - Observability
+- **Zipkin** - Distributed tracing
+
+---
 
 ## Project Structure
 
 ```
 base-station-platform/
 ├── api-gateway/           # Spring Cloud Gateway + rate limiting
-├── auth-service/          # JWT authentication
+├── auth-service/          # JWT authentication + user management
 ├── base-station-service/  # Station CRUD + geospatial search
 ├── monitoring-service/    # Metrics collection + WebSocket
 ├── notification-service/  # Alert delivery via RabbitMQ
-├── eureka-server/         # Service discovery
+├── ai-diagnostic/         # Python AI diagnostic service
 ├── common/                # Shared utilities + HMAC security
-├── frontend/              # React dashboard
+├── frontend/              # React TypeScript dashboard
 ├── init-db/               # Database seed scripts
-└── docs/                  # Architecture + performance docs
+├── k8s/                   # Kubernetes manifests
+├── helm/                  # Helm charts
+├── monitoring/            # Prometheus configuration
+└── docs/                  # Documentation
 ```
 
 ---
@@ -296,29 +177,40 @@ base-station-platform/
 ## Documentation
 
 **Getting Started:**
-- [Installation & Setup](docs/SETUP.md)
+- [Quick Start Guide](docs/QUICK_START.md)
+- [Setup Guide](docs/SETUP.md)
 - [API Reference](docs/API.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [Makefile Commands](Makefile) - One-command Docker & K8s operations
 
 **Architecture:**
 - [Design Overview](docs/ARCHITECTURE.md)
-- [Authentication](docs/AUTH_IMPLEMENTATION.md)
-- [Monolith vs Microservices](docs/MONOLITH_VS_MICROSERVICES.md)
+- [Security (HMAC Auth)](docs/HEADER_SPOOFING_BLOCKED.md)
+- [Secret Management](docs/SECRET_MANAGEMENT.md)
 
-**Operations & Optimization:**
-- [Resource Optimization Guide](docs/RESOURCE_OPTIMIZATION.md) - CPU/memory tuning for 12-core systems
-- [Container Crash Fixes](docs/CONTAINER_CRASH_FIXES.md) - Database initialization and dependency resolution
-- [Service Discovery & Security](docs/SERVICE_DISCOVERY_FIX.md) - Hostname-based Eureka, credential management
-- [Kubernetes with Fabric8](docs/FABRIC8_KUBERNETES.md) - Auto-generated manifests deployment
-- [Kubernetes Migration](docs/K8S_MIGRATION.md) - Manual to Fabric8 migration path
-
-**Performance & Security:**
-- [Geospatial Optimization](docs/POSTGIS_MIGRATION.md)
-- [Load Testing Results](docs/STRESS_TEST_RESULTS.md)
-- [Security Implementation](docs/HEADER_SPOOFING_BLOCKED.md)
-- [Production Gaps](docs/IMPROVEMENTS.md)
+**Operations:**
 - [Testing Strategy](docs/TESTING.md)
+
+---
+
+## Testing
+
+```bash
+# Backend tests
+mvn test
+
+# Frontend tests
+cd frontend && npm test
+
+# Integration tests (requires Docker)
+mvn verify -P integration-tests
+```
+
+| Layer | Coverage | Implementation |
+|-------|----------|----------------|
+| Backend unit | ~85% | JUnit 5, Mockito |
+| Frontend unit | ~87% | Vitest, React Testing Library |
+| Integration | Yes | Testcontainers |
+| Contract | Yes | Spring Cloud Contract |
+| E2E | Partial | Playwright |
 
 ---
 
@@ -326,4 +218,4 @@ base-station-platform/
 
 MIT License - [LICENSE](LICENSE)
 
-**Author:** Ersel Seyit • [GitHub](https://github.com/ErselSeyit) • [erselseyit@gmail.com](mailto:erselseyit@gmail.com)
+**Author:** Ersel Seyit

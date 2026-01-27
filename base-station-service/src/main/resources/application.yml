@@ -5,13 +5,14 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres-basestation:5432/basestationdb}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/basestationdb}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      # Use 'validate' in production, 'update' only in development
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
     open-in-view: false
   jackson:
     serialization:
@@ -19,16 +20,6 @@ spring:
 
 server:
   port: 8081
-
-eureka:
-  client:
-    service-url:
-      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
-    register-with-eureka: true
-    fetch-registry: true
-  instance:
-    prefer-ip-address: true
-    instance-id: ${spring.application.name}:${random.uuid}
 
 management:
   endpoints:
@@ -44,7 +35,8 @@ management:
         enabled: true
   tracing:
     sampling:
-      probability: 1.0
+      # Use 10% sampling in production, 100% in dev for debugging
+      probability: ${TRACING_SAMPLE_PROBABILITY:0.1}
   zipkin:
     tracing:
       endpoint: ${MANAGEMENT_TRACING_ENDPOINT:http://zipkin:9411/api/v2/spans}
@@ -55,7 +47,8 @@ monitoring:
 
 logging:
   level:
-    com.huawei.basestation: DEBUG
+    root: INFO
+    com.huawei.basestation: INFO
 
 resilience4j:
   circuitbreaker:

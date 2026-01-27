@@ -76,9 +76,5 @@
         
         <!-- RabbitMQ: INFO for connection events -->
         <logger name="org.springframework.amqp" level="INFO"/>
-        
-        <!-- Eureka -->
-        <logger name="com.netflix.discovery" level="INFO"/>
-        <logger name="com.netflix.eureka" level="INFO"/>
     </springProfile>
 </configuration>

@@ -117,7 +117,7 @@ const MicroMetric = ({ label, value, status = 'neutral', unit = '', trend, delay
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '4px' }}>
         <Typography
           sx={{
-            fontSize: '2rem',
+            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2rem' },
             fontWeight: 600,
             lineHeight: 1,
             letterSpacing: '-0.02em',
@@ -311,7 +311,7 @@ export default function Dashboard() {
   const uptime = stationsData.length > 0 ? ((activeCount / stationsData.length) * 100).toFixed(1) : '0'
 
   return (
-    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
       {/* Header - Brutally minimal */}
       <Box
         component={motion.div}
@@ -323,7 +323,7 @@ export default function Dashboard() {
         <Typography
           variant="h1"
           sx={{
-            fontSize: '2.25rem',
+            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.25rem' },
             fontWeight: 700,
             letterSpacing: '-0.025em',
             color: 'var(--mono-950)',

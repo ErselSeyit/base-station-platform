@@ -14,9 +14,9 @@ COPY virtual-basestation/ ./virtual-basestation/
 # Expose ports
 EXPOSE 9090 9091
 
-# Health check
+# Health check using Python instead of curl
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:9091/health || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9091/health')" || exit 1
 
 # Run the service with HTTP enabled
 CMD ["python", "service/diagnostic_service.py", "--tcp-port", "9090", "--http-port", "9091"]

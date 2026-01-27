@@ -15,7 +15,6 @@
 
     <modules>
         <module>common</module>
-        <module>eureka-server</module>
         <module>base-station-service</module>
         <module>monitoring-service</module>
         <module>notification-service</module>
@@ -146,6 +145,18 @@
                     <groupId>org.eclipse.jkube</groupId>
                     <artifactId>kubernetes-maven-plugin</artifactId>
                     <version>${fabric8.version}</version>
+                </plugin>
+                <!-- Surefire plugin with JVM args for Mockito on Java 21+ -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.2.5</version>
+                    <configuration>
+                        <argLine>
+                            --add-opens java.base/java.lang=ALL-UNNAMED
+                            --add-opens java.base/java.lang.reflect=ALL-UNNAMED
+                        </argLine>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>

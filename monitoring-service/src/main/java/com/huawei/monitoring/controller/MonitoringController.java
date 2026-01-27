@@ -30,6 +30,7 @@ import jakarta.validation.constraints.NotEmpty;
 
 @RestController
 @RequestMapping("/api/v1/metrics")
+@PreAuthorize("isAuthenticated()")
 public class MonitoringController {
 
     private static final Logger log = LoggerFactory.getLogger(MonitoringController.class);

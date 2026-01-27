@@ -5,38 +5,25 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres-auth:5432/authdb}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/authdb}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      # Use 'validate' in production, 'update' only in development
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
+  sql:
+    init:
+      mode: always
+
+auth:
+  admin:
+    username: ${AUTH_ADMIN_USERNAME:admin}
+    password: ${AUTH_ADMIN_PASSWORD:}
 
 server:
   port: 8084
-
-# ============================================
-# EUREKA CLIENT CONFIGURATION
-# ============================================
-# This service registers with Eureka for service discovery.
-# Other services can find this service by name: 'auth-service'
-# ============================================
-eureka:
-  client:
-    # service-url.defaultZone: Eureka server URL for registration.
-    service-url:
-      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
-    register-with-eureka: true
-    fetch-registry: true
-  instance:
-    # prefer-ip-address: false to use hostname instead of IP.
-    # This ensures services use container hostnames which work across all networks.
-    prefer-ip-address: false
-    # hostname: Use container name for service discovery.
-    # This works reliably across Docker networks.
-    hostname: ${EUREKA_INSTANCE_HOSTNAME:auth-service}
-    instance-id: ${spring.application.name}:${random.uuid}
 
 jwt:
   # JWT_SECRET environment variable is REQUIRED
@@ -50,6 +37,9 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
   metrics:
     export:
       prometheus:
@@ -57,5 +47,5 @@ management:
 
 logging:
   level:
-    com.huawei.auth: DEBUG
-
+    root: INFO
+    com.huawei.auth: INFO

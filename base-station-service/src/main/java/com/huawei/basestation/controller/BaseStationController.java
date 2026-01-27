@@ -23,9 +23,15 @@ import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.service.BaseStationService;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Positive;
+
+import org.springframework.validation.annotation.Validated;
 
 @RestController
 @RequestMapping("/api/v1/stations")
+@Validated
 public class BaseStationController {
 
     private static final String STATION_ID_NULL_MESSAGE = "Station ID cannot be null";
@@ -91,10 +97,10 @@ public class BaseStationController {
 
     @GetMapping("/search/area")
     public ResponseEntity<List<BaseStationDTO>> findStationsInArea(
-            @RequestParam Double minLat,
-            @RequestParam Double maxLat,
-            @RequestParam Double minLon,
-            @RequestParam Double maxLon) {
+            @RequestParam @DecimalMin("-90") @DecimalMax("90") Double minLat,
+            @RequestParam @DecimalMin("-90") @DecimalMax("90") Double maxLat,
+            @RequestParam @DecimalMin("-180") @DecimalMax("180") Double minLon,
+            @RequestParam @DecimalMin("-180") @DecimalMax("180") Double maxLon) {
         return ResponseEntity.ok(service.findStationsInArea(
                 Objects.requireNonNull(minLat, "Minimum latitude cannot be null"),
                 Objects.requireNonNull(maxLat, "Maximum latitude cannot be null"),
@@ -110,14 +116,14 @@ public class BaseStationController {
 
     /**
      * Find stations within a radius of a point (Haversine distance).
-     * 
+     *
      * Example: /api/v1/stations/search/nearby?lat=40.7128&lon=-74.0060&radiusKm=5
      */
     @GetMapping("/search/nearby")
     public ResponseEntity<List<BaseStationDTO>> findStationsNearby(
-            @RequestParam Double lat,
-            @RequestParam Double lon,
-            @RequestParam(defaultValue = "10") Double radiusKm) {
+            @RequestParam @DecimalMin("-90") @DecimalMax("90") Double lat,
+            @RequestParam @DecimalMin("-180") @DecimalMax("180") Double lon,
+            @RequestParam(defaultValue = "10") @Positive Double radiusKm) {
         return ResponseEntity.ok(service.findStationsNearPoint(
                 Objects.requireNonNull(lat, "Latitude cannot be null"),
                 Objects.requireNonNull(lon, "Longitude cannot be null"),

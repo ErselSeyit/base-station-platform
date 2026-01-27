@@ -264,7 +264,7 @@ class LiveDataSimulator:
         try:
             response = requests.post(
                 f"{self.api_url}/api/v1/auth/login",
-                json={"username": "admin", "password": "admin"},
+                json={"username": "admin", "password": "adminPassword123!"},
                 timeout=10,
             )
 

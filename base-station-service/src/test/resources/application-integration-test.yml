@@ -8,7 +8,7 @@ spring:
     url: jdbc:h2:mem:basestation-it;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
     driver-class-name: org.h2.Driver
     username: sa
-    password: 
+    password:
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -22,10 +22,6 @@ spring:
 
 server:
   port: 0
-
-eureka:
-  client:
-    enabled: false
 
 monitoring:
   service:

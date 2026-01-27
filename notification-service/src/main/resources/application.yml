@@ -5,13 +5,14 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres-notification:5432/notificationdb}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/notificationdb}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      # Use 'validate' in production, 'update' only in development
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
     open-in-view: false
   task:
     execution:
@@ -28,31 +29,20 @@ spring:
 server:
   port: 8083
 
-# ============================================
-# EUREKA CLIENT CONFIGURATION
-# ============================================
-# This service registers with Eureka for service discovery.
-# Other services can find this service by name: 'notification-service'
-# ============================================
-eureka:
-  client:
-    # service-url.defaultZone: Eureka server URL for registration.
-    # Use 'eureka-server' service name in Docker/K8s, localhost for local dev.
-    service-url:
-      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
-
-    # register-with-eureka: true to register this service.
-    register-with-eureka: true
-
-    # fetch-registry: true to discover other services.
-    fetch-registry: true
-  instance:
-    # Use hostname instead of IP to avoid network routing issues
-    prefer-ip-address: false
-    hostname: notification-service
-    instance-id: ${spring.application.name}:${random.uuid}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
 
 logging:
   level:
-    com.huawei.notification: DEBUG
-
+    root: INFO
+    com.huawei.notification: INFO

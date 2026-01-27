@@ -12,6 +12,8 @@ const StationDetail = lazy(() => import('./pages/StationDetail'))
 const MapView = lazy(() => import('./pages/MapView'))
 const Alerts = lazy(() => import('./pages/Alerts'))
 const Metrics = lazy(() => import('./pages/Metrics'))
+const AIDiagnostics = lazy(() => import('./pages/AIDiagnostics'))
+const Reports = lazy(() => import('./pages/Reports'))
 const Login = lazy(() => import('./pages/Login'))
 
 // Loading fallback component
@@ -51,6 +53,8 @@ function App() {
                     <Route path="/map" element={<MapView />} />
                     <Route path="/alerts" element={<Alerts />} />
                     <Route path="/metrics" element={<Metrics />} />
+                    <Route path="/ai-diagnostics" element={<AIDiagnostics />} />
+                    <Route path="/reports" element={<Reports />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

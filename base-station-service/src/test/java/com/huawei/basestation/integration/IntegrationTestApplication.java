@@ -5,7 +5,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.cloud.netflix.eureka.EurekaClientAutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
@@ -14,7 +13,6 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication(exclude = {
         RedisAutoConfiguration.class,
         RedisRepositoriesAutoConfiguration.class,
-        EurekaClientAutoConfiguration.class,
         io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration.class,
         io.github.resilience4j.springboot3.retry.autoconfigure.RetryAutoConfiguration.class,
         io.github.resilience4j.springboot3.timelimiter.autoconfigure.TimeLimiterAutoConfiguration.class
@@ -39,4 +37,3 @@ public class IntegrationTestApplication {
         SpringApplication.run(IntegrationTestApplication.class, args);
     }
 }
-
