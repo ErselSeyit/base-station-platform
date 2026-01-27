@@ -79,7 +79,6 @@ k8s/*-secrets.yaml
 coverage/
 
 effective-pom.xml
-.claude/
 *.sh
 !scripts/generate-secrets.sh
 node_modules
@@ -95,3 +94,6 @@ backups/
 
 # Testing scripts and tools (keep in repo)
 # testing/ is tracked for integration testing tools
+
+# AI tool local files
+.claude/
