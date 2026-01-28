@@ -1,6 +1,7 @@
 package com.huawei.gateway.util;
 
 import java.util.Date;
+import java.util.Optional;
 import java.util.function.Function;
 
 import javax.crypto.SecretKey;
@@ -224,15 +225,16 @@ public class JwtValidator {
         }
 
         public String getUsername() {
-            return claims != null ? claims.getSubject() : null;
+            return Optional.ofNullable(claims)
+                    .map(Claims::getSubject)
+                    .orElse(null);
         }
 
         public String getRole() {
-            if (claims == null) {
-                return null;
-            }
-            Object role = claims.get("role");
-            return role != null ? role.toString() : null;
+            return Optional.ofNullable(claims)
+                    .map(c -> c.get("role"))
+                    .map(Object::toString)
+                    .orElse(null);
         }
     }
 }

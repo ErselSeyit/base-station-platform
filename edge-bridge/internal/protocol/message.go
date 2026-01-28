@@ -46,40 +46,55 @@ const (
 type MetricType byte
 
 const (
-	MetricTemperature    MetricType = 0x01
-	MetricCPUUsage       MetricType = 0x02
-	MetricMemoryUsage    MetricType = 0x03
-	MetricNetworkTraffic MetricType = 0x04
-	MetricSignalStrength MetricType = 0x05
-	MetricPowerLevel     MetricType = 0x06
-	MetricFanSpeed       MetricType = 0x07
-	MetricVoltage        MetricType = 0x08
-	MetricAll            MetricType = 0xFF
+	MetricCPUUsage         MetricType = 0x01
+	MetricMemoryUsage      MetricType = 0x02
+	MetricTemperature      MetricType = 0x03
+	MetricHumidity         MetricType = 0x04
+	MetricFanSpeed         MetricType = 0x05
+	MetricVoltage          MetricType = 0x06
+	MetricCurrent          MetricType = 0x07
+	MetricPowerConsumption MetricType = 0x08
+	MetricSignalStrength   MetricType = 0x10
+	MetricSignalQuality    MetricType = 0x11
+	MetricInterference     MetricType = 0x12
+	MetricBER              MetricType = 0x13
+	MetricVSWR             MetricType = 0x14
+	MetricAntennaTilt      MetricType = 0x15
+	MetricDataThroughput   MetricType = 0x20
+	MetricLatency          MetricType = 0x21
+	MetricPacketLoss       MetricType = 0x22
+	MetricJitter           MetricType = 0x23
+	MetricConnectionCount  MetricType = 0x24
+	MetricBatteryLevel     MetricType = 0x30
+	MetricUptime           MetricType = 0x31
+	MetricErrorCount       MetricType = 0x32
+	MetricAll              MetricType = 0xFF
 )
 
-// MetricTypeString returns a human-readable name for a metric type.
+// MetricTypeString returns the metric type name for the monitoring service.
 func MetricTypeString(mt MetricType) string {
 	switch mt {
-	case MetricTemperature:
-		return "TEMPERATURE"
 	case MetricCPUUsage:
 		return "CPU_USAGE"
 	case MetricMemoryUsage:
 		return "MEMORY_USAGE"
-	case MetricNetworkTraffic:
-		return "NETWORK_TRAFFIC"
+	case MetricTemperature:
+		return "TEMPERATURE"
 	case MetricSignalStrength:
 		return "SIGNAL_STRENGTH"
-	case MetricPowerLevel:
-		return "POWER_LEVEL"
+	case MetricPowerConsumption:
+		return "POWER_CONSUMPTION"
 	case MetricFanSpeed:
 		return "FAN_SPEED"
-	case MetricVoltage:
-		return "VOLTAGE"
-	case MetricAll:
-		return "ALL"
+	case MetricDataThroughput:
+		return "DATA_THROUGHPUT"
+	case MetricConnectionCount:
+		return "CONNECTION_COUNT"
+	case MetricUptime:
+		return "UPTIME"
 	default:
-		return "UNKNOWN"
+		// Return empty for unsupported types - they will be filtered out
+		return ""
 	}
 }
 

@@ -175,13 +175,23 @@ func (b *Bridge) collectAndUploadMetrics() {
 		}
 	}
 
-	cloudMetrics := make([]cloud.MetricData, len(metrics))
-	for i, m := range metrics {
-		cloudMetrics[i] = cloud.MetricData{
-			Type:      protocol.MetricTypeString(m.Type),
+	// Filter and convert metrics to cloud format
+	cloudMetrics := make([]cloud.MetricData, 0, len(metrics))
+	for _, m := range metrics {
+		typeStr := protocol.MetricTypeString(m.Type)
+		if typeStr == "" {
+			continue // Skip unsupported metric types
+		}
+		cloudMetrics = append(cloudMetrics, cloud.MetricData{
+			Type:      typeStr,
 			Value:     float64(m.Value),
 			Timestamp: time.Now(),
-		}
+		})
+	}
+
+	if len(cloudMetrics) == 0 {
+		log.Printf("No supported metrics to upload")
+		return
 	}
 
 	resp, err := b.cloudClient.UploadMetrics(b.config.Bridge.StationID, cloudMetrics)

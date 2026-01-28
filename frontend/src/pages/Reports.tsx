@@ -92,9 +92,9 @@ function ReportCard({ report, onDownload, onGenerate }: {
   }
 
   const typeColors: Record<string, { bg: string; color: string }> = {
-    pdf: { bg: '#fee2e2', color: '#dc2626' },
-    excel: { bg: '#dcfce7', color: '#16a34a' },
-    json: { bg: '#dbeafe', color: '#2563eb' },
+    pdf: { bg: 'rgba(220, 38, 38, 0.1)', color: 'var(--status-offline)' },
+    excel: { bg: 'rgba(22, 163, 74, 0.1)', color: 'var(--status-active)' },
+    json: { bg: 'rgba(59, 130, 246, 0.1)', color: 'var(--status-info)' },
   }
 
   const typeIcons: Record<string, React.ReactNode> = {
@@ -221,12 +221,20 @@ function ReportCard({ report, onDownload, onGenerate }: {
             sx={{
               border: '1px solid var(--surface-border)',
               borderRadius: '10px',
+              width: 40,
+              height: 40,
+              color: 'inherit',
               '&:hover': {
                 background: 'var(--mono-100)',
+                borderColor: 'var(--mono-300)',
+              },
+              '&:disabled': {
+                opacity: 0.5,
+                borderColor: 'var(--mono-200)',
               },
             }}
           >
-            <RefreshIcon sx={{ animation: isGenerating ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshIcon sx={{ fontSize: 20, animation: isGenerating ? 'spin 1s linear infinite' : 'none' }} />
           </IconButton>
         </Tooltip>
       </Box>
@@ -236,47 +244,94 @@ function ReportCard({ report, onDownload, onGenerate }: {
 
 export default function Reports() {
   const handleDownload = async (reportId: string) => {
-    // Simulate download delay
-    await new Promise(resolve => setTimeout(resolve, 500))
-
     // Trigger actual download based on report type
     if (reportId === 'bi-report') {
-      // Download the BI report PDF
-      const link = document.createElement('a')
-      link.href = '/api/v1/reports/bi-report.pdf'
-      link.download = 'bi-report.pdf'
-
-      // For demo, create a mock download
-      const response = await fetch('/bi-report.pdf').catch(() => null)
-      if (response) {
-        const blob = await response.blob()
-        const url = URL.createObjectURL(blob)
-        link.href = url
-        link.click()
-        URL.revokeObjectURL(url)
-      } else {
-        // Fallback - show toast or notification
-        console.log('BI Report download triggered')
+      // Generate and download BI report PDF on-demand from AI diagnostic service
+      try {
+        const response = await fetch('/api/reports/bi')
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer()
+          const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `bi-report-${new Date().toISOString().slice(0, 10)}.pdf`
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          // Delay cleanup to ensure download starts
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        } else {
+          console.error('Failed to generate BI report:', response.statusText)
+        }
+      } catch (error) {
+        console.error('BI Report generation failed:', error)
       }
     } else if (reportId === 'ai-diagnostics') {
-      // Download AI diagnostics JSON
-      const response = await fetch('/ai-diagnose-log.json').catch(() => null)
-      if (response) {
-        const blob = await response.blob()
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = 'ai-diagnostics.json'
-        link.click()
-        URL.revokeObjectURL(url)
+      // Download AI diagnostics JSON from backend
+      try {
+        const response = await fetch('/api/reports/diagnostics')
+        if (response.ok) {
+          const data = await response.json()
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `ai-diagnostics-${new Date().toISOString().slice(0, 10)}.json`
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        } else {
+          console.error('Failed to fetch AI diagnostics:', response.statusText)
+        }
+      } catch (error) {
+        console.error('AI Diagnostics download failed:', error)
       }
     }
   }
 
   const handleGenerate = async (reportId: string) => {
-    // Simulate report generation
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    console.log(`Report ${reportId} regenerated`)
+    // Actually regenerate the report by calling the backend
+    if (reportId === 'bi-report') {
+      // Trigger BI report regeneration (same as download - it generates fresh each time)
+      try {
+        const response = await fetch('/api/reports/bi')
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer()
+          const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `bi-report-${new Date().toISOString().slice(0, 10)}.pdf`
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        }
+      } catch (error) {
+        console.error('BI Report regeneration failed:', error)
+      }
+    } else if (reportId === 'ai-diagnostics') {
+      // Fetch fresh AI diagnostics log
+      try {
+        const response = await fetch('/api/reports/diagnostics')
+        if (response.ok) {
+          const data = await response.json()
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `ai-diagnostics-${new Date().toISOString().slice(0, 10)}.json`
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        }
+      } catch (error) {
+        console.error('AI Diagnostics fetch failed:', error)
+      }
+    }
   }
 
   return (

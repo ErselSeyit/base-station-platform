@@ -1,0 +1,15 @@
+# Device Protocol Simulator
+# Simulates MIPS device for testing the edge bridge
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy the simulator script
+COPY device_protocol.py .
+
+# Expose the default port
+EXPOSE 9999
+
+# Run the simulator
+CMD ["python", "device_protocol.py", "--simulate", "--host", "0.0.0.0", "--port", "9999"]

@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
+import org.springframework.lang.Nullable;
+
 /**
  * Event DTO for alert notifications sent via RabbitMQ.
  * 
@@ -66,57 +68,57 @@ public class AlertEvent {
     }
 
     public static class Builder {
-        private String alertRuleId;
-        private String alertRuleName;
-        private Long stationId;
-        private String stationName;
-        private String metricType;
-        private Double metricValue;
-        private Double threshold;
-        private String severity;
-        private String message;
+        @Nullable private String alertRuleId;
+        @Nullable private String alertRuleName;
+        @Nullable private Long stationId;
+        @Nullable private String stationName;
+        @Nullable private String metricType;
+        @Nullable private Double metricValue;
+        @Nullable private Double threshold;
+        @Nullable private String severity;
+        @Nullable private String message;
 
-        public Builder alertRuleId(String alertRuleId) {
+        public Builder alertRuleId(@Nullable String alertRuleId) {
             this.alertRuleId = alertRuleId;
             return this;
         }
 
-        public Builder alertRuleName(String alertRuleName) {
+        public Builder alertRuleName(@Nullable String alertRuleName) {
             this.alertRuleName = alertRuleName;
             return this;
         }
 
-        public Builder stationId(Long stationId) {
+        public Builder stationId(@Nullable Long stationId) {
             this.stationId = stationId;
             return this;
         }
 
-        public Builder stationName(String stationName) {
+        public Builder stationName(@Nullable String stationName) {
             this.stationName = stationName;
             return this;
         }
 
-        public Builder metricType(String metricType) {
+        public Builder metricType(@Nullable String metricType) {
             this.metricType = metricType;
             return this;
         }
 
-        public Builder metricValue(Double metricValue) {
+        public Builder metricValue(@Nullable Double metricValue) {
             this.metricValue = metricValue;
             return this;
         }
 
-        public Builder threshold(Double threshold) {
+        public Builder threshold(@Nullable Double threshold) {
             this.threshold = threshold;
             return this;
         }
 
-        public Builder severity(String severity) {
+        public Builder severity(@Nullable String severity) {
             this.severity = severity;
             return this;
         }
 
-        public Builder message(String message) {
+        public Builder message(@Nullable String message) {
             this.message = message;
             return this;
         }
@@ -127,84 +129,94 @@ public class AlertEvent {
     }
 
     // Getters and Setters
+    @Nullable
     public String getAlertRuleId() {
         return alertRuleId;
     }
 
-    public void setAlertRuleId(String alertRuleId) {
+    public void setAlertRuleId(@Nullable String alertRuleId) {
         this.alertRuleId = alertRuleId;
     }
 
+    @Nullable
     public String getAlertRuleName() {
         return alertRuleName;
     }
 
-    public void setAlertRuleName(String alertRuleName) {
+    public void setAlertRuleName(@Nullable String alertRuleName) {
         this.alertRuleName = alertRuleName;
     }
 
+    @Nullable
     public Long getStationId() {
         return stationId;
     }
 
-    public void setStationId(Long stationId) {
-        this.stationId = Objects.requireNonNull(stationId, "Station ID cannot be null");
+    public void setStationId(@Nullable Long stationId) {
+        this.stationId = stationId;
     }
 
+    @Nullable
     public String getStationName() {
         return stationName;
     }
 
-    public void setStationName(String stationName) {
+    public void setStationName(@Nullable String stationName) {
         this.stationName = stationName;
     }
 
+    @Nullable
     public String getMetricType() {
         return metricType;
     }
 
-    public void setMetricType(String metricType) {
+    public void setMetricType(@Nullable String metricType) {
         this.metricType = metricType;
     }
 
+    @Nullable
     public Double getMetricValue() {
         return metricValue;
     }
 
-    public void setMetricValue(Double metricValue) {
+    public void setMetricValue(@Nullable Double metricValue) {
         this.metricValue = metricValue;
     }
 
+    @Nullable
     public Double getThreshold() {
         return threshold;
     }
 
-    public void setThreshold(Double threshold) {
+    public void setThreshold(@Nullable Double threshold) {
         this.threshold = threshold;
     }
 
+    @Nullable
     public String getSeverity() {
         return severity;
     }
 
-    public void setSeverity(String severity) {
+    public void setSeverity(@Nullable String severity) {
         this.severity = severity;
     }
 
+    @Nullable
     public String getMessage() {
         return message;
     }
 
-    public void setMessage(String message) {
+    public void setMessage(@Nullable String message) {
         this.message = message;
     }
 
+    @Nullable
     public LocalDateTime getTimestamp() {
         return timestamp;
     }
 
-    public void setTimestamp(LocalDateTime timestamp) {
-        this.timestamp = timestamp != null ? timestamp : LocalDateTime.now();
+    public void setTimestamp(@Nullable LocalDateTime timestamp) {
+        this.timestamp = Objects.requireNonNullElseGet(timestamp, LocalDateTime::now);
     }
 
     @Override

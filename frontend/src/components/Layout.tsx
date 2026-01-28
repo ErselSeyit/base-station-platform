@@ -63,10 +63,13 @@ interface DrawerContentProps {
 function DrawerContent({ menuItems, currentPath, onNavigate }: DrawerContentProps) {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Minimal Header */}
+      {/* Minimal Header - matches AppBar height */}
       <Box
         sx={{
-          padding: '20px 16px',
+          height: '64px',
+          padding: '0 16px',
+          display: 'flex',
+          alignItems: 'center',
           borderBottom: '1px solid var(--surface-border)',
         }}
       >
@@ -176,8 +179,9 @@ export default function Layout({ children }: LayoutProps) {
   })
 
   const notificationsList = Array.isArray(notifications) ? notifications : []
+  // Count both UNREAD and PENDING as unread (PENDING = not yet processed)
   const unreadCount = notificationsList.filter(
-    (n: Notification) => n.status === 'UNREAD'
+    (n: Notification) => n.status === 'UNREAD' || n.status === 'PENDING'
   ).length || 0
 
   const menuItems = getMenuItems(unreadCount)
@@ -212,7 +216,7 @@ export default function Layout({ children }: LayoutProps) {
           boxShadow: 'none',
         }}
       >
-        <Toolbar sx={{ minHeight: '64px !important' }}>
+        <Toolbar sx={{ minHeight: '63px !important', height: '63px' }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -338,7 +342,7 @@ export default function Layout({ children }: LayoutProps) {
           zIndex: 1,
         }}
       >
-        <Toolbar />
+        <Toolbar sx={{ minHeight: '64px !important' }} />
         {children}
       </Box>
     </Box>

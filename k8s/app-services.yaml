@@ -589,3 +589,100 @@ spec:
   - port: 80
     targetPort: 80
     nodePort: 30000
+---
+# Edge Bridge (for MIPS device integration)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-bridge
+  namespace: basestation-platform
+  labels:
+    component: edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-bridge
+  template:
+    metadata:
+      labels:
+        app: edge-bridge
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: edge-bridge
+        image: base-station-platform-edge-bridge:1.0.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: STATION_ID
+          value: "BS-001"
+        - name: CLOUD_BASE_URL
+          value: http://api-gateway:8080
+        - name: BRIDGE_USERNAME
+          value: operator
+        - name: BRIDGE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: edge-bridge-secret
+              key: password
+              optional: true
+        - name: DEVICE_HOST
+          value: device-simulator
+        - name: DEVICE_PORT
+          value: "9999"
+        resources:
+          limits:
+            cpu: "250m"
+            memory: 64Mi
+            ephemeral-storage: "256Mi"
+          requests:
+            cpu: "100m"
+            memory: 32Mi
+            ephemeral-storage: "128Mi"
+---
+# Device Simulator (for testing edge-bridge without real hardware)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: device-simulator
+  namespace: basestation-platform
+  labels:
+    component: edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: device-simulator
+  template:
+    metadata:
+      labels:
+        app: device-simulator
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: device-simulator
+        image: base-station-platform-device-simulator:1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9999
+        resources:
+          limits:
+            cpu: "100m"
+            memory: 64Mi
+            ephemeral-storage: "128Mi"
+          requests:
+            cpu: "50m"
+            memory: 32Mi
+            ephemeral-storage: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: device-simulator
+  namespace: basestation-platform
+spec:
+  selector:
+    app: device-simulator
+  ports:
+  - port: 9999
+    targetPort: 9999

@@ -29,12 +29,16 @@ import com.huawei.basestation.model.BaseStation;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.repository.BaseStationRepository;
+import com.huawei.common.audit.AuditLogger;
 
 @ExtendWith(MockitoExtension.class)
 class BaseStationServiceTest {
 
     @Mock
     private BaseStationRepository repository;
+
+    @Mock
+    private AuditLogger auditLogger;
 
     @InjectMocks
     private BaseStationService service;

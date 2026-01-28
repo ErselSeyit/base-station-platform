@@ -10,6 +10,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.lang.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -56,8 +57,8 @@ public class MonitoringController {
 
     @GetMapping
     public ResponseEntity<List<MetricDataDTO>> getAllMetrics(
-            @RequestParam(required = false) String startTime,
-            @RequestParam(required = false) String endTime) {
+            @RequestParam(required = false) @Nullable String startTime,
+            @RequestParam(required = false) @Nullable String endTime) {
         // Let exceptions propagate to GlobalExceptionHandler instead of swallowing them
         log.debug("Getting all metrics with time range: start={}, end={}", startTime, endTime);
         LocalDateTime start = parseDateTime(startTime);
@@ -138,8 +139,10 @@ public class MonitoringController {
         } else {
             log.debug("No metrics found for station: {}", stationId);
         }
-        return latest.map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        return Objects.requireNonNull(
+                latest.map(ResponseEntity::ok)
+                        .orElseGet(() -> ResponseEntity.notFound().build()),
+                "Response cannot be null");
     }
 
     /**
@@ -202,12 +205,13 @@ public class MonitoringController {
     public ResponseEntity<BatchRecordResponse> recordMetricsBatch(
             @Valid @RequestBody BatchRecordRequest request) {
         Objects.requireNonNull(request, "Request cannot be null");
+        List<BatchMetricEntry> metrics = Objects.requireNonNull(request.getMetrics(), "Metrics cannot be null");
 
         log.info("Recording batch of {} metrics for station {}",
-                request.getMetrics().size(), request.getStationId());
+                metrics.size(), request.getStationId());
 
         int recorded = 0;
-        for (BatchMetricEntry entry : request.getMetrics()) {
+        for (BatchMetricEntry entry : metrics) {
             try {
                 MetricDataDTO dto = new MetricDataDTO();
                 dto.setStationId(parseStationId(request.getStationId()));
@@ -224,7 +228,7 @@ public class MonitoringController {
         }
 
         log.info("Successfully recorded {} out of {} metrics for station {}",
-                recorded, request.getMetrics().size(), request.getStationId());
+                recorded, metrics.size(), request.getStationId());
 
         BatchRecordResponse response = new BatchRecordResponse();
         response.setReceived(recorded);
@@ -232,7 +236,8 @@ public class MonitoringController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    private Long parseStationId(String stationId) {
+    @Nullable
+    private Long parseStationId(@Nullable String stationId) {
         if (stationId == null) {
             return null;
         }
@@ -251,11 +256,12 @@ public class MonitoringController {
         @NotEmpty(message = "Station IDs list cannot be empty")
         private List<Long> stationIds;
 
+        @Nullable
         public List<Long> getStationIds() {
             return stationIds;
         }
 
-        public void setStationIds(List<Long> stationIds) {
+        public void setStationIds(@Nullable List<Long> stationIds) {
             this.stationIds = stationIds;
         }
     }
@@ -270,19 +276,21 @@ public class MonitoringController {
         @NotEmpty(message = "Metrics list cannot be empty")
         private List<BatchMetricEntry> metrics;
 
+        @Nullable
         public String getStationId() {
             return stationId;
         }
 
-        public void setStationId(String stationId) {
+        public void setStationId(@Nullable String stationId) {
             this.stationId = stationId;
         }
 
+        @Nullable
         public List<BatchMetricEntry> getMetrics() {
             return metrics;
         }
 
-        public void setMetrics(List<BatchMetricEntry> metrics) {
+        public void setMetrics(@Nullable List<BatchMetricEntry> metrics) {
             this.metrics = metrics;
         }
     }
@@ -299,27 +307,30 @@ public class MonitoringController {
 
         private LocalDateTime timestamp;
 
+        @Nullable
         public String getType() {
             return type;
         }
 
-        public void setType(String type) {
+        public void setType(@Nullable String type) {
             this.type = type;
         }
 
+        @Nullable
         public Double getValue() {
             return value;
         }
 
-        public void setValue(Double value) {
+        public void setValue(@Nullable Double value) {
             this.value = value;
         }
 
+        @Nullable
         public LocalDateTime getTimestamp() {
             return timestamp;
         }
 
-        public void setTimestamp(LocalDateTime timestamp) {
+        public void setTimestamp(@Nullable LocalDateTime timestamp) {
             this.timestamp = timestamp;
         }
     }
@@ -339,16 +350,18 @@ public class MonitoringController {
             this.received = received;
         }
 
+        @Nullable
         public String getStatus() {
             return status;
         }
 
-        public void setStatus(String status) {
+        public void setStatus(@Nullable String status) {
             this.status = status;
         }
     }
 
-    private LocalDateTime parseDateTime(String dateTimeStr) {
+    @Nullable
+    private LocalDateTime parseDateTime(@Nullable String dateTimeStr) {
         if (dateTimeStr == null || dateTimeStr.isEmpty()) {
             return null;
         }

@@ -61,7 +61,7 @@ export interface Notification {
   message: string
   type: NotificationType
   severity?: string
-  status?: 'UNREAD' | 'READ'
+  status?: 'UNREAD' | 'READ' | 'PENDING'
   createdAt?: string
   readAt?: string
 }

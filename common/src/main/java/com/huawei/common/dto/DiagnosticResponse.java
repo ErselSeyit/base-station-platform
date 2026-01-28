@@ -4,6 +4,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+
+import org.springframework.lang.Nullable;
 
 /**
  * Response DTO from AI diagnostic service.
@@ -37,13 +40,15 @@ public class DiagnosticResponse {
         this.confidence = 0.0;
     }
 
+    private static final Double DEFAULT_CONFIDENCE = 0.0;
+
     private DiagnosticResponse(Builder builder) {
         this.problemId = builder.problemId;
         this.action = builder.action;
-        this.commands = builder.commands != null ? builder.commands : Collections.emptyList();
+        this.commands = Objects.requireNonNullElse(builder.commands, Collections.emptyList());
         this.expectedOutcome = builder.expectedOutcome;
         this.riskLevel = builder.riskLevel;
-        this.confidence = builder.confidence != null ? builder.confidence : 0.0;
+        this.confidence = Objects.requireNonNullElse(builder.confidence, DEFAULT_CONFIDENCE);
         this.reasoning = builder.reasoning;
     }
 
@@ -54,7 +59,7 @@ public class DiagnosticResponse {
     /**
      * Create a fallback response when diagnostic service is unavailable.
      */
-    public static DiagnosticResponse fallback(String problemId, String message) {
+    public static DiagnosticResponse fallback(@Nullable String problemId, @Nullable String message) {
         return DiagnosticResponse.builder()
                 .problemId(problemId)
                 .action("Manual investigation required")
@@ -74,45 +79,45 @@ public class DiagnosticResponse {
     }
 
     public static class Builder {
-        private String problemId;
-        private String action;
-        private List<String> commands;
-        private String expectedOutcome;
-        private String riskLevel;
-        private Double confidence;
-        private String reasoning;
+        @Nullable private String problemId;
+        @Nullable private String action;
+        @Nullable private List<String> commands;
+        @Nullable private String expectedOutcome;
+        @Nullable private String riskLevel;
+        @Nullable private Double confidence;
+        @Nullable private String reasoning;
 
-        public Builder problemId(String problemId) {
+        public Builder problemId(@Nullable String problemId) {
             this.problemId = problemId;
             return this;
         }
 
-        public Builder action(String action) {
+        public Builder action(@Nullable String action) {
             this.action = action;
             return this;
         }
 
-        public Builder commands(List<String> commands) {
+        public Builder commands(@Nullable List<String> commands) {
             this.commands = commands;
             return this;
         }
 
-        public Builder expectedOutcome(String expectedOutcome) {
+        public Builder expectedOutcome(@Nullable String expectedOutcome) {
             this.expectedOutcome = expectedOutcome;
             return this;
         }
 
-        public Builder riskLevel(String riskLevel) {
+        public Builder riskLevel(@Nullable String riskLevel) {
             this.riskLevel = riskLevel;
             return this;
         }
 
-        public Builder confidence(Double confidence) {
+        public Builder confidence(@Nullable Double confidence) {
             this.confidence = confidence;
             return this;
         }
 
-        public Builder reasoning(String reasoning) {
+        public Builder reasoning(@Nullable String reasoning) {
             this.reasoning = reasoning;
             return this;
         }
@@ -123,26 +128,33 @@ public class DiagnosticResponse {
     }
 
     // Getters and Setters
+    @Nullable
     public String getProblemId() { return problemId; }
-    public void setProblemId(String problemId) { this.problemId = problemId; }
+    public void setProblemId(@Nullable String problemId) { this.problemId = problemId; }
 
+    @Nullable
     public String getAction() { return action; }
-    public void setAction(String action) { this.action = action; }
+    public void setAction(@Nullable String action) { this.action = action; }
 
+    @Nullable
     public List<String> getCommands() { return commands; }
-    public void setCommands(List<String> commands) { this.commands = commands; }
+    public void setCommands(@Nullable List<String> commands) { this.commands = commands; }
 
+    @Nullable
     public String getExpectedOutcome() { return expectedOutcome; }
-    public void setExpectedOutcome(String expectedOutcome) { this.expectedOutcome = expectedOutcome; }
+    public void setExpectedOutcome(@Nullable String expectedOutcome) { this.expectedOutcome = expectedOutcome; }
 
+    @Nullable
     public String getRiskLevel() { return riskLevel; }
-    public void setRiskLevel(String riskLevel) { this.riskLevel = riskLevel; }
+    public void setRiskLevel(@Nullable String riskLevel) { this.riskLevel = riskLevel; }
 
+    @Nullable
     public Double getConfidence() { return confidence; }
-    public void setConfidence(Double confidence) { this.confidence = confidence; }
+    public void setConfidence(@Nullable Double confidence) { this.confidence = confidence; }
 
+    @Nullable
     public String getReasoning() { return reasoning; }
-    public void setReasoning(String reasoning) { this.reasoning = reasoning; }
+    public void setReasoning(@Nullable String reasoning) { this.reasoning = reasoning; }
 
     @Override
     public String toString() {

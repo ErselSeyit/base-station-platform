@@ -60,7 +60,7 @@ func NewAuthenticator(baseURL string, config *AuthConfig) *Authenticator {
 
 // Login authenticates with the auth service and obtains a JWT token.
 func (a *Authenticator) Login() error {
-	url := fmt.Sprintf("%s/api/auth/login", a.baseURL)
+	url := fmt.Sprintf("%s/api/v1/auth/login", a.baseURL)
 
 	reqBody := LoginRequest{
 		Username: a.config.Username,

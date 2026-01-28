@@ -1,6 +1,7 @@
 package com.huawei.basestation.service;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -16,7 +17,6 @@ import com.huawei.common.audit.AuditLogger.AuditAction;
 
 @Service
 @Transactional
-@SuppressWarnings("null") // All return values from repository and stream operations are guaranteed non-null
 public class BaseStationService {
 
     private static final String AUDIT_ACTOR = "SYSTEM";
@@ -31,9 +31,10 @@ public class BaseStationService {
     }
 
     public BaseStationDTO createStation(BaseStationDTO dto) {
-        // @NotBlank validation ensures stationName is not null
-        if (repository.findByStationName(dto.getStationName()).isPresent()) {
-            throw new IllegalArgumentException("Station with name " + dto.getStationName() + " already exists");
+        // @NotBlank validation ensures stationName is not null - requireNonNull satisfies null checker
+        String stationName = Objects.requireNonNull(dto.getStationName(), "Station name is required");
+        if (repository.findByStationName(stationName).isPresent()) {
+            throw new IllegalArgumentException("Station with name " + stationName + " already exists");
         }
         BaseStation station = convertToEntity(dto);
         BaseStationDTO saved = convertToDTO(repository.save(station));
@@ -44,38 +45,39 @@ public class BaseStationService {
 
     @Transactional(readOnly = true)
     public Optional<BaseStationDTO> getStationById(Long id) {
-        return repository.findById(id).map(this::convertToDTO);
+        return Objects.requireNonNull(repository.findById(id).map(this::convertToDTO));
     }
 
     @Transactional(readOnly = true)
     public List<BaseStationDTO> getAllStations() {
-        return repository.findAll().stream()
+        return Objects.requireNonNull(repository.findAll().stream()
                         .map(this::convertToDTO)
-                        .toList();
+                        .toList());
     }
 
     @Transactional(readOnly = true)
     public List<BaseStationDTO> getStationsByStatus(StationStatus status) {
-        return repository.findByStatus(status).stream()
+        return Objects.requireNonNull(repository.findByStatus(status).stream()
                         .map(this::convertToDTO)
-                        .toList();
+                        .toList());
     }
 
     @Transactional(readOnly = true)
     public List<BaseStationDTO> getStationsByType(StationType type) {
-        return repository.findByStationType(type).stream()
+        return Objects.requireNonNull(repository.findByStationType(type).stream()
                         .map(this::convertToDTO)
-                        .toList();
+                        .toList());
     }
 
     public BaseStationDTO updateStation(Long id, BaseStationDTO dto) {
         BaseStation station = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Station not found with id: " + id));
 
-        // @NotBlank validation ensures stationName is not null
-        if (!station.getStationName().equals(dto.getStationName())
-                && repository.findByStationName(dto.getStationName()).isPresent()) {
-            throw new IllegalArgumentException("Station with name " + dto.getStationName() + " already exists");
+        // @NotBlank validation ensures stationName is not null - requireNonNull satisfies null checker
+        String newStationName = Objects.requireNonNull(dto.getStationName(), "Station name is required");
+        if (!station.getStationName().equals(newStationName)
+                && repository.findByStationName(newStationName).isPresent()) {
+            throw new IllegalArgumentException("Station with name " + newStationName + " already exists");
         }
 
         station.setStationName(dto.getStationName());
@@ -83,7 +85,7 @@ public class BaseStationService {
         station.setLatitude(dto.getLatitude());
         station.setLongitude(dto.getLongitude());
         station.setStationType(dto.getStationType());
-        station.setStatus(dto.getStatus() != null ? dto.getStatus() : station.getStatus());
+        station.setStatus(Objects.requireNonNullElse(dto.getStatus(), station.getStatus()));
         station.setPowerConsumption(dto.getPowerConsumption());
         station.setDescription(dto.getDescription());
 
@@ -103,9 +105,9 @@ public class BaseStationService {
 
     @Transactional(readOnly = true)
     public List<BaseStationDTO> findStationsInArea(Double minLat, Double maxLat, Double minLon, Double maxLon) {
-        return repository.findStationsInArea(minLat, maxLat, minLon, maxLon).stream()
+        return Objects.requireNonNull(repository.findStationsInArea(minLat, maxLat, minLon, maxLon).stream()
                         .map(this::convertToDTO)
-                        .toList();
+                        .toList());
     }
 
     @Transactional(readOnly = true)
@@ -119,9 +121,9 @@ public class BaseStationService {
      */
     @Transactional(readOnly = true)
     public List<BaseStationDTO> findStationsNearPoint(Double lat, Double lon, Double radiusKm) {
-        return repository.findStationsNearPoint(lat, lon, radiusKm).stream()
+        return Objects.requireNonNull(repository.findStationsNearPoint(lat, lon, radiusKm).stream()
                         .map(this::convertToDTO)
-                        .toList();
+                        .toList());
     }
 
     private BaseStation convertToEntity(BaseStationDTO dto) {
@@ -131,7 +133,7 @@ public class BaseStationService {
         station.setLatitude(dto.getLatitude());
         station.setLongitude(dto.getLongitude());
         station.setStationType(dto.getStationType());
-        station.setStatus(dto.getStatus() != null ? dto.getStatus() : StationStatus.ACTIVE);
+        station.setStatus(Objects.requireNonNullElse(dto.getStatus(), StationStatus.ACTIVE));
         station.setPowerConsumption(dto.getPowerConsumption());
         station.setDescription(dto.getDescription());
         return station;

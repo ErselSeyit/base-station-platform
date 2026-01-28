@@ -6,6 +6,7 @@ import java.util.Objects;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -91,7 +92,7 @@ public class NotificationController {
 
     @GetMapping
     public ResponseEntity<List<Notification>> getNotifications(
-            @RequestParam(required = false) NotificationStatus status) {
+            @RequestParam(required = false) @Nullable NotificationStatus status) {
         if (status != null) {
             return ResponseEntity.ok(service.getNotificationsByStatus(status));
         }

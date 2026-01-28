@@ -147,7 +147,9 @@
 }
 
 /* CSS Reset with surgical precision */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -173,22 +175,47 @@ body {
 }
 
 /* Typography with mathematical precision */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.025em;
   color: var(--mono-950);
 }
 
-h1 { font-size: 2.25rem; font-weight: 700; }
-h2 { font-size: 1.875rem; }
-h3 { font-size: 1.5rem; }
-h4 { font-size: 1.25rem; }
-h5 { font-size: 1.125rem; }
-h6 { font-size: 1rem; }
+h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 1.875rem;
+}
+
+h3 {
+  font-size: 1.5rem;
+}
+
+h4 {
+  font-size: 1.25rem;
+}
+
+h5 {
+  font-size: 1.125rem;
+}
+
+h6 {
+  font-size: 1rem;
+}
 
 /* Monospaced for data */
-code, pre, .mono {
+code,
+pre,
+.mono {
   font-family: 'JetBrains Mono', 'SF Mono', Monaco, monospace;
   font-feature-settings: 'liga' 0, 'calt' 0;
   font-size: 0.875em;
@@ -216,8 +243,13 @@ code, pre, .mono {
 
 /* Micro-animations with purpose */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
@@ -225,6 +257,7 @@ code, pre, .mono {
     opacity: 0;
     transform: translateY(16px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -236,6 +269,7 @@ code, pre, .mono {
     opacity: 0;
     transform: translateY(-16px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -247,6 +281,7 @@ code, pre, .mono {
     opacity: 0;
     transform: scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -254,14 +289,22 @@ code, pre, .mono {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @keyframes shimmer {
   0% {
     background-position: -100% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
@@ -291,12 +334,29 @@ code, pre, .mono {
 }
 
 /* Delay utilities */
-.delay-75 { animation-delay: 75ms; }
-.delay-100 { animation-delay: 100ms; }
-.delay-150 { animation-delay: 150ms; }
-.delay-200 { animation-delay: 200ms; }
-.delay-300 { animation-delay: 300ms; }
-.delay-500 { animation-delay: 500ms; }
+.delay-75 {
+  animation-delay: 75ms;
+}
+
+.delay-100 {
+  animation-delay: 100ms;
+}
+
+.delay-150 {
+  animation-delay: 150ms;
+}
+
+.delay-200 {
+  animation-delay: 200ms;
+}
+
+.delay-300 {
+  animation-delay: 300ms;
+}
+
+.delay-500 {
+  animation-delay: 500ms;
+}
 
 /* Revolutionary card system - floating surfaces */
 .card {
@@ -315,6 +375,7 @@ code, pre, .mono {
   padding: 1px;
   background: linear-gradient(135deg, transparent, var(--mono-200), transparent);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   opacity: 0;
@@ -480,12 +541,10 @@ a:hover {
 
 /* Loading skeleton */
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--mono-100) 0%,
-    var(--mono-200) 50%,
-    var(--mono-100) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--mono-100) 0%,
+      var(--mono-200) 50%,
+      var(--mono-100) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 4px;
@@ -514,7 +573,7 @@ a:hover {
   overflow: hidden;
 }
 
-.data-grid > * {
+.data-grid>* {
   background: var(--surface-base);
   padding: 16px;
 }

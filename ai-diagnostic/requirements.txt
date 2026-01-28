@@ -12,7 +12,11 @@ opentelemetry-sdk>=1.20.0
 opentelemetry-exporter-zipkin>=1.20.0
 opentelemetry-instrumentation-flask>=0.41b0
 
+# BI Report Generation
+matplotlib>=3.7.0      # Charts and PDF generation
+numpy>=1.24.0          # Numerical operations
+requests>=2.28.0       # HTTP client for API calls
+
 # Optional - Install based on your needs:
 # paho-mqtt>=1.6.1     # MQTT IoT protocol
 # websockets>=10.0     # WebSocket support
-# requests>=2.28.0     # HTTP client for Ollama

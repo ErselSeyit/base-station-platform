@@ -27,6 +27,7 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Positive;
 
+import org.springframework.lang.Nullable;
 import org.springframework.validation.annotation.Validated;
 
 @RestController
@@ -52,15 +53,16 @@ public class BaseStationController {
 
     @GetMapping("/{id}")
     public ResponseEntity<BaseStationDTO> getStationById(@PathVariable Long id) {
-        return service.getStationById(Objects.requireNonNull(id, STATION_ID_NULL_MESSAGE))
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        return Objects.requireNonNull(
+                service.getStationById(Objects.requireNonNull(id, STATION_ID_NULL_MESSAGE))
+                        .map(ResponseEntity::ok)
+                        .orElse(ResponseEntity.notFound().build()));
     }
 
     @GetMapping
     public ResponseEntity<List<BaseStationDTO>> getAllStations(
-            @RequestParam(required = false) StationStatus status,
-            @RequestParam(required = false) StationType type) {
+            @RequestParam(required = false) @Nullable StationStatus status,
+            @RequestParam(required = false) @Nullable StationType type) {
         if (status != null) {
             return ResponseEntity.ok(service.getStationsByStatus(status));
         }
