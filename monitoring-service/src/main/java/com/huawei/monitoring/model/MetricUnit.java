@@ -13,7 +13,9 @@ public enum MetricUnit {
     WATTS("W"),
     DBM("dBm"),
     CONNECTIONS("connections"),
-    MBPS("Mbps");
+    MBPS("Mbps"),
+    RPM("RPM"),
+    HOURS("h");
 
     private final String unit;
 
@@ -34,12 +36,13 @@ public enum MetricUnit {
     static {
         METRIC_TYPE_UNITS.put(MetricType.CPU_USAGE, PERCENTAGE);
         METRIC_TYPE_UNITS.put(MetricType.MEMORY_USAGE, PERCENTAGE);
-        METRIC_TYPE_UNITS.put(MetricType.UPTIME, PERCENTAGE);
         METRIC_TYPE_UNITS.put(MetricType.TEMPERATURE, CELSIUS);
         METRIC_TYPE_UNITS.put(MetricType.POWER_CONSUMPTION, WATTS);
         METRIC_TYPE_UNITS.put(MetricType.SIGNAL_STRENGTH, DBM);
         METRIC_TYPE_UNITS.put(MetricType.CONNECTION_COUNT, CONNECTIONS);
         METRIC_TYPE_UNITS.put(MetricType.DATA_THROUGHPUT, MBPS);
+        METRIC_TYPE_UNITS.put(MetricType.FAN_SPEED, RPM);
+        METRIC_TYPE_UNITS.put(MetricType.UPTIME, HOURS);
     }
 
     /**

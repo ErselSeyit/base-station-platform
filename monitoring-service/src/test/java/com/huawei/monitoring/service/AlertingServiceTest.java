@@ -36,7 +36,8 @@ class AlertingServiceTest {
     void setUp() {
         RabbitTemplate rabbitTemplate = Objects.requireNonNull(mock(RabbitTemplate.class));
         DiagnosticClient diagnosticClient = Objects.requireNonNull(mock(DiagnosticClient.class));
-        alertingService = new AlertingService(rabbitTemplate, diagnosticClient);
+        DiagnosticSessionService diagnosticSessionService = Objects.requireNonNull(mock(DiagnosticSessionService.class));
+        alertingService = new AlertingService(rabbitTemplate, diagnosticClient, diagnosticSessionService);
     }
 
     @Nested

@@ -89,7 +89,8 @@ public class MonitoringServiceClient {
                 cachedMetrics.set(metrics);
             }
 
-            return metrics != null ? metrics : Collections.emptyMap();
+            // Return empty map instead of null - follows "return empty, not null" pattern
+            return Objects.requireNonNullElse(metrics, Collections.emptyMap());
         });
     }
 
@@ -111,7 +112,8 @@ public class MonitoringServiceClient {
             cachedMetrics.set(metrics);
         }
 
-        return metrics != null ? metrics : Collections.emptyMap();
+        // Return empty map instead of null - follows "return empty, not null" pattern
+        return Objects.requireNonNullElse(metrics, Collections.emptyMap());
     }
 
     /**
@@ -161,7 +163,8 @@ public class MonitoringServiceClient {
             log.debug("Successfully fetched batch metrics for {} stations", batchMetrics.size());
         }
 
-        return batchMetrics != null ? batchMetrics : Collections.emptyMap();
+        // Return empty map instead of null - follows "return empty, not null" pattern
+        return Objects.requireNonNullElse(batchMetrics, Collections.emptyMap());
     }
 
     /**

@@ -9,6 +9,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
+
+import org.springframework.lang.Nullable;
 
 public class BaseStationDTO {
 
@@ -49,122 +52,125 @@ public class BaseStationDTO {
     }
 
     // Getters and Setters
+    @Nullable
     public Long getId() {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(@Nullable Long id) {
         this.id = id;
     }
 
+    @Nullable
     public String getStationName() {
         return stationName;
     }
 
-    public void setStationName(String stationName) {
+    public void setStationName(@Nullable String stationName) {
         this.stationName = stationName;
     }
 
+    @Nullable
     public String getLocation() {
         return location;
     }
 
-    public void setLocation(String location) {
+    public void setLocation(@Nullable String location) {
         this.location = location;
     }
 
+    @Nullable
     public Double getLatitude() {
         return latitude;
     }
 
-    public void setLatitude(Double latitude) {
+    public void setLatitude(@Nullable Double latitude) {
         this.latitude = latitude;
     }
 
+    @Nullable
     public Double getLongitude() {
         return longitude;
     }
 
-    public void setLongitude(Double longitude) {
+    public void setLongitude(@Nullable Double longitude) {
         this.longitude = longitude;
     }
 
+    @Nullable
     public StationType getStationType() {
         return stationType;
     }
 
-    public void setStationType(StationType stationType) {
+    public void setStationType(@Nullable StationType stationType) {
         this.stationType = stationType;
     }
 
+    @Nullable
     public StationStatus getStatus() {
         return status;
     }
 
-    public void setStatus(StationStatus status) {
+    public void setStatus(@Nullable StationStatus status) {
         this.status = status;
     }
 
+    @Nullable
     public Double getPowerConsumption() {
         return powerConsumption;
     }
 
-    public void setPowerConsumption(Double powerConsumption) {
+    public void setPowerConsumption(@Nullable Double powerConsumption) {
         this.powerConsumption = powerConsumption;
     }
 
+    @Nullable
     public String getDescription() {
         return description;
     }
 
-    public void setDescription(String description) {
+    public void setDescription(@Nullable String description) {
         this.description = description;
     }
 
+    @Nullable
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(@Nullable LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
 
+    @Nullable
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
     }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(@Nullable LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(@Nullable Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
         BaseStationDTO that = (BaseStationDTO) o;
 
-        if (id != null ? !id.equals(that.id) : that.id != null) return false;
-        if (stationName != null ? !stationName.equals(that.stationName) : that.stationName != null) return false;
-        if (location != null ? !location.equals(that.location) : that.location != null) return false;
-        if (latitude != null ? !latitude.equals(that.latitude) : that.latitude != null) return false;
-        if (longitude != null ? !longitude.equals(that.longitude) : that.longitude != null) return false;
-        if (stationType != that.stationType) return false;
-        if (status != that.status) return false;
-        return powerConsumption != null ? powerConsumption.equals(that.powerConsumption) : that.powerConsumption == null;
+        return Objects.equals(id, that.id)
+                && Objects.equals(stationName, that.stationName)
+                && Objects.equals(location, that.location)
+                && Objects.equals(latitude, that.latitude)
+                && Objects.equals(longitude, that.longitude)
+                && stationType == that.stationType
+                && status == that.status
+                && Objects.equals(powerConsumption, that.powerConsumption);
     }
 
     @Override
     public int hashCode() {
-        int result = id != null ? id.hashCode() : 0;
-        result = 31 * result + (stationName != null ? stationName.hashCode() : 0);
-        result = 31 * result + (location != null ? location.hashCode() : 0);
-        result = 31 * result + (latitude != null ? latitude.hashCode() : 0);
-        result = 31 * result + (longitude != null ? longitude.hashCode() : 0);
-        result = 31 * result + (stationType != null ? stationType.hashCode() : 0);
-        result = 31 * result + (status != null ? status.hashCode() : 0);
-        result = 31 * result + (powerConsumption != null ? powerConsumption.hashCode() : 0);
-        return result;
+        return Objects.hash(id, stationName, location, latitude, longitude, stationType, status, powerConsumption);
     }
 
     @Override

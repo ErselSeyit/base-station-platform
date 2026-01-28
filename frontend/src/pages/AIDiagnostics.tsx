@@ -10,9 +10,12 @@ import {
   Thermostat as TempIcon,
   SignalCellularAlt as SignalIcon,
   Refresh as RefreshIcon,
+  RateReview as FeedbackIcon,
+  School as LearnIcon,
 } from '@mui/icons-material'
 import {
   Box,
+  Button,
   Card,
   Chip,
   Grid,
@@ -28,6 +31,9 @@ import {
   Typography,
 } from '@mui/material'
 import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import FeedbackDialog from '../components/FeedbackDialog'
+import { diagnosticsApi, DiagnosticSession } from '../services/api'
 
 // Types
 interface DiagnosticEvent {
@@ -239,6 +245,39 @@ export default function AIDiagnostics() {
   const [diagnosticData, setDiagnosticData] = useState<DiagnosticLog>(defaultDiagnosticLog)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
+  const [selectedSession, setSelectedSession] = useState<DiagnosticSession | null>(null)
+  const queryClient = useQueryClient()
+
+  // Fetch pending confirmations from the learning system
+  const { data: pendingSessions = [] } = useQuery({
+    queryKey: ['diagnostic-pending'],
+    queryFn: async () => {
+      const response = await diagnosticsApi.getPending()
+      return response.data
+    },
+    refetchInterval: 30000,
+  })
+
+  // Fetch learning stats
+  const { data: learningStats } = useQuery({
+    queryKey: ['learning-stats'],
+    queryFn: async () => {
+      const response = await diagnosticsApi.getLearningStats()
+      return response.data
+    },
+    refetchInterval: 60000,
+  })
+
+  const handleOpenFeedback = (session: DiagnosticSession) => {
+    setSelectedSession(session)
+    setFeedbackDialogOpen(true)
+  }
+
+  const handleFeedbackSubmit = () => {
+    queryClient.invalidateQueries({ queryKey: ['diagnostic-pending'] })
+    queryClient.invalidateQueries({ queryKey: ['learning-stats'] })
+  }
 
   // Fetch diagnostic data from the JSON file
   const fetchDiagnosticData = useCallback(async () => {
@@ -312,12 +351,19 @@ export default function AIDiagnostics() {
           <IconButton
             onClick={handleRefresh}
             sx={{
+              width: 40,
+              height: 40,
               background: 'var(--surface-elevated)',
               border: '1px solid var(--surface-border)',
-              '&:hover': { background: 'var(--mono-100)' },
+              borderRadius: '10px',
+              color: 'inherit',
+              '&:hover': {
+                background: 'var(--mono-100)',
+                borderColor: 'var(--mono-300)',
+              },
             }}
           >
-            <RefreshIcon sx={{ animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshIcon sx={{ fontSize: 20, animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
           </IconButton>
         </Tooltip>
       </Box>
@@ -692,6 +738,216 @@ export default function AIDiagnostics() {
           </Table>
         </TableContainer>
       </Card>
+
+      {/* Pending Confirmations Section */}
+      {pendingSessions.length > 0 && (
+        <Card
+          sx={{
+            mt: 4,
+            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+            border: '1px solid rgba(102, 126, 234, 0.3)',
+            borderRadius: '16px',
+            overflow: 'hidden',
+          }}
+        >
+          <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid var(--surface-border)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box
+                sx={{
+                  p: 1,
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                }}
+              >
+                <FeedbackIcon sx={{ fontSize: 20 }} />
+              </Box>
+              <Box>
+                <Typography
+                  variant="h6"
+                  sx={{ fontWeight: 600, color: 'var(--mono-950)', fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                >
+                  Pending Confirmations
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)', fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+                  Help the AI learn by confirming if solutions worked
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {pendingSessions.map((session) => (
+                <Box
+                  key={session.id}
+                  sx={{
+                    p: 2,
+                    background: 'var(--surface-base)',
+                    border: '1px solid var(--surface-border)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 2,
+                  }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 200 }}>
+                    <Typography sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                      {session.problemCode.replace(/_/g, ' ')}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'var(--mono-500)', mt: 0.5 }}>
+                      {session.stationName} - {session.message}
+                    </Typography>
+                    {session.aiSolution && (
+                      <Typography variant="body2" sx={{ color: 'var(--mono-600)', mt: 1, fontStyle: 'italic' }}>
+                        AI Action: {session.aiSolution.action}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Button
+                    variant="contained"
+                    startIcon={<FeedbackIcon />}
+                    onClick={() => handleOpenFeedback(session)}
+                    sx={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 3,
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%)',
+                      },
+                    }}
+                  >
+                    Confirm Solution
+                  </Button>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        </Card>
+      )}
+
+      {/* Learning Stats Section */}
+      {learningStats && learningStats.totalFeedback > 0 && (
+        <Card
+          sx={{
+            mt: 4,
+            background: 'var(--surface-elevated)',
+            border: '1px solid var(--surface-border)',
+            borderRadius: '16px',
+            p: { xs: 2, sm: 3 },
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+            <Box
+              sx={{
+                p: 1,
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white',
+              }}
+            >
+              <LearnIcon sx={{ fontSize: 20 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                AI Learning Progress
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                The AI improves based on your feedback
+              </Typography>
+            </Box>
+          </Box>
+
+          <Grid container spacing={3}>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--mono-950)' }}>
+                  {learningStats.totalFeedback}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Total Feedback
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--status-active)' }}>
+                  {learningStats.resolved}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Successful
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--status-offline)' }}>
+                  {learningStats.failed}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Failed
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Tooltip title="Solutions auto-applied due to high AI confidence (95%+)">
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#8b5cf6', cursor: 'help' }}>
+                    {learningStats.autoApplied || 0}
+                  </Typography>
+                </Tooltip>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Auto-Applied
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#667eea' }}>
+                  {learningStats.successRate.toFixed(1)}%
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Success Rate
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+
+          {learningStats.topPatterns && learningStats.topPatterns.length > 0 && (
+            <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid var(--surface-border)' }}>
+              <Typography variant="subtitle2" sx={{ color: 'var(--mono-600)', mb: 2 }}>
+                Top Learned Patterns
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {learningStats.topPatterns.map((pattern) => (
+                  <Chip
+                    key={pattern.problemCode}
+                    label={`${pattern.problemCode.replace(/_/g, ' ')} (${pattern.successRate.toFixed(0)}%)`}
+                    size="small"
+                    sx={{
+                      backgroundColor: pattern.successRate >= 70 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      color: pattern.successRate >= 70 ? '#059669' : '#d97706',
+                      fontWeight: 600,
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Card>
+      )}
+
+      {/* Feedback Dialog */}
+      <FeedbackDialog
+        open={feedbackDialogOpen}
+        session={selectedSession}
+        onClose={() => setFeedbackDialogOpen(false)}
+        onSubmit={handleFeedbackSubmit}
+      />
 
       {/* CSS for spin animation */}
       <style>{`

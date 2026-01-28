@@ -181,9 +181,6 @@ class BaseStationControllerTest {
         if (objectMapper == null) {
             throw new IllegalStateException("ObjectMapper is null - cannot serialize object to JSON");
         }
-        if (object == null) {
-            throw new IllegalArgumentException("Cannot serialize null object to JSON");
-        }
         try {
             String json = objectMapper.writeValueAsString(object);
             if (json == null) {

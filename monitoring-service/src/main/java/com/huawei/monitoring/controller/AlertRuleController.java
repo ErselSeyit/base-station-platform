@@ -41,9 +41,11 @@ public class AlertRuleController {
 
     @GetMapping("/{ruleId}")
     public ResponseEntity<AlertRule> getRule(@PathVariable String ruleId) {
-        return alertingService.getRule(Objects.requireNonNull(ruleId, RULE_ID_NULL_MESSAGE))
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return Objects.requireNonNull(
+                alertingService.getRule(Objects.requireNonNull(ruleId, RULE_ID_NULL_MESSAGE))
+                        .map(ResponseEntity::ok)
+                        .orElseGet(() -> ResponseEntity.notFound().build()),
+                "Response cannot be null");
     }
 
     @PutMapping("/{ruleId}/enable")
@@ -67,15 +69,17 @@ public class AlertRuleController {
     public ResponseEntity<AlertRule> updateThreshold(
             @PathVariable String ruleId,
             @RequestParam Double threshold) {
-        return alertingService.getRule(Objects.requireNonNull(ruleId, RULE_ID_NULL_MESSAGE))
-                .map(rule -> {
-                    AlertRule updated = Objects.requireNonNull(
-                            rule.withThreshold(threshold),
-                            "Updated rule cannot be null");
-                    alertingService.addRule(updated);
-                    return ResponseEntity.ok(updated);
-                })
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return Objects.requireNonNull(
+                alertingService.getRule(Objects.requireNonNull(ruleId, RULE_ID_NULL_MESSAGE))
+                        .map(rule -> {
+                            AlertRule updated = Objects.requireNonNull(
+                                    rule.withThreshold(threshold),
+                                    "Updated rule cannot be null");
+                            alertingService.addRule(updated);
+                            return ResponseEntity.ok(updated);
+                        })
+                        .orElseGet(() -> ResponseEntity.notFound().build()),
+                "Response cannot be null");
     }
 
     @DeleteMapping("/{ruleId}")

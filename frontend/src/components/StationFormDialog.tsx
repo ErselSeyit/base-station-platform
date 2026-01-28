@@ -112,13 +112,17 @@ export default function StationFormDialog({
         <IconButton
           onClick={onClose}
           sx={{
+            width: 36,
+            height: 36,
+            borderRadius: '10px',
             color: 'var(--mono-600)',
             '&:hover': {
               background: 'var(--mono-100)',
+              color: 'var(--mono-950)',
             },
           }}
         >
-          <CloseIcon />
+          <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </Box>
 

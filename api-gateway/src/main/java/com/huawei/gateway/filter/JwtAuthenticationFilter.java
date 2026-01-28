@@ -20,6 +20,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.util.Objects;
 
 /**
  * JWT Authentication Filter for API Gateway.
@@ -143,7 +144,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
         }
 
         long timestamp = System.currentTimeMillis();
-        String payload = username + ":" + (role != null ? role : "USER") + ":" + timestamp;
+        String payload = username + ":" + Objects.requireNonNullElse(role, "USER") + ":" + timestamp;
         String signature = computeHmac(payload, internalSecret);
 
         return signature + "." + payload;

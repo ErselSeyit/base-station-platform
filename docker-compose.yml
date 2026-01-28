@@ -202,6 +202,7 @@ services:
     environment:
       DIAGNOSTIC_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+      API_GATEWAY_URL: http://api-gateway:8080
     ports:
       - "9091:9091"
     networks:
@@ -212,7 +213,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 128M
+          memory: 256M
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9091/health')"]
       interval: 30s
@@ -424,6 +425,52 @@ services:
         limits:
           cpus: '0.25'
           memory: 64M
+
+  # ============================================
+  # EDGE BRIDGE (optional - for MIPS device integration)
+  # ============================================
+  edge-bridge:
+    build:
+      context: ./edge-bridge
+      dockerfile: Dockerfile
+    container_name: edge-bridge
+    environment:
+      STATION_ID: ${EDGE_STATION_ID:-BS-001}
+      CLOUD_BASE_URL: http://api-gateway:8080
+      BRIDGE_USERNAME: ${BRIDGE_USERNAME:-admin}
+      BRIDGE_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
+      DEVICE_HOST: ${DEVICE_HOST:-device-simulator}
+      DEVICE_PORT: ${DEVICE_PORT:-9999}
+    depends_on:
+      - api-gateway
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+    profiles:
+      - edge  # Only start with: docker-compose --profile edge up
+
+  device-simulator:
+    build:
+      context: ./testing
+      dockerfile: Dockerfile.simulator
+    container_name: device-simulator
+    ports:
+      - "9999:9999"
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    profiles:
+      - edge  # Only start with: docker-compose --profile edge up
 
 volumes:
   postgres-data:

@@ -5,6 +5,8 @@ import com.huawei.monitoring.model.MetricType;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
+import java.util.Objects;
+
 /**
  * Validator that ensures metric values are within realistic ranges for their type.
  * Prevents storing unrealistic or erroneous data that could indicate sensor failures
@@ -25,7 +27,7 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
         }
 
         MetricType metricType = dto.getMetricType();
-        double value = dto.getValue();
+        double value = Objects.requireNonNull(dto.getValue(), "Value cannot be null after null check");
 
         ValidationResult result = validateValue(metricType, value);
 
@@ -47,23 +49,15 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
      * @return validation result with message if invalid
      */
     private ValidationResult validateValue(MetricType metricType, double value) {
-        switch (metricType) {
-            case CPU_USAGE, MEMORY_USAGE, UPTIME:
-                return validatePercentage(metricType, value);
-            case TEMPERATURE:
-                return validateTemperature(value);
-            case POWER_CONSUMPTION:
-                return validatePowerConsumption(value);
-            case SIGNAL_STRENGTH:
-                return validateSignalStrength(value);
-            case CONNECTION_COUNT:
-                return validateConnectionCount(value);
-            case DATA_THROUGHPUT:
-                return validateDataThroughput(value);
-            default:
-                // Unknown metric type - let it pass, other validations will catch it
-                return ValidationResult.valid();
-        }
+        return switch (metricType) {
+            case CPU_USAGE, MEMORY_USAGE, UPTIME -> validatePercentage(metricType, value);
+            case TEMPERATURE -> validateTemperature(value);
+            case POWER_CONSUMPTION -> validatePowerConsumption(value);
+            case SIGNAL_STRENGTH -> validateSignalStrength(value);
+            case CONNECTION_COUNT -> validateConnectionCount(value);
+            case DATA_THROUGHPUT -> validateDataThroughput(value);
+            case FAN_SPEED -> validateFanSpeed(value);
+        };
     }
 
     private ValidationResult validatePercentage(MetricType metricType, double value) {
@@ -127,6 +121,17 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
         if (value < 0 || value > 100000) {
             return ValidationResult.invalid(
                 String.format("Data throughput must be between 0 Mbps and 100,000 Mbps, received: %.2f Mbps", value)
+            );
+        }
+        return ValidationResult.valid();
+    }
+
+    private ValidationResult validateFanSpeed(double value) {
+        // Fan speed: 0 RPM to 15,000 RPM (high-performance server fans)
+        // Typical: 1000-5000 RPM
+        if (value < 0 || value > 15000) {
+            return ValidationResult.invalid(
+                String.format("Fan speed must be between 0 RPM and 15,000 RPM, received: %.0f RPM", value)
             );
         }
         return ValidationResult.valid();

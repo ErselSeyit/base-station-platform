@@ -64,10 +64,17 @@ except ImportError:
     MQTT_AVAILABLE = False
 
 try:
-    from flask import Flask, request, jsonify
+    from flask import Flask, request, jsonify, Response
     FLASK_AVAILABLE = True
 except ImportError:
     FLASK_AVAILABLE = False
+
+# BI Report generation (optional)
+try:
+    from bi_report_generator import BIReportGenerator
+    BI_REPORT_AVAILABLE = True
+except ImportError:
+    BI_REPORT_AVAILABLE = False
 
 try:
     import websockets
@@ -78,6 +85,9 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Error messages
+LEARNING_ENGINE_NOT_AVAILABLE = "Learning engine not available"
 
 
 # ============================================================================
@@ -109,6 +119,120 @@ class Solution:
     risk_level: str
     confidence: float = 0.0
     reasoning: str = ""
+
+
+@dataclass
+class LearnedPattern:
+    """Pattern learned from operator feedback"""
+    problem_code: str
+    category: str
+    resolved_count: int = 0
+    failed_count: int = 0
+    adjusted_confidence: float = 0.85
+    successful_actions: Optional[List[str]] = None
+    failed_actions: Optional[List[str]] = None
+
+    def __post_init__(self):
+        if self.successful_actions is None:
+            self.successful_actions = []
+        if self.failed_actions is None:
+            self.failed_actions = []
+
+    def success_rate(self) -> float:
+        total = self.resolved_count + self.failed_count
+        return (self.resolved_count / total * 100) if total > 0 else 0.0
+
+
+# ============================================================================
+# Learning Engine
+# ============================================================================
+
+class LearningEngine:
+    """
+    Manages learned patterns from operator feedback.
+    Adjusts confidence scores based on historical success rates.
+    """
+
+    def __init__(self):
+        self.patterns: Dict[str, LearnedPattern] = {}
+        self._lock = threading.Lock()
+
+    def get_pattern(self, problem_code: str) -> Optional[LearnedPattern]:
+        """Get learned pattern for a problem code."""
+        with self._lock:
+            return self.patterns.get(problem_code)
+
+    def update_pattern(self, problem_code: str, category: str,
+                       was_effective: bool, action: str) -> LearnedPattern:
+        """Update pattern based on feedback."""
+        with self._lock:
+            if problem_code not in self.patterns:
+                self.patterns[problem_code] = LearnedPattern(
+                    problem_code=problem_code,
+                    category=category
+                )
+
+            pattern = self.patterns[problem_code]
+
+            if was_effective:
+                pattern.resolved_count += 1
+                if action and action not in pattern.successful_actions:
+                    pattern.successful_actions.append(action)
+            else:
+                pattern.failed_count += 1
+                if action and action not in pattern.failed_actions:
+                    pattern.failed_actions.append(action)
+
+            # Recalculate confidence based on success rate
+            total = pattern.resolved_count + pattern.failed_count
+            if total > 0:
+                success_rate = pattern.resolved_count / total
+                # Weighted average: 30% base + 70% success rate
+                pattern.adjusted_confidence = 0.3 * 0.85 + 0.7 * success_rate
+
+            return pattern
+
+    def get_adjusted_confidence(self, problem_code: str,
+                                 base_confidence: float) -> float:
+        """Get confidence adjusted by learned patterns."""
+        pattern = self.get_pattern(problem_code)
+        if pattern and (pattern.resolved_count + pattern.failed_count) >= 3:
+            # Only use learned confidence if we have enough data
+            return pattern.adjusted_confidence
+        return base_confidence
+
+    def get_all_patterns(self) -> List[LearnedPattern]:
+        """Get all learned patterns."""
+        with self._lock:
+            return list(self.patterns.values())
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get learning statistics."""
+        with self._lock:
+            total_resolved = sum(p.resolved_count for p in self.patterns.values())
+            total_failed = sum(p.failed_count for p in self.patterns.values())
+            total = total_resolved + total_failed
+
+            return {
+                "total_patterns": len(self.patterns),
+                "total_feedback": total,
+                "total_resolved": total_resolved,
+                "total_failed": total_failed,
+                "overall_success_rate": (total_resolved / total * 100) if total > 0 else 0.0,
+                "top_patterns": [
+                    {
+                        "problem_code": p.problem_code,
+                        "success_rate": p.success_rate(),
+                        "total_cases": p.resolved_count + p.failed_count,
+                        "adjusted_confidence": p.adjusted_confidence
+                    }
+                    for p in sorted(
+                        self.patterns.values(),
+                        key=lambda x: x.resolved_count + x.failed_count,
+                        reverse=True
+                    )[:5]
+                ]
+            }
 
 
 # ============================================================================
@@ -321,7 +445,7 @@ Respond with JSON: {{"action": "...", "commands": [...], "expected_outcome": "..
             import requests
             r = requests.get(f"{self.host}/api/tags", timeout=2)
             return r.ok
-        except:
+        except Exception:
             return False
 
 
@@ -560,6 +684,11 @@ class HTTPAdapter(ProtocolAdapter):
         self.app = None
         self.secret = os.environ.get("DIAGNOSTIC_SECRET", "")
         self.tracer = None
+        # References to diagnostic logs and learning engine (set by DiagnosticService)
+        self.problem_log: List[Problem] = []
+        self.solution_log: List[Solution] = []
+        self.learning_engine: Optional[LearningEngine] = None
+        self.diagnostic_service = None  # Reference to parent service for feedback
         require_auth = os.environ.get("DIAGNOSTIC_REQUIRE_AUTH", "false").lower() == "true"
         if not self.secret:
             if require_auth:
@@ -630,6 +759,14 @@ class HTTPAdapter(ProtocolAdapter):
         self.running = True
         self.app = Flask(__name__)
 
+        # Enable CORS for browser requests
+        @self.app.after_request
+        def add_cors_headers(response):
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-HMAC-Signature'
+            return response
+
         # Setup OpenTelemetry tracing
         self._setup_tracing()
 
@@ -647,6 +784,149 @@ class HTTPAdapter(ProtocolAdapter):
                 "status": "ok",
                 "authenticated": bool(self.secret),
                 "tracing": OTEL_AVAILABLE and self.tracer is not None
+            })
+
+        @self.app.route('/reports/bi', methods=['GET'])
+        def generate_bi_report():
+            """Generate BI report PDF on-demand"""
+            if not BI_REPORT_AVAILABLE:
+                return jsonify({"error": "BI report generation not available"}), 503
+
+            api_url = os.environ.get("API_GATEWAY_URL", "http://localhost:8080")
+            generator = BIReportGenerator(api_url)
+            pdf_bytes = generator.generate_report_bytes()
+
+            if pdf_bytes is None:
+                return jsonify({"error": "Failed to generate report"}), 500
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"bi-report-{timestamp}.pdf"
+
+            return Response(
+                pdf_bytes,
+                mimetype='application/pdf',
+                headers={
+                    'Content-Disposition': f'attachment; filename="{filename}"',
+                    'Content-Length': str(len(pdf_bytes))
+                }
+            )
+
+        @self.app.route('/reports/diagnostics', methods=['GET'])
+        def get_diagnostics_log():
+            """Return AI diagnostics problem and solution logs"""
+            diagnostics = []
+
+            # Pair problems with their solutions
+            for i, problem in enumerate(self.problem_log):
+                entry = {
+                    "id": problem.id,
+                    "timestamp": problem.timestamp,
+                    "station_id": problem.station_id,
+                    "category": problem.category,
+                    "severity": problem.severity,
+                    "code": problem.code,
+                    "message": problem.message,
+                    "source_protocol": problem.source_protocol,
+                    "solution": None
+                }
+
+                # Find matching solution
+                if i < len(self.solution_log):
+                    sol = self.solution_log[i]
+                    entry["solution"] = {
+                        "action": sol.action,
+                        "commands": sol.commands,
+                        "expected_outcome": sol.expected_outcome,
+                        "risk_level": sol.risk_level,
+                        "confidence": sol.confidence,
+                        "reasoning": sol.reasoning
+                    }
+
+                diagnostics.append(entry)
+
+            return jsonify({
+                "total": len(diagnostics),
+                "diagnostics": diagnostics
+            })
+
+        @self.app.route('/learning/feedback', methods=['POST'])
+        @self._require_auth
+        def submit_feedback():
+            """Submit feedback on a diagnostic solution for learning."""
+            if not self.diagnostic_service:
+                return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
+
+            data = request.json
+            problem_code = data.get('problem_code')
+            category = data.get('category', 'unknown')
+            was_effective = data.get('was_effective', False)
+            action = data.get('action', '')
+
+            if not problem_code:
+                return jsonify({"error": "problem_code is required"}), 400
+
+            pattern = self.diagnostic_service.record_feedback(
+                problem_code, category, was_effective, action
+            )
+
+            return jsonify({
+                "problem_code": pattern.problem_code,
+                "success_rate": pattern.success_rate(),
+                "resolved_count": pattern.resolved_count,
+                "failed_count": pattern.failed_count,
+                "adjusted_confidence": pattern.adjusted_confidence
+            })
+
+        @self.app.route('/learning/stats', methods=['GET'])
+        def get_learning_stats():
+            """Get learning statistics."""
+            if not self.learning_engine:
+                return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
+            return jsonify(self.learning_engine.get_stats())
+
+        @self.app.route('/learning/patterns', methods=['GET'])
+        def get_patterns():
+            """Get all learned patterns."""
+            if not self.learning_engine:
+                return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
+
+            patterns = self.learning_engine.get_all_patterns()
+            return jsonify({
+                "total": len(patterns),
+                "patterns": [
+                    {
+                        "problem_code": p.problem_code,
+                        "category": p.category,
+                        "resolved_count": p.resolved_count,
+                        "failed_count": p.failed_count,
+                        "success_rate": p.success_rate(),
+                        "adjusted_confidence": p.adjusted_confidence,
+                        "successful_actions": p.successful_actions,
+                        "failed_actions": p.failed_actions
+                    }
+                    for p in patterns
+                ]
+            })
+
+        @self.app.route('/learning/patterns/<problem_code>', methods=['GET'])
+        def get_pattern(problem_code):
+            """Get a specific learned pattern."""
+            if not self.learning_engine:
+                return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
+
+            pattern = self.learning_engine.get_pattern(problem_code)
+            if not pattern:
+                return jsonify({"error": "Pattern not found"}), 404
+
+            return jsonify({
+                "problem_code": pattern.problem_code,
+                "category": pattern.category,
+                "resolved_count": pattern.resolved_count,
+                "failed_count": pattern.failed_count,
+                "success_rate": pattern.success_rate(),
+                "adjusted_confidence": pattern.adjusted_confidence,
+                "successful_actions": pattern.successful_actions,
+                "failed_actions": pattern.failed_actions
             })
 
         threading.Thread(
@@ -671,7 +951,7 @@ class DiagnosticService:
     """
     Main AI Diagnostic Service
 
-    Manages multiple protocol adapters and AI backends.
+    Manages multiple protocol adapters, AI backends, and the learning engine.
     """
 
     def __init__(self):
@@ -679,6 +959,7 @@ class DiagnosticService:
         self.backend: AIBackend = RuleBasedBackend()
         self.problem_log: List[Problem] = []
         self.solution_log: List[Solution] = []
+        self.learning_engine = LearningEngine()
 
     def set_backend(self, backend: AIBackend):
         """Set the AI backend for diagnosis"""
@@ -690,6 +971,16 @@ class DiagnosticService:
         self.adapters.append(adapter)
         logger.info(f"Added adapter: {type(adapter).__name__}")
 
+    def record_feedback(self, problem_code: str, category: str,
+                        was_effective: bool, action: str) -> LearnedPattern:
+        """Record operator feedback and update learning patterns."""
+        pattern = self.learning_engine.update_pattern(
+            problem_code, category, was_effective, action
+        )
+        logger.info(f"Feedback recorded for {problem_code}: "
+                   f"effective={was_effective}, success_rate={pattern.success_rate():.1f}%")
+        return pattern
+
     def _handle_problem(self, problem: Problem) -> Solution:
         """Central problem handler called by all adapters"""
         logger.info(f"Received problem from {problem.source_protocol}: "
@@ -699,6 +990,16 @@ class DiagnosticService:
 
         # Diagnose using AI backend
         solution = self.backend.diagnose(problem)
+
+        # Adjust confidence based on learned patterns
+        adjusted_confidence = self.learning_engine.get_adjusted_confidence(
+            problem.code, solution.confidence
+        )
+        if adjusted_confidence != solution.confidence:
+            logger.info(f"Adjusted confidence for {problem.code}: "
+                       f"{solution.confidence:.0%} -> {adjusted_confidence:.0%}")
+            solution.confidence = adjusted_confidence
+
         self.solution_log.append(solution)
 
         logger.info(f"Generated solution: {solution.action} "
@@ -711,9 +1012,16 @@ class DiagnosticService:
         logger.info("Starting AI Diagnostic Service")
         logger.info(f"Backend: {type(self.backend).__name__}")
         logger.info(f"Adapters: {len(self.adapters)}")
+        logger.info("Learning Engine: enabled")
 
         for adapter in self.adapters:
             adapter.on_problem = self._handle_problem
+            # Share log and learning references with HTTPAdapter
+            if isinstance(adapter, HTTPAdapter):
+                adapter.problem_log = self.problem_log
+                adapter.solution_log = self.solution_log
+                adapter.learning_engine = self.learning_engine
+                adapter.diagnostic_service = self
             adapter.start()
 
     def stop(self):
