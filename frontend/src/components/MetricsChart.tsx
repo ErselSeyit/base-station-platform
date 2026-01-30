@@ -11,12 +11,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { CHART_COLORS } from '../constants/colors'
 import { metricsApi } from '../services/api'
 import { MetricData } from '../types'
 import LoadingSpinner from './LoadingSpinner'
 
 interface ChartDataPoint {
   date: string
+  sortKey: string  // ISO date for sorting
   cpuUsage?: number
   memoryUsage?: number
   temperature?: number
@@ -24,6 +26,8 @@ interface ChartDataPoint {
 }
 
 interface AggregatedValues {
+  displayDate: string
+  sortKey: string
   cpuSum: number
   cpuCount: number
   memorySum: number
@@ -40,9 +44,12 @@ export default function MetricsChart() {
     queryFn: async () => {
       const response = await metricsApi.getAll({
         startTime: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        limit: 10000,
+        sort: 'asc', // Oldest first for historical chart
       })
       return response.data
     },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   })
 
   if (isLoading) {
@@ -56,10 +63,14 @@ export default function MetricsChart() {
 
   metrics.forEach((metric: MetricData) => {
     if (!metric.timestamp) return
-    const date = format(new Date(metric.timestamp), 'MMM dd')
+    const metricDate = new Date(metric.timestamp)
+    const sortKey = format(metricDate, 'yyyy-MM-dd')  // Sortable key
+    const displayDate = format(metricDate, 'MMM dd')  // Display format
 
-    if (!aggregated[date]) {
-      aggregated[date] = {
+    if (!aggregated[sortKey]) {
+      aggregated[sortKey] = {
+        displayDate,
+        sortKey,
         cpuSum: 0, cpuCount: 0,
         memorySum: 0, memoryCount: 0,
         tempSum: 0, tempCount: 0,
@@ -68,33 +79,32 @@ export default function MetricsChart() {
     }
 
     if (metric.metricType === 'CPU_USAGE') {
-      aggregated[date].cpuSum += metric.value
-      aggregated[date].cpuCount += 1
+      aggregated[sortKey].cpuSum += metric.value
+      aggregated[sortKey].cpuCount += 1
     } else if (metric.metricType === 'MEMORY_USAGE') {
-      aggregated[date].memorySum += metric.value
-      aggregated[date].memoryCount += 1
+      aggregated[sortKey].memorySum += metric.value
+      aggregated[sortKey].memoryCount += 1
     } else if (metric.metricType === 'TEMPERATURE') {
-      aggregated[date].tempSum += metric.value
-      aggregated[date].tempCount += 1
+      aggregated[sortKey].tempSum += metric.value
+      aggregated[sortKey].tempCount += 1
     } else if (metric.metricType === 'SIGNAL_STRENGTH') {
-      aggregated[date].signalSum += metric.value
-      aggregated[date].signalCount += 1
+      aggregated[sortKey].signalSum += metric.value
+      aggregated[sortKey].signalCount += 1
     }
   })
 
-  // Convert to chart data with averages
-  const chartData: ChartDataPoint[] = Object.keys(aggregated)
-    .map((date) => {
-      const values = aggregated[date]
-      return {
-        date,
-        cpuUsage: values.cpuCount > 0 ? values.cpuSum / values.cpuCount : undefined,
-        memoryUsage: values.memoryCount > 0 ? values.memorySum / values.memoryCount : undefined,
-        temperature: values.tempCount > 0 ? values.tempSum / values.tempCount : undefined,
-        signalStrength: values.signalCount > 0 ? values.signalSum / values.signalCount : undefined,
-      }
-    })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  // Convert to chart data with averages, sorted by date
+  const aggregatedValues = Object.values(aggregated)
+  aggregatedValues.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+  const chartData: ChartDataPoint[] = aggregatedValues
+    .map((values) => ({
+      date: values.displayDate,
+      sortKey: values.sortKey,
+      cpuUsage: values.cpuCount > 0 ? values.cpuSum / values.cpuCount : undefined,
+      memoryUsage: values.memoryCount > 0 ? values.memorySum / values.memoryCount : undefined,
+      temperature: values.tempCount > 0 ? values.tempSum / values.tempCount : undefined,
+      signalStrength: values.signalCount > 0 ? values.signalSum / values.signalCount : undefined,
+    }))
 
   // Check if we have any data
   const hasData = chartData.some(d =>
@@ -138,25 +148,25 @@ export default function MetricsChart() {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--mono-200)" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--mono-400)" />
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 12, fill: 'var(--mono-600)' }}
-          stroke="var(--mono-300)"
+          tick={{ fontSize: 12, fill: 'var(--mono-700)' }}
+          stroke="var(--mono-500)"
         />
         <YAxis
           yAxisId="left"
           domain={[0, 100]}
           tickFormatter={(v) => `${v}%`}
-          tick={{ fontSize: 12, fill: 'var(--mono-600)' }}
-          stroke="var(--mono-300)"
+          tick={{ fontSize: 12, fill: 'var(--mono-700)' }}
+          stroke="var(--mono-500)"
         />
         <YAxis
           yAxisId="right"
           orientation="right"
           domain={[-100, 100]}
-          tick={{ fontSize: 12, fill: 'var(--mono-600)' }}
-          stroke="var(--mono-300)"
+          tick={{ fontSize: 12, fill: 'var(--mono-700)' }}
+          stroke="var(--mono-500)"
         />
         <Tooltip
           formatter={formatValue}
@@ -171,13 +181,13 @@ export default function MetricsChart() {
         />
         <Legend
           formatter={legendFormatter}
-          wrapperStyle={{ color: 'var(--mono-700)' }}
+          wrapperStyle={{ color: 'var(--mono-800)' }}
         />
         <Line
           yAxisId="left"
           type="monotone"
           dataKey="cpuUsage"
-          stroke="var(--status-active)"
+          stroke={CHART_COLORS.cpuUsage}
           strokeWidth={2}
           dot={false}
           connectNulls
@@ -186,7 +196,7 @@ export default function MetricsChart() {
           yAxisId="left"
           type="monotone"
           dataKey="memoryUsage"
-          stroke="var(--status-maintenance)"
+          stroke={CHART_COLORS.memoryUsage}
           strokeWidth={2}
           dot={false}
           connectNulls
@@ -195,7 +205,7 @@ export default function MetricsChart() {
           yAxisId="right"
           type="monotone"
           dataKey="temperature"
-          stroke="#f97316"
+          stroke={CHART_COLORS.temperature}
           strokeWidth={2}
           dot={false}
           connectNulls
@@ -204,7 +214,7 @@ export default function MetricsChart() {
           yAxisId="right"
           type="monotone"
           dataKey="signalStrength"
-          stroke="#8b5cf6"
+          stroke={CHART_COLORS.signalStrength}
           strokeWidth={2}
           dot={false}
           connectNulls

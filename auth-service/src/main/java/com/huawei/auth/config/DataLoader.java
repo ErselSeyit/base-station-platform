@@ -23,28 +23,40 @@ public class DataLoader {
     @Value("${auth.admin.password:#{null}}")
     private String adminPassword;
 
+    @Value("${auth.bridge.username:bridge-user}")
+    private String bridgeUsername;
+
     @Bean
     CommandLineRunner initDatabase(UserRepository userRepository, UserService userService) {
         return args -> {
-            // Create default admin user if not exists and password is configured
+            // Validate password is configured
+            if (adminPassword == null || adminPassword.isBlank()) {
+                log.warn("No admin password configured (AUTH_ADMIN_PASSWORD). " +
+                        "Skipping user creation. " +
+                        "Set AUTH_ADMIN_PASSWORD environment variable to create users.");
+                return;
+            }
+
+            if (adminPassword.length() < 12) {
+                log.error("Admin password must be at least 12 characters for security. " +
+                        "Skipping user creation.");
+                return;
+            }
+
+            // Create default admin user if not exists
             if (!userRepository.existsByUsername(adminUsername)) {
-                if (adminPassword == null || adminPassword.isBlank()) {
-                    log.warn("No admin password configured (AUTH_ADMIN_PASSWORD). " +
-                            "Skipping default admin user creation. " +
-                            "Set AUTH_ADMIN_PASSWORD environment variable to create admin user.");
-                    return;
-                }
-
-                if (adminPassword.length() < 12) {
-                    log.error("Admin password must be at least 12 characters. " +
-                            "Skipping default admin user creation.");
-                    return;
-                }
-
                 userService.createUser(adminUsername, adminPassword, "ROLE_ADMIN");
                 log.info("Created default admin user: {}", adminUsername);
             } else {
                 log.debug("Admin user already exists: {}", adminUsername);
+            }
+
+            // Create bridge service account if not exists (uses same password as admin for simplicity)
+            if (!userRepository.existsByUsername(bridgeUsername)) {
+                userService.createUser(bridgeUsername, adminPassword, "ROLE_SERVICE");
+                log.info("Created bridge service account: {}", bridgeUsername);
+            } else {
+                log.debug("Bridge user already exists: {}", bridgeUsername);
             }
         };
     }

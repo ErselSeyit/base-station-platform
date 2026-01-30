@@ -26,12 +26,19 @@ import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.MetricType;
 import com.huawei.monitoring.service.MonitoringService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 
 @RestController
 @RequestMapping("/api/v1/metrics")
 @PreAuthorize("isAuthenticated()")
+@Tag(name = "Metrics", description = "Base station metrics collection and querying")
+@SecurityRequirement(name = "bearerAuth")
 public class MonitoringController {
 
     private static final Logger log = LoggerFactory.getLogger(MonitoringController.class);
@@ -44,9 +51,12 @@ public class MonitoringController {
         this.service = service;
     }
 
+    @Operation(summary = "Record metric", description = "Records a single metric data point")
+    @ApiResponse(responseCode = "201", description = "Metric recorded")
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
-    public ResponseEntity<MetricDataDTO> recordMetric(@Valid @RequestBody MetricDataDTO dto) {
+    public ResponseEntity<MetricDataDTO> recordMetric(
+            @Parameter(description = "Metric data") @Valid @RequestBody MetricDataDTO dto) {
         log.debug("Recording metric for station {}: type={}, value={}", 
                 dto.getStationId(), dto.getMetricType(), dto.getValue());
         MetricDataDTO recorded = service.recordMetric(Objects.requireNonNull(dto, "Metric DTO cannot be null"));
@@ -55,69 +65,80 @@ public class MonitoringController {
         return ResponseEntity.status(HttpStatus.CREATED).body(recorded);
     }
 
+    private static final int MAX_LIMIT = 10000;
+
+    @Operation(summary = "Get metrics", description = "Retrieves metrics with optional time range filter and limit")
+    @ApiResponse(responseCode = "200", description = "List of metrics (limited to prevent OOM)")
     @GetMapping
     public ResponseEntity<List<MetricDataDTO>> getAllMetrics(
-            @RequestParam(required = false) @Nullable String startTime,
-            @RequestParam(required = false) @Nullable String endTime) {
+            @Parameter(description = "Start time (ISO format)") @RequestParam(required = false) @Nullable String startTime,
+            @Parameter(description = "End time (ISO format)") @RequestParam(required = false) @Nullable String endTime,
+            @Parameter(description = "Max results (default 1000, max 10000)") @RequestParam(defaultValue = "1000") int limit,
+            @Parameter(description = "Sort order: asc or desc (default desc)") @RequestParam(defaultValue = "desc") String sort) {
         // Let exceptions propagate to GlobalExceptionHandler instead of swallowing them
-        log.debug("Getting all metrics with time range: start={}, end={}", startTime, endTime);
+        int effectiveLimit = Math.clamp(limit, 1, MAX_LIMIT);
+        boolean sortAsc = "asc".equalsIgnoreCase(sort);
+        log.debug("Getting metrics with time range: start={}, end={}, limit={}, sort={}", startTime, endTime, effectiveLimit, sort);
         LocalDateTime start = parseDateTime(startTime);
         LocalDateTime end = parseDateTime(endTime);
 
-        if (start != null && end != null) {
-            return ResponseEntity.ok(service.getMetricsByTimeRange(start, end));
-        }
-        if (start != null) {
-            return ResponseEntity.ok(service.getMetricsByTimeRange(start,
-                    Objects.requireNonNull(LocalDateTime.now(), "Current time cannot be null")));
-        }
-        // Default: last 24 hours
-        LocalDateTime now = Objects.requireNonNull(LocalDateTime.now(), "Current time cannot be null");
-        return ResponseEntity.ok(service.getMetricsByTimeRange(
-                Objects.requireNonNull(now.minusDays(1), START_TIME_NULL_MESSAGE),
-                now));
+        LocalDateTime effectiveEnd = Objects.requireNonNull(end != null ? end : LocalDateTime.now());
+        LocalDateTime effectiveStart = Objects.requireNonNull(start != null ? start : effectiveEnd.minusDays(1));
+
+        return ResponseEntity.ok(service.getMetricsByTimeRangeWithLimit(effectiveStart, effectiveEnd, effectiveLimit, sortAsc));
     }
 
+    @Operation(summary = "Get metrics by station", description = "Retrieves all metrics for a specific station")
+    @ApiResponse(responseCode = "200", description = "List of metrics")
     @GetMapping("/station/{stationId}")
-    public ResponseEntity<List<MetricDataDTO>> getMetricsByStation(@PathVariable Long stationId) {
+    public ResponseEntity<List<MetricDataDTO>> getMetricsByStation(
+            @Parameter(description = "Station ID") @PathVariable Long stationId) {
         log.debug("Getting metrics for station: {}", stationId);
         return ResponseEntity.ok(service.getMetricsByStation(
                 Objects.requireNonNull(stationId, STATION_ID_NULL_MESSAGE)));
     }
 
+    @Operation(summary = "Get metrics by station and type", description = "Retrieves metrics of a specific type for a station")
+    @ApiResponse(responseCode = "200", description = "List of metrics")
     @GetMapping("/station/{stationId}/type/{metricType}")
     public ResponseEntity<List<MetricDataDTO>> getMetricsByStationAndType(
-            @PathVariable Long stationId,
-            @PathVariable MetricType metricType) {
+            @Parameter(description = "Station ID") @PathVariable Long stationId,
+            @Parameter(description = "Metric type") @PathVariable MetricType metricType) {
         return ResponseEntity.ok(service.getMetricsByStationAndType(
                 Objects.requireNonNull(stationId, STATION_ID_NULL_MESSAGE),
                 Objects.requireNonNull(metricType, "Metric type cannot be null")));
     }
 
+    @Operation(summary = "Get metrics by time range", description = "Retrieves metrics within a specific time range")
+    @ApiResponse(responseCode = "200", description = "List of metrics")
     @GetMapping("/time-range")
     public ResponseEntity<List<MetricDataDTO>> getMetricsByTimeRange(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+            @Parameter(description = "Start time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @Parameter(description = "End time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
         return ResponseEntity.ok(service.getMetricsByTimeRange(
                 Objects.requireNonNull(start, START_TIME_NULL_MESSAGE),
                 Objects.requireNonNull(end, "End time cannot be null")));
     }
 
+    @Operation(summary = "Get station metrics by time range", description = "Retrieves metrics for a station within a time range")
+    @ApiResponse(responseCode = "200", description = "List of metrics")
     @GetMapping("/station/{stationId}/time-range")
     public ResponseEntity<List<MetricDataDTO>> getMetricsByStationAndTimeRange(
-            @PathVariable Long stationId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+            @Parameter(description = "Station ID") @PathVariable Long stationId,
+            @Parameter(description = "Start time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @Parameter(description = "End time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
         return ResponseEntity.ok(service.getMetricsByStationAndTimeRange(
                 Objects.requireNonNull(stationId, STATION_ID_NULL_MESSAGE),
                 Objects.requireNonNull(start, START_TIME_NULL_MESSAGE),
                 Objects.requireNonNull(end, "End time cannot be null")));
     }
 
+    @Operation(summary = "Get metrics above threshold", description = "Retrieves metrics that exceed a specified threshold value")
+    @ApiResponse(responseCode = "200", description = "List of metrics above threshold")
     @GetMapping("/threshold")
     public ResponseEntity<List<MetricDataDTO>> getMetricsAboveThreshold(
-            @RequestParam MetricType metricType,
-            @RequestParam Double threshold) {
+            @Parameter(description = "Metric type") @RequestParam MetricType metricType,
+            @Parameter(description = "Threshold value") @RequestParam Double threshold) {
         return ResponseEntity.ok(service.getMetricsAboveThreshold(
                 Objects.requireNonNull(metricType, "Metric type cannot be null"),
                 Objects.requireNonNull(threshold, "Threshold cannot be null")));
@@ -125,12 +146,16 @@ public class MonitoringController {
 
     /**
      * Gets the latest metric for a single station.
-     * 
+     *
      * @param stationId the station ID
      * @return the latest metric, or 404 if not found
      */
+    @Operation(summary = "Get latest metric", description = "Retrieves the most recent metric for a station")
+    @ApiResponse(responseCode = "200", description = "Latest metric found")
+    @ApiResponse(responseCode = "404", description = "No metrics found for station")
     @GetMapping("/station/{stationId}/latest")
-    public ResponseEntity<MetricDataDTO> getLatestMetricByStation(@PathVariable Long stationId) {
+    public ResponseEntity<MetricDataDTO> getLatestMetricByStation(
+            @Parameter(description = "Station ID") @PathVariable Long stationId) {
         log.debug("Getting latest metric for station: {}", stationId);
         Optional<MetricDataDTO> latest = service.getLatestMetricByStation(
                 Objects.requireNonNull(stationId, STATION_ID_NULL_MESSAGE));
@@ -168,6 +193,9 @@ public class MonitoringController {
      * @param request the batch request containing station IDs
      * @return map of stationId -> latest MetricDataDTO
      */
+    @Operation(summary = "Batch get latest metrics",
+            description = "Retrieves latest metrics for multiple stations in a single request")
+    @ApiResponse(responseCode = "200", description = "Map of station ID to latest metric")
     @PostMapping("/batch/latest")
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'USER')")
     public ResponseEntity<Map<Long, MetricDataDTO>> getLatestMetricsBatch(
@@ -200,10 +228,14 @@ public class MonitoringController {
      * @param request the batch record request
      * @return response with count of recorded metrics
      */
+    @Operation(summary = "Batch record metrics",
+            description = "Records multiple metrics at once. Used by edge bridges for efficient metric upload. Returns detailed error information for any failed metrics.")
+    @ApiResponse(responseCode = "201", description = "Metrics recorded (may include partial failures)")
+    @ApiResponse(responseCode = "400", description = "All metrics failed to record")
     @PostMapping("/batch")
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
     public ResponseEntity<BatchRecordResponse> recordMetricsBatch(
-            @Valid @RequestBody BatchRecordRequest request) {
+            @Parameter(description = "Batch of metrics") @Valid @RequestBody BatchRecordRequest request) {
         Objects.requireNonNull(request, "Request cannot be null");
         List<BatchMetricEntry> metrics = Objects.requireNonNull(request.getMetrics(), "Metrics cannot be null");
 
@@ -211,7 +243,10 @@ public class MonitoringController {
                 metrics.size(), request.getStationId());
 
         int recorded = 0;
-        for (BatchMetricEntry entry : metrics) {
+        List<BatchRecordError> errors = new java.util.ArrayList<>();
+
+        for (int i = 0; i < metrics.size(); i++) {
+            BatchMetricEntry entry = metrics.get(i);
             try {
                 MetricDataDTO dto = new MetricDataDTO();
                 dto.setStationId(parseStationId(request.getStationId()));
@@ -222,18 +257,35 @@ public class MonitoringController {
                 }
                 service.recordMetric(dto);
                 recorded++;
+            } catch (IllegalArgumentException e) {
+                String errorMsg = "Invalid metric type: " + entry.getType();
+                log.warn("Failed to record metric at index {}: {}", i, errorMsg);
+                errors.add(new BatchRecordError(i, entry.getType(), errorMsg));
             } catch (Exception e) {
-                log.warn("Failed to record metric {}: {}", entry.getType(), e.getMessage());
+                String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                log.warn("Failed to record metric {} at index {}: {}", entry.getType(), i, errorMsg);
+                errors.add(new BatchRecordError(i, entry.getType(), errorMsg));
             }
         }
 
-        log.info("Successfully recorded {} out of {} metrics for station {}",
-                recorded, metrics.size(), request.getStationId());
+        log.info("Successfully recorded {} out of {} metrics for station {} ({} errors)",
+                recorded, metrics.size(), request.getStationId(), errors.size());
 
         BatchRecordResponse response = new BatchRecordResponse();
         response.setReceived(recorded);
-        response.setStatus(recorded > 0 ? "OK" : "FAILED");
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        response.setFailed(errors.size());
+        response.setErrors(errors.isEmpty() ? null : errors);
+
+        if (recorded == 0 && !metrics.isEmpty()) {
+            response.setStatus("FAILED");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        } else if (!errors.isEmpty()) {
+            response.setStatus("PARTIAL");
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } else {
+            response.setStatus("OK");
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
     }
 
     @Nullable
@@ -336,11 +388,13 @@ public class MonitoringController {
     }
 
     /**
-     * Response DTO for batch recording.
+     * Response DTO for batch recording with detailed error reporting.
      */
     public static class BatchRecordResponse {
         private int received;
+        private int failed;
         private String status;
+        private List<BatchRecordError> errors;
 
         public int getReceived() {
             return received;
@@ -350,6 +404,14 @@ public class MonitoringController {
             this.received = received;
         }
 
+        public int getFailed() {
+            return failed;
+        }
+
+        public void setFailed(int failed) {
+            this.failed = failed;
+        }
+
         @Nullable
         public String getStatus() {
             return status;
@@ -357,6 +419,58 @@ public class MonitoringController {
 
         public void setStatus(@Nullable String status) {
             this.status = status;
+        }
+
+        @Nullable
+        public List<BatchRecordError> getErrors() {
+            return errors;
+        }
+
+        public void setErrors(@Nullable List<BatchRecordError> errors) {
+            this.errors = errors;
+        }
+    }
+
+    /**
+     * Error details for a single failed metric in batch recording.
+     */
+    public static class BatchRecordError {
+        private int index;
+        private String metricType;
+        private String error;
+
+        public BatchRecordError() {}
+
+        public BatchRecordError(int index, @Nullable String metricType, @Nullable String error) {
+            this.index = index;
+            this.metricType = metricType;
+            this.error = error;
+        }
+
+        public int getIndex() {
+            return index;
+        }
+
+        public void setIndex(int index) {
+            this.index = index;
+        }
+
+        @Nullable
+        public String getMetricType() {
+            return metricType;
+        }
+
+        public void setMetricType(@Nullable String metricType) {
+            this.metricType = metricType;
+        }
+
+        @Nullable
+        public String getError() {
+            return error;
+        }
+
+        public void setError(@Nullable String error) {
+            this.error = error;
         }
     }
 

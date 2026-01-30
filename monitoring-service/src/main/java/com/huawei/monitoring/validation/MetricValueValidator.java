@@ -50,14 +50,86 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
      */
     private ValidationResult validateValue(MetricType metricType, double value) {
         return switch (metricType) {
-            case CPU_USAGE, MEMORY_USAGE, UPTIME -> validatePercentage(metricType, value);
+            case CPU_USAGE, MEMORY_USAGE, UPTIME, INITIAL_BLER, HANDOVER_SUCCESS_RATE ->
+                validatePercentage(metricType, value);
             case TEMPERATURE -> validateTemperature(value);
             case POWER_CONSUMPTION -> validatePowerConsumption(value);
-            case SIGNAL_STRENGTH -> validateSignalStrength(value);
-            case CONNECTION_COUNT -> validateConnectionCount(value);
-            case DATA_THROUGHPUT -> validateDataThroughput(value);
+            case SIGNAL_STRENGTH, RSRP_NR700, RSRP_NR3500 -> validateSignalStrength(value);
+            case CONNECTION_COUNT, RB_PER_SLOT -> validateConnectionCount(value);
+            case DATA_THROUGHPUT, DL_THROUGHPUT_NR700, UL_THROUGHPUT_NR700,
+                 DL_THROUGHPUT_NR3500, UL_THROUGHPUT_NR3500, PDCP_THROUGHPUT,
+                 RLC_THROUGHPUT, CA_DL_THROUGHPUT, CA_UL_THROUGHPUT -> validateDataThroughput(value);
             case FAN_SPEED -> validateFanSpeed(value);
+            case SINR_NR700, SINR_NR3500 -> validateSinr(value);
+            case LATENCY_PING -> validateLatency(value);
+            case TX_IMBALANCE, VSWR -> validateTxImbalance(value);
+            case AVG_MCS -> validateMcs(value);
+            case RANK_INDICATOR -> validateRankIndicator(value);
+            case INTERFERENCE_LEVEL -> validateInterference(value);
         };
+    }
+
+    private ValidationResult validateSinr(double value) {
+        // SINR range: -20 dB to 50 dB
+        // Typical good: 10-30 dB
+        if (value < -20 || value > 50) {
+            return ValidationResult.invalid(
+                String.format("SINR must be between -20 dB and 50 dB, received: %.2f dB", value)
+            );
+        }
+        return ValidationResult.valid();
+    }
+
+    private ValidationResult validateLatency(double value) {
+        // Latency: 0 ms to 1000 ms
+        // Target for 5G: < 15 ms
+        if (value < 0 || value > 1000) {
+            return ValidationResult.invalid(
+                String.format("Latency must be between 0 ms and 1000 ms, received: %.2f ms", value)
+            );
+        }
+        return ValidationResult.valid();
+    }
+
+    private ValidationResult validateTxImbalance(double value) {
+        // TX Imbalance: 0 dB to 30 dB
+        // Target: <= 4 dB
+        if (value < 0 || value > 30) {
+            return ValidationResult.invalid(
+                String.format("TX Imbalance must be between 0 dB and 30 dB, received: %.2f dB", value)
+            );
+        }
+        return ValidationResult.valid();
+    }
+
+    private ValidationResult validateMcs(double value) {
+        // MCS: 0 to 28 (5G NR)
+        if (value < 0 || value > 28) {
+            return ValidationResult.invalid(
+                String.format("MCS must be between 0 and 28, received: %.2f", value)
+            );
+        }
+        return ValidationResult.valid();
+    }
+
+    private ValidationResult validateRankIndicator(double value) {
+        // Rank: 1, 2, or 4
+        if (value != 1 && value != 2 && value != 4) {
+            return ValidationResult.invalid(
+                String.format("Rank indicator must be 1, 2, or 4, received: %.0f", value)
+            );
+        }
+        return ValidationResult.valid();
+    }
+
+    private ValidationResult validateInterference(double value) {
+        // Interference level: -120 dBm to -40 dBm
+        if (value < -120 || value > -40) {
+            return ValidationResult.invalid(
+                String.format("Interference level must be between -120 dBm and -40 dBm, received: %.2f dBm", value)
+            );
+        }
+        return ValidationResult.valid();
     }
 
     private ValidationResult validatePercentage(MetricType metricType, double value) {

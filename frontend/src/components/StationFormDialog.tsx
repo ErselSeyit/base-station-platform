@@ -527,7 +527,7 @@ export default function StationFormDialog({
               transform: 'translateY(-1px)',
             },
             '&:disabled': {
-              background: 'var(--mono-300)',
+              background: 'var(--mono-400)',
               color: 'var(--mono-600)',
             },
           }}

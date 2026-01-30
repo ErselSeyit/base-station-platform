@@ -37,47 +37,37 @@ import io.jsonwebtoken.security.Keys;
 public class JwtValidator {
 
     private static final Logger log = LoggerFactory.getLogger(JwtValidator.class);
-    
+
     private final SecretKey secretKey;
-    private final boolean simulateValidation;
 
     /**
      * Creates JWT validator with secret key from configuration.
-     * 
-     * @param jwtSecret JWT secret key (must be at least 256 bits)
-     * @param simulateValidation If true, simulates validation for testing (when tokens unavailable)
+     *
+     * <p>SECURITY: JWT_SECRET is REQUIRED. The application will fail to start
+     * without a properly configured secret key.
+     *
+     * @param jwtSecret JWT secret key (must be at least 32 characters for HS256)
+     * @throws IllegalStateException if JWT_SECRET is not configured or too short
      */
-    public JwtValidator(
-            @Value("${jwt.secret:}") String jwtSecret,
-            @Value("${jwt.simulate-validation:false}") boolean simulateValidation) {
-        this.simulateValidation = simulateValidation;
-
+    public JwtValidator(@Value("${jwt.secret:}") String jwtSecret) {
         if (jwtSecret == null || jwtSecret.isBlank()) {
-            if (!simulateValidation) {
-                throw new IllegalStateException(
-                    "JWT_SECRET is required but not configured. Set JWT_SECRET environment variable or enable simulation mode for testing."
-                );
-            }
-            log.warn("SECURITY WARNING: JWT secret not configured. Token validation will be simulated. DO NOT USE IN PRODUCTION.");
-            this.secretKey = null;
-        } else {
-            // Validate secret length (should be at least 32 characters for HS256)
-            if (jwtSecret.length() < 32) {
-                throw new IllegalStateException(
-                    String.format("JWT secret is too short (%d chars). Must be at least 32 characters for security. Generate with: openssl rand -base64 64",
-                        jwtSecret.length())
-                );
-            }
-            this.secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            throw new IllegalStateException(
+                "JWT_SECRET is REQUIRED but not configured. " +
+                "Set JWT_SECRET environment variable. " +
+                "Generate with: openssl rand -base64 64"
+            );
         }
 
-        if (simulateValidation) {
-            log.warn("***** SECURITY WARNING *****");
-            log.warn("JWT validation is running in SIMULATION MODE");
-            log.warn("This mode bypasses actual token validation and should NEVER be used in production");
-            log.warn("Set jwt.simulate-validation=false for production deployment");
-            log.warn("****************************");
+        // Validate secret length (must be at least 32 characters for HS256)
+        if (jwtSecret.length() < 32) {
+            throw new IllegalStateException(
+                String.format("JWT_SECRET is too short (%d chars). Must be at least 32 characters for security. " +
+                    "Generate with: openssl rand -base64 64", jwtSecret.length())
+            );
         }
+
+        this.secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        log.info("JWT validator initialized with secure key");
     }
 
     /**
@@ -91,38 +81,7 @@ public class JwtValidator {
             return ValidationResult.invalid("Token is null or empty");
         }
 
-        if (simulateValidation || secretKey == null) {
-            return validateTokenInSimulationMode(token);
-        }
-
         return validateTokenWithSignature(token);
-    }
-
-    private ValidationResult validateTokenInSimulationMode(String token) {
-        log.warn("SECURITY RISK: Token validation running in simulation mode for token: {}...",
-                token.length() > 10 ? token.substring(0, 10) : token);
-
-        String[] parts = token.split("\\.");
-        if (parts.length != 3) {
-            return ValidationResult.invalid("Invalid token format (not a JWT)");
-        }
-
-        // Parse token WITHOUT verification by creating an unsigned JWT with same payload
-        try {
-            // Create an unsigned JWT by replacing the header with {alg:none} and removing signature
-            // Format: header.payload. (note the trailing dot with no signature)
-            Claims claims = Jwts.parser()
-                    .unsecured()
-                    .build()
-                    .parseUnsecuredClaims("eyJhbGciOiJub25lIn0." + parts[1] + ".")
-                    .getPayload();
-
-            log.warn("SECURITY RISK: Accepting token without signature verification (simulation mode). User: {}", claims.getSubject());
-            return ValidationResult.valid(claims);
-        } catch (Exception e) {
-            log.error("Failed to parse token in simulation mode: {}", e.getMessage());
-            return ValidationResult.invalid("Failed to parse token: " + e.getMessage());
-        }
     }
 
     private ValidationResult validateTokenWithSignature(String token) {
@@ -235,6 +194,25 @@ public class JwtValidator {
                     .map(c -> c.get("role"))
                     .map(Object::toString)
                     .orElse(null);
+        }
+
+        /**
+         * Gets the token ID (jti claim) for revocation tracking.
+         */
+        public String getTokenId() {
+            return Optional.ofNullable(claims)
+                    .map(Claims::getId)
+                    .orElse(null);
+        }
+
+        /**
+         * Gets the token issued timestamp for revocation comparison.
+         */
+        public long getIssuedAt() {
+            return Optional.ofNullable(claims)
+                    .map(Claims::getIssuedAt)
+                    .map(Date::getTime)
+                    .orElse(0L);
         }
     }
 }

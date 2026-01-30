@@ -26,7 +26,14 @@ export const authService = {
     return data
   },
 
-  logout: () => {
+  logout: async () => {
+    // Clear server-side HttpOnly cookie
+    try {
+      await api.post('/auth/logout')
+    } catch {
+      // Ignore errors - still clear local state
+    }
+    // Clear local state (kept for backward compatibility)
     localStorage.removeItem('token')
     localStorage.removeItem('username')
     localStorage.removeItem('role')

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import com.huawei.monitoring.client.DiagnosticClient;
+import com.huawei.monitoring.config.AlertThresholdConfig;
 import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.AlertRule;
 import com.huawei.monitoring.model.AlertSeverity;
@@ -37,7 +38,8 @@ class AlertingServiceTest {
         RabbitTemplate rabbitTemplate = Objects.requireNonNull(mock(RabbitTemplate.class));
         DiagnosticClient diagnosticClient = Objects.requireNonNull(mock(DiagnosticClient.class));
         DiagnosticSessionService diagnosticSessionService = Objects.requireNonNull(mock(DiagnosticSessionService.class));
-        alertingService = new AlertingService(rabbitTemplate, diagnosticClient, diagnosticSessionService);
+        AlertThresholdConfig thresholdConfig = new AlertThresholdConfig();
+        alertingService = new AlertingService(rabbitTemplate, diagnosticClient, diagnosticSessionService, thresholdConfig);
     }
 
     @Nested

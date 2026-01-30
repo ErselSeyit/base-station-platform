@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass, asdict
 from enum import Enum
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -235,7 +235,7 @@ class VirtualMIPSBaseStation:
             if scenario["trigger"](self.state):
                 problem = Problem(
                     id=f"PRB-{int(time.time())}-{random.randint(1000, 9999)}",
-                    timestamp=datetime.utcnow().isoformat(),
+                    timestamp=datetime.now(timezone.utc).isoformat(),
                     station_id=self.station_id,
                     category=scenario["category"].value,
                     severity=scenario["severity"].value,

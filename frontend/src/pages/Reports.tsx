@@ -71,11 +71,11 @@ const reports: ReportItem[] = [
   },
 ]
 
-function ReportCard({ report, onDownload, onGenerate }: {
+function ReportCard({ report, onDownload, onGenerate }: Readonly<{
   report: ReportItem
-  onDownload: (id: string) => void
-  onGenerate: (id: string) => void
-}) {
+  onDownload: (id: string) => Promise<void>
+  onGenerate: (id: string) => Promise<void>
+}>) {
   const [isDownloading, setIsDownloading] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
 
@@ -117,7 +117,7 @@ function ReportCard({ report, onDownload, onGenerate }: {
         '&:hover': {
           transform: 'translateY(-2px)',
           boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-          borderColor: 'var(--mono-300)',
+          borderColor: 'var(--mono-400)',
         },
       }}
     >
@@ -207,7 +207,7 @@ function ReportCard({ report, onDownload, onGenerate }: {
               background: 'var(--mono-800)',
             },
             '&:disabled': {
-              background: 'var(--mono-300)',
+              background: 'var(--mono-400)',
               color: 'var(--mono-500)',
             },
           }}
@@ -219,22 +219,23 @@ function ReportCard({ report, onDownload, onGenerate }: {
             onClick={handleGenerate}
             disabled={isGenerating}
             sx={{
-              border: '1px solid var(--surface-border)',
+              border: '1px solid var(--mono-400)',
               borderRadius: '10px',
               width: 40,
               height: 40,
-              color: 'inherit',
+              color: 'var(--mono-700)',
               '&:hover': {
                 background: 'var(--mono-100)',
-                borderColor: 'var(--mono-300)',
+                borderColor: 'var(--mono-400)',
+                color: 'var(--mono-900)',
               },
               '&:disabled': {
                 opacity: 0.5,
-                borderColor: 'var(--mono-200)',
+                borderColor: 'var(--mono-400)',
               },
             }}
           >
-            <RefreshIcon sx={{ fontSize: 20, animation: isGenerating ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshIcon sx={{ fontSize: 20, animation: isGenerating ? 'spin 1s linear infinite' : 'none', color: 'inherit' }} />
           </IconButton>
         </Tooltip>
       </Box>
@@ -377,7 +378,7 @@ export default function Reports() {
           transition: 'all 0.2s ease',
           '&:hover': {
             boxShadow: 'var(--shadow-lg)',
-            borderColor: 'var(--mono-300)',
+            borderColor: 'var(--mono-400)',
           },
         }}
       >
