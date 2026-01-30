@@ -61,83 +61,110 @@ func (p *FrameParser) CRCErrors() int {
 func (p *FrameParser) ParseByte(b byte) bool {
 	switch p.state {
 	case StateIdle:
-		if b == HeaderByte0 {
-			p.buffer[0] = b
-			p.bufferPos = 1
-			p.state = StateHeader1
-		}
-		return false
-
+		return p.parseIdle(b)
 	case StateHeader1:
-		if b == HeaderByte1 {
-			p.buffer[1] = b
-			p.bufferPos = 2
-			p.state = StateLength
-		} else if b == HeaderByte0 {
-			// Stay in this state, might be another start
-			p.buffer[0] = b
-			p.bufferPos = 1
-		} else {
-			p.state = StateIdle
-		}
-		return false
-
+		return p.parseHeader1(b)
 	case StateLength:
-		p.buffer[p.bufferPos] = b
-		p.bufferPos++
-		if p.bufferPos == 4 {
-			p.payloadLen = int(binary.BigEndian.Uint16(p.buffer[2:4]))
-			if p.payloadLen > MaxPayloadLen {
-				p.state = StateIdle
-				return false
-			}
-			p.state = StateType
-		}
-		return false
-
+		return p.parseLength(b)
 	case StateType:
-		p.buffer[p.bufferPos] = b
-		p.bufferPos++
-		p.state = StateSequence
-		return false
-
+		return p.parseType(b)
 	case StateSequence:
-		p.buffer[p.bufferPos] = b
-		p.bufferPos++
-		if p.payloadLen > 0 {
-			p.state = StatePayload
-		} else {
-			p.state = StateCRC
-		}
-		return false
-
+		return p.parseSequence(b)
 	case StatePayload:
-		p.buffer[p.bufferPos] = b
-		p.bufferPos++
-		if p.bufferPos >= HeaderSize+p.payloadLen {
-			p.state = StateCRC
-		}
-		return false
-
+		return p.parsePayload(b)
 	case StateCRC:
-		p.buffer[p.bufferPos] = b
-		p.bufferPos++
-		if p.bufferPos >= HeaderSize+p.payloadLen+CRCSize {
-			// Frame complete, verify CRC
-			frameLen := HeaderSize + p.payloadLen
-			expectedCRC := CalculateCRC16(p.buffer[:frameLen])
-			actualCRC := binary.BigEndian.Uint16(p.buffer[frameLen : frameLen+CRCSize])
-
-			if expectedCRC != actualCRC {
-				p.crcErrors++
-				p.state = StateIdle
-				return false
-			}
-			return true
-		}
+		return p.parseCRC(b)
+	default:
 		return false
 	}
+}
+
+func (p *FrameParser) parseIdle(b byte) bool {
+	if b == HeaderByte0 {
+		p.buffer[0] = b
+		p.bufferPos = 1
+		p.state = StateHeader1
+	}
 	return false
+}
+
+func (p *FrameParser) parseHeader1(b byte) bool {
+	switch b {
+	case HeaderByte1:
+		p.buffer[1] = b
+		p.bufferPos = 2
+		p.state = StateLength
+	case HeaderByte0:
+		// Stay in this state, might be another start
+		p.buffer[0] = b
+		p.bufferPos = 1
+	default:
+		p.state = StateIdle
+	}
+	return false
+}
+
+func (p *FrameParser) parseLength(b byte) bool {
+	p.buffer[p.bufferPos] = b
+	p.bufferPos++
+	if p.bufferPos == 4 {
+		p.payloadLen = int(binary.BigEndian.Uint16(p.buffer[2:4]))
+		if p.payloadLen > MaxPayloadLen {
+			p.state = StateIdle
+			return false
+		}
+		p.state = StateType
+	}
+	return false
+}
+
+func (p *FrameParser) parseType(b byte) bool {
+	p.buffer[p.bufferPos] = b
+	p.bufferPos++
+	p.state = StateSequence
+	return false
+}
+
+func (p *FrameParser) parseSequence(b byte) bool {
+	p.buffer[p.bufferPos] = b
+	p.bufferPos++
+	if p.payloadLen > 0 {
+		p.state = StatePayload
+	} else {
+		p.state = StateCRC
+	}
+	return false
+}
+
+func (p *FrameParser) parsePayload(b byte) bool {
+	p.buffer[p.bufferPos] = b
+	p.bufferPos++
+	if p.bufferPos >= HeaderSize+p.payloadLen {
+		p.state = StateCRC
+	}
+	return false
+}
+
+func (p *FrameParser) parseCRC(b byte) bool {
+	p.buffer[p.bufferPos] = b
+	p.bufferPos++
+	if p.bufferPos < HeaderSize+p.payloadLen+CRCSize {
+		return false
+	}
+	return p.verifyCRC()
+}
+
+func (p *FrameParser) verifyCRC() bool {
+	frameLen := HeaderSize + p.payloadLen
+	expectedCRC := CalculateCRC16(p.buffer[:frameLen])
+	actualCRC := binary.BigEndian.Uint16(p.buffer[frameLen : frameLen+CRCSize])
+
+	if expectedCRC != actualCRC {
+		p.crcErrors++
+		p.state = StateIdle
+		return false
+	}
+	return true
 }
 
 // Parse processes a buffer of bytes and returns parsed messages.

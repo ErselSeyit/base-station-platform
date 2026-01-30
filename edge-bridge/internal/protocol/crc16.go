@@ -4,10 +4,9 @@ package protocol
 // CRC-16-CCITT implementation matching the C library and Python protocol.
 // Polynomial: 0x1021, Initial: 0xFFFF
 
-const (
-	crcInitial    uint16 = 0xFFFF
-	crcPolynomial uint16 = 0x1021
-)
+// crcInitial is the initial CRC value for CRC-16-CCITT.
+// Note: The polynomial 0x1021 is pre-computed into crcTable below.
+const crcInitial uint16 = 0xFFFF
 
 // crcTable is a pre-computed lookup table for fast CRC calculation.
 var crcTable = [256]uint16{

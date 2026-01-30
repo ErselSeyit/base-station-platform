@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/huawei/edge-bridge/internal/protocol"
@@ -44,9 +45,9 @@ type Manager struct {
 	tracker   *RequestTracker
 
 	sequence     byte
-	connected    bool
+	connected    atomic.Bool
 	lastActivity time.Time
-	mu           sync.RWMutex
+	mu           sync.RWMutex // protects lastActivity and sequence
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -104,9 +105,7 @@ func (m *Manager) Stop() error {
 
 // IsConnected returns true if connected to the device.
 func (m *Manager) IsConnected() bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.connected
+	return m.connected.Load()
 }
 
 func (m *Manager) connect() error {
@@ -114,8 +113,8 @@ func (m *Manager) connect() error {
 		return err
 	}
 
+	m.connected.Store(true)
 	m.mu.Lock()
-	m.connected = true
 	m.lastActivity = time.Now()
 	m.mu.Unlock()
 
@@ -124,10 +123,7 @@ func (m *Manager) connect() error {
 }
 
 func (m *Manager) reconnect() {
-	m.mu.Lock()
-	m.connected = false
-	m.mu.Unlock()
-
+	m.connected.Store(false)
 	m.transport.Close()
 
 	attempts := 0
@@ -156,6 +152,42 @@ func (m *Manager) reconnect() {
 	}
 }
 
+// handleReceiveError processes receive errors, returns true if should continue loop.
+func (m *Manager) handleReceiveError(err error) bool {
+	if errors.Is(err, transport.ErrTimeout) {
+		return true
+	}
+	log.Printf("Receive error: %v", err)
+	m.reconnect()
+	return true
+}
+
+// processMessages handles parsed protocol messages.
+func (m *Manager) processMessages(messages []*protocol.Message) {
+	for _, msg := range messages {
+		if msg.IsResponse() && m.tracker.Complete(msg) {
+			continue
+		}
+		m.handler.HandleMessage(msg)
+	}
+}
+
+// handleReceivedData parses and processes received data.
+func (m *Manager) handleReceivedData(data []byte) {
+	m.mu.Lock()
+	m.lastActivity = time.Now()
+	m.mu.Unlock()
+
+	messages, err := m.parser.Parse(data)
+	if err != nil {
+		log.Printf("Parse error: %v", err)
+		return
+	}
+
+	m.processMessages(messages)
+	m.parser.Reset()
+}
+
 func (m *Manager) receiveLoop() {
 	defer m.wg.Done()
 
@@ -174,36 +206,12 @@ func (m *Manager) receiveLoop() {
 
 		n, err := m.transport.Receive(buffer, 100*time.Millisecond)
 		if err != nil {
-			if !errors.Is(err, transport.ErrTimeout) {
-				log.Printf("Receive error: %v", err)
-				m.reconnect()
-			}
+			m.handleReceiveError(err)
 			continue
 		}
 
 		if n > 0 {
-			m.mu.Lock()
-			m.lastActivity = time.Now()
-			m.mu.Unlock()
-
-			messages, err := m.parser.Parse(buffer[:n])
-			if err != nil {
-				log.Printf("Parse error: %v", err)
-				continue
-			}
-
-			for _, msg := range messages {
-				// Try to match with pending request
-				if msg.IsResponse() {
-					if m.tracker.Complete(msg) {
-						continue
-					}
-				}
-				// Handle unsolicited message
-				m.handler.HandleMessage(msg)
-			}
-
-			m.parser.Reset()
+			m.handleReceivedData(buffer[:n])
 		}
 	}
 }

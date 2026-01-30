@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ type Bridge struct {
 	cloudClient *cloud.Client
 	cmdExecutor *CommandExecutor
 
+	stationDBID int64 // Database ID of registered station
 	metrics     []protocol.Metric
 	metricsLock sync.RWMutex
 
@@ -104,6 +106,8 @@ func (b *Bridge) Start(ctx context.Context) error {
 		// Continue without cloud - will retry later
 	} else {
 		log.Printf("Cloud authentication successful")
+		// Register this station with the cloud
+		b.registerStation()
 	}
 
 	// Start metrics collection loop
@@ -118,7 +122,10 @@ func (b *Bridge) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the bridge gracefully.
+// shutdownTimeout is the maximum time to wait for graceful shutdown.
+const shutdownTimeout = 10 * time.Second
+
+// Stop stops the bridge gracefully with timeout.
 func (b *Bridge) Stop() error {
 	log.Printf("Stopping bridge...")
 
@@ -126,7 +133,19 @@ func (b *Bridge) Stop() error {
 		b.cancel()
 	}
 
-	b.wg.Wait()
+	// Wait for goroutines with timeout
+	done := make(chan struct{})
+	go func() {
+		b.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Clean shutdown completed
+	case <-time.After(shutdownTimeout):
+		log.Printf("Warning: graceful shutdown timeout exceeded (%v)", shutdownTimeout)
+	}
 
 	if err := b.deviceMgr.Stop(); err != nil {
 		log.Printf("Error stopping device manager: %v", err)
@@ -194,7 +213,13 @@ func (b *Bridge) collectAndUploadMetrics() {
 		return
 	}
 
-	resp, err := b.cloudClient.UploadMetrics(b.config.Bridge.StationID, cloudMetrics)
+	// Use database ID if available, otherwise fall back to config station ID
+	stationID := b.config.Bridge.StationID
+	if b.stationDBID > 0 {
+		stationID = strconv.FormatInt(b.stationDBID, 10)
+	}
+
+	resp, err := b.cloudClient.UploadMetrics(stationID, cloudMetrics)
 	if err != nil {
 		log.Printf("Failed to upload metrics: %v", err)
 		return
@@ -282,4 +307,45 @@ func (b *Bridge) IsCloudConnected() bool {
 // StationID returns the configured station ID.
 func (b *Bridge) StationID() string {
 	return b.config.Bridge.StationID
+}
+
+// registerStation registers or updates this station in the cloud.
+func (b *Bridge) registerStation() {
+	cfg := b.config.Bridge
+
+	// First try to find existing station by name
+	existing, err := b.cloudClient.GetBaseStationByName(cfg.StationName)
+	if err == nil && existing != nil {
+		b.stationDBID = existing.ID
+		log.Printf("Station already registered: %s (ID: %d)", existing.StationName, existing.ID)
+		return
+	}
+
+	// Register new station
+	req := &cloud.CreateStationRequest{
+		StationName:  cfg.StationName,
+		Location:     cfg.Location,
+		Latitude:     cfg.Latitude,
+		Longitude:    cfg.Longitude,
+		StationType:  cfg.StationType,
+		Status:       "ACTIVE",
+		Description:  cfg.Description,
+	}
+
+	station, err := b.cloudClient.RegisterStation(req)
+	if err != nil {
+		// If registration failed (e.g., already exists), try to find the station again
+		log.Printf("Registration attempt failed: %v, trying to find existing station", err)
+		existing, findErr := b.cloudClient.GetBaseStationByName(cfg.StationName)
+		if findErr == nil && existing != nil {
+			b.stationDBID = existing.ID
+			log.Printf("Found existing station: %s (ID: %d)", existing.StationName, existing.ID)
+			return
+		}
+		log.Printf("Warning: Failed to register or find station: %v", err)
+		return
+	}
+
+	b.stationDBID = station.ID
+	log.Printf("Station registered: %s (ID: %d)", station.StationName, station.ID)
 }

@@ -4,6 +4,7 @@ package device
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/huawei/edge-bridge/internal/protocol"
@@ -156,14 +157,15 @@ func (h *MessageHandler) handleErrorEvent(msg *protocol.Message) {
 
 // PendingRequest tracks a request waiting for response.
 type PendingRequest struct {
-	Sequence  byte
-	Type      protocol.MessageType
-	SentAt    time.Time
+	Sequence   byte
+	Type       protocol.MessageType
+	SentAt     time.Time
 	ResponseCh chan *protocol.Message
 }
 
 // RequestTracker tracks pending requests and matches responses.
 type RequestTracker struct {
+	mu      sync.Mutex
 	pending map[byte]*PendingRequest
 	timeout time.Duration
 }
@@ -178,6 +180,9 @@ func NewRequestTracker(timeout time.Duration) *RequestTracker {
 
 // Track adds a request to track.
 func (rt *RequestTracker) Track(seq byte, msgType protocol.MessageType) *PendingRequest {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
 	req := &PendingRequest{
 		Sequence:   seq,
 		Type:       msgType,
@@ -189,27 +194,48 @@ func (rt *RequestTracker) Track(seq byte, msgType protocol.MessageType) *Pending
 }
 
 // Complete marks a request as complete with its response.
+// Returns true if the request was found and completed.
 func (rt *RequestTracker) Complete(msg *protocol.Message) bool {
+	rt.mu.Lock()
 	req, ok := rt.pending[msg.Sequence]
 	if !ok {
+		rt.mu.Unlock()
 		return false
 	}
-
 	delete(rt.pending, msg.Sequence)
+	rt.mu.Unlock()
+
+	// Send outside lock to avoid deadlock; channel is buffered
 	select {
 	case req.ResponseCh <- msg:
 	default:
+		// Channel full - shouldn't happen with buffered channel of 1
+		log.Printf("Warning: response channel full for seq %d", msg.Sequence)
 	}
 	return true
 }
 
-// Cleanup removes expired requests.
+// Cleanup removes expired requests and signals timeout on their channels.
 func (rt *RequestTracker) Cleanup() {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
 	now := time.Now()
 	for seq, req := range rt.pending {
 		if now.Sub(req.SentAt) > rt.timeout {
 			delete(rt.pending, seq)
-			close(req.ResponseCh)
+			// Send nil to signal timeout instead of closing
+			select {
+			case req.ResponseCh <- nil:
+			default:
+			}
 		}
 	}
+}
+
+// Remove removes a specific request from tracking without sending a response.
+func (rt *RequestTracker) Remove(seq byte) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	delete(rt.pending, seq)
 }

@@ -47,12 +47,15 @@ func (e *CommandExecutor) ProcessPendingCommands() error {
 	return nil
 }
 
+// ErrUnknownCommandType is returned when an unrecognized command type is received.
+var ErrUnknownCommandType = fmt.Errorf("unknown command type")
+
 func (e *CommandExecutor) executeCommand(cmd *cloud.PendingCommand) *cloud.CommandResultRequest {
-	cmdType := e.mapCommandType(cmd.Type)
-	if cmdType == 0 {
+	cmdType, err := e.mapCommandType(cmd.Type)
+	if err != nil {
 		return &cloud.CommandResultRequest{
 			Success: false,
-			Error:   fmt.Sprintf("unknown command type: %s", cmd.Type),
+			Error:   err.Error(),
 		}
 	}
 
@@ -73,23 +76,22 @@ func (e *CommandExecutor) executeCommand(cmd *cloud.PendingCommand) *cloud.Comma
 	}
 }
 
-func (e *CommandExecutor) mapCommandType(cloudType string) protocol.CommandType {
-	switch strings.ToUpper(cloudType) {
-	case "RESTART":
-		return protocol.CmdRestart
-	case "SHUTDOWN":
-		return protocol.CmdShutdown
-	case "RESET_CONFIG":
-		return protocol.CmdResetConfig
-	case "UPDATE_FIRMWARE":
-		return protocol.CmdUpdateFirmware
-	case "RUN_DIAGNOSTIC":
-		return protocol.CmdRunDiagnostic
-	case "SET_PARAMETER":
-		return protocol.CmdSetParameter
-	default:
-		return 0
+// commandTypeMap maps cloud command type strings to protocol command types.
+var commandTypeMap = map[string]protocol.CommandType{
+	"RESTART":         protocol.CmdRestart,
+	"SHUTDOWN":        protocol.CmdShutdown,
+	"RESET_CONFIG":    protocol.CmdResetConfig,
+	"UPDATE_FIRMWARE": protocol.CmdUpdateFirmware,
+	"RUN_DIAGNOSTIC":  protocol.CmdRunDiagnostic,
+	"SET_PARAMETER":   protocol.CmdSetParameter,
+}
+
+func (e *CommandExecutor) mapCommandType(cloudType string) (protocol.CommandType, error) {
+	cmdType, ok := commandTypeMap[strings.ToUpper(cloudType)]
+	if !ok {
+		return 0, fmt.Errorf("%w: %s", ErrUnknownCommandType, cloudType)
 	}
+	return cmdType, nil
 }
 
 func (e *CommandExecutor) buildCommandParams(cmd *cloud.PendingCommand) []byte {

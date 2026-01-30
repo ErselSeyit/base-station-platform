@@ -1,7 +1,13 @@
 # Edge Bridge Configuration
 
 bridge:
-  station_id: "BS-001"
+  station_id: "MIPS-BS-001"
+  station_name: "MIPS Virtual Base Station"
+  location: "Shenzhen R&D Center"
+  latitude: 22.5431
+  longitude: 114.0579
+  station_type: "5G_NR"
+  description: "MIPS edge device running virtual base station simulator"
   poll_interval: 10s
   metrics_interval: 30s
   log_level: info
@@ -18,7 +24,7 @@ device:
 cloud:
   base_url: "http://localhost:8080"
   auth:
-    username: "bridge-user"
+    username: "${BRIDGE_USERNAME}"
     password: "${BRIDGE_PASSWORD}"
   timeout: 30s
   retry_attempts: 3

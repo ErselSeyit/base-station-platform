@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +52,7 @@ public class DiagnosticSessionService {
      * @param problemId the problem identifier (must not be null)
      * @return the created session
      */
+    @Transactional
     public DiagnosticSession createSession(AlertEvent alert, String problemId) {
         Objects.requireNonNull(alert, "AlertEvent must not be null");
         Objects.requireNonNull(problemId, "problemId must not be null");
@@ -89,6 +91,7 @@ public class DiagnosticSessionService {
      * If confidence is high enough based on risk level, auto-applies the solution.
      * @return the updated session, or empty if session not found
      */
+    @Transactional
     public Optional<DiagnosticSession> recordDiagnosis(String problemId, DiagnosticResponse diagnosis) {
         Optional<DiagnosticSession> sessionOpt = sessionRepository.findByProblemId(problemId);
         if (sessionOpt.isEmpty()) {
@@ -194,6 +197,7 @@ public class DiagnosticSessionService {
      * Marks a session as having its solution applied.
      * @return the updated session, or empty if session not found
      */
+    @Transactional
     public Optional<DiagnosticSession> markApplied(String sessionId) {
         return Objects.requireNonNull(sessionRepository.findById(sessionId)
                 .map(session -> {
@@ -207,6 +211,7 @@ public class DiagnosticSessionService {
      * Submits feedback for a diagnostic session and updates learning patterns.
      * @return the updated session, or empty if session not found
      */
+    @Transactional
     public Optional<DiagnosticSession> submitFeedback(String sessionId, boolean wasEffective,
                                                        @Nullable Integer rating, @Nullable String operatorNotes,
                                                        @Nullable String actualOutcome, String confirmedBy) {
@@ -272,8 +277,17 @@ public class DiagnosticSessionService {
     }
 
     /**
+     * Gets all diagnostic sessions ordered by creation date (most recent first).
+     */
+    @Transactional(readOnly = true)
+    public List<DiagnosticSession> getAllSessions() {
+        return sessionRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    /**
      * Gets all sessions pending confirmation.
      */
+    @Transactional(readOnly = true)
     public List<DiagnosticSession> getPendingConfirmation() {
         return sessionRepository.findPendingConfirmation();
     }
@@ -281,6 +295,7 @@ public class DiagnosticSessionService {
     /**
      * Gets all sessions pending confirmation for a station.
      */
+    @Transactional(readOnly = true)
     public List<DiagnosticSession> getPendingConfirmationForStation(Long stationId) {
         return sessionRepository.findByStationIdAndStatusOrderByCreatedAtDesc(
                 stationId, DiagnosticStatus.PENDING_CONFIRMATION);
@@ -289,6 +304,7 @@ public class DiagnosticSessionService {
     /**
      * Gets a session by ID.
      */
+    @Transactional(readOnly = true)
     public Optional<DiagnosticSession> getSession(String sessionId) {
         return sessionRepository.findById(sessionId);
     }
@@ -296,6 +312,7 @@ public class DiagnosticSessionService {
     /**
      * Gets a session by problem ID.
      */
+    @Transactional(readOnly = true)
     public Optional<DiagnosticSession> getSessionByProblemId(String problemId) {
         return sessionRepository.findByProblemId(problemId);
     }
@@ -303,6 +320,7 @@ public class DiagnosticSessionService {
     /**
      * Gets all sessions for a station.
      */
+    @Transactional(readOnly = true)
     public List<DiagnosticSession> getSessionsForStation(Long stationId) {
         return sessionRepository.findByStationIdOrderByCreatedAtDesc(stationId);
     }
@@ -310,6 +328,7 @@ public class DiagnosticSessionService {
     /**
      * Gets sessions by status.
      */
+    @Transactional(readOnly = true)
     public List<DiagnosticSession> getSessionsByStatus(DiagnosticStatus status) {
         return sessionRepository.findByStatusOrderByCreatedAtDesc(status);
     }
@@ -317,6 +336,7 @@ public class DiagnosticSessionService {
     /**
      * Gets learning statistics.
      */
+    @Transactional(readOnly = true)
     public Map<String, Object> getLearningStats() {
         Map<String, Object> stats = new HashMap<>();
 
@@ -352,6 +372,7 @@ public class DiagnosticSessionService {
     /**
      * Gets the learned pattern for a problem code.
      */
+    @Transactional(readOnly = true)
     public Optional<LearnedPattern> getLearnedPattern(String problemCode) {
         return patternRepository.findByProblemCode(problemCode);
     }
@@ -359,6 +380,7 @@ public class DiagnosticSessionService {
     /**
      * Gets all learned patterns.
      */
+    @Transactional(readOnly = true)
     public List<LearnedPattern> getAllPatterns() {
         return patternRepository.findAllOrderByTotalCases();
     }

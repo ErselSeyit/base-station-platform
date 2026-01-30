@@ -86,20 +86,20 @@ const defaultDiagnosticLog: DiagnosticLog = {
 }
 
 // Stat Card Component - responsive for all screen sizes
-function StatCard({ title, value, subtitle, icon, color }: {
+function StatCard({ title, value, subtitle, icon, color }: Readonly<{
   title: string
   value: number | string
   subtitle: string
   icon: React.ReactNode
   color: string
-}) {
+}>) {
   return (
     <Card
       sx={{
         p: { xs: 1.5, sm: 2, md: 2.5, lg: 3 },
         height: '100%',
         background: 'var(--surface-elevated)',
-        border: '1px solid var(--surface-border)',
+        border: '1px solid var(--mono-400)',
         borderRadius: { xs: '10px', sm: '12px', lg: '16px' },
         transition: 'all 0.2s ease',
         '&:hover': {
@@ -191,7 +191,7 @@ function getProblemIcon(type: string) {
 }
 
 // Status Chip - with dark mode support
-function StatusChip({ status }: { status: string }) {
+function StatusChip({ status }: Readonly<{ status: string }>) {
   const configs: Record<string, { color: string; bg: string; darkBg: string; icon: React.ReactElement }> = {
     RESOLVED: { color: 'var(--status-active)', bg: 'rgba(22, 163, 74, 0.15)', darkBg: 'rgba(22, 163, 74, 0.25)', icon: <CheckIcon sx={{ fontSize: 14 }} /> },
     DIAGNOSED: { color: 'var(--status-maintenance)', bg: 'rgba(234, 88, 12, 0.15)', darkBg: 'rgba(234, 88, 12, 0.25)', icon: <AutoFixIcon sx={{ fontSize: 14 }} /> },
@@ -218,7 +218,7 @@ function StatusChip({ status }: { status: string }) {
 }
 
 // Severity Chip - with dark mode support
-function SeverityChip({ severity }: { severity: string }) {
+function SeverityChip({ severity }: Readonly<{ severity: string }>) {
   const configs: Record<string, { color: string; bg: string }> = {
     CRITICAL: { color: 'var(--status-offline)', bg: 'rgba(220, 38, 38, 0.15)' },
     WARNING: { color: 'var(--status-maintenance)', bg: 'rgba(234, 88, 12, 0.15)' },
@@ -239,6 +239,13 @@ function SeverityChip({ severity }: { severity: string }) {
       }}
     />
   )
+}
+
+// Helper function to get color based on AI confidence level
+function getConfidenceColor(confidence: number): string {
+  if (confidence > 0.8) return '#10b981'
+  if (confidence > 0.6) return '#f59e0b'
+  return '#ef4444'
 }
 
 export default function AIDiagnostics() {
@@ -279,20 +286,54 @@ export default function AIDiagnostics() {
     queryClient.invalidateQueries({ queryKey: ['learning-stats'] })
   }
 
-  // Fetch diagnostic data from the JSON file
+  // Fetch diagnostic data from the API (diagnostic sessions from monitoring service)
   const fetchDiagnosticData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch('/ai-diagnose-log.json')
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.status}`)
+      // Get diagnostic sessions from the monitoring service
+      const response = await diagnosticsApi.getAll()
+      const sessions: DiagnosticSession[] = response.data
+
+      // Transform sessions to DiagnosticLog format
+      const events: DiagnosticEvent[] = sessions.map((session) => ({
+        id: session.id,
+        timestamp: session.createdAt,
+        station_id: session.stationId,
+        station_name: session.stationName || `Station ${session.stationId}`,
+        problem_type: session.problemCode.split('_')[0],
+        problem_code: session.problemCode,
+        category: session.category || 'SYSTEM',
+        severity: session.severity,
+        problem_description: session.message,
+        metric_value: 0, // Not tracked in DiagnosticSession
+        threshold: 0, // Not tracked in DiagnosticSession
+        ai_action: session.aiSolution?.action || 'Analyzing...',
+        ai_commands: session.aiSolution?.commands || [],
+        ai_confidence: session.aiSolution?.confidence || 0,
+        remediation_type: session.aiSolution?.riskLevel || 'unknown',
+        status: session.status,
+        resolution_time: session.resolvedAt,
+        notes: '',
+        root_cause: session.aiSolution?.reasoning || '',
+      }))
+
+      const data: DiagnosticLog = {
+        generated_at: new Date().toISOString(),
+        stats: {
+          total_checks: sessions.length,
+          problems_detected: sessions.length,
+          problems_diagnosed: sessions.filter(s => s.aiSolution).length,
+          problems_resolved: sessions.filter(s => s.status === 'RESOLVED').length,
+          failed_diagnoses: sessions.filter(s => s.status === 'FAILED').length,
+        },
+        events,
       }
-      const data: DiagnosticLog = await response.json()
       setDiagnosticData(data)
     } catch (err) {
       console.error('Error fetching diagnostic data:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load diagnostic data')
+      // If API fails, use empty data instead of error state
+      setDiagnosticData(defaultDiagnosticLog)
     } finally {
       setIsLoading(false)
     }
@@ -347,23 +388,24 @@ export default function AIDiagnostics() {
             </Typography>
           </Box>
         </Box>
-        <Tooltip title="Refresh data">
+        <Tooltip title="">
           <IconButton
             onClick={handleRefresh}
             sx={{
               width: 40,
               height: 40,
               background: 'var(--surface-elevated)',
-              border: '1px solid var(--surface-border)',
+              border: '1px solid var(--mono-400)',
               borderRadius: '10px',
-              color: 'inherit',
+              color: 'var(--mono-700)',
               '&:hover': {
                 background: 'var(--mono-100)',
-                borderColor: 'var(--mono-300)',
+                borderColor: 'var(--mono-400)',
+                color: 'var(--mono-900)',
               },
             }}
           >
-            <RefreshIcon sx={{ fontSize: 20, animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshIcon sx={{ fontSize: 20, animation: isLoading ? 'spin 1s linear infinite' : 'none', color: 'inherit' }} />
           </IconButton>
         </Tooltip>
       </Box>
@@ -425,111 +467,113 @@ export default function AIDiagnostics() {
         </Grid>
       </Grid>
 
-      {/* AI Confidence Gauge */}
-      <Card
-        sx={{
-          p: 3,
-          mb: 4,
-          background: 'var(--surface-elevated)',
-          border: '1px solid var(--surface-border)',
-          borderRadius: '16px',
-        }}
-      >
-        <Typography
-          variant="h6"
-          sx={{ fontWeight: 600, mb: 3, color: 'var(--mono-950)' }}
+      {/* AI Confidence Gauge - only show when we have learning stats */}
+      {learningStats && learningStats.totalFeedback > 0 && (
+        <Card
+          sx={{
+            p: 3,
+            mb: 4,
+            background: 'var(--surface-elevated)',
+            border: '1px solid var(--mono-400)',
+            borderRadius: '16px',
+          }}
         >
-          AI System Performance
-        </Typography>
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={4}>
-            <Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
-                  Average Confidence
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
-                  78%
-                </Typography>
-              </Box>
-              <LinearProgress
-                variant="determinate"
-                value={78}
-                sx={{
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: 'var(--mono-200)',
-                  '& .MuiLinearProgress-bar': {
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 600, mb: 3, color: 'var(--mono-950)' }}
+          >
+            AI System Performance
+          </Typography>
+          <Grid container spacing={4}>
+            <Grid item xs={12} md={4}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
+                    Success Rate
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                    {learningStats.successRate.toFixed(1)}%
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={learningStats.successRate}
+                  sx={{
+                    height: 8,
                     borderRadius: 4,
-                    background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-                  },
-                }}
-              />
-            </Box>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
-                  Diagnosis Accuracy
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
-                  91%
-                </Typography>
+                    backgroundColor: 'var(--mono-200)',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+                    },
+                  }}
+                />
               </Box>
-              <LinearProgress
-                variant="determinate"
-                value={91}
-                sx={{
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: 'var(--mono-200)',
-                  '& .MuiLinearProgress-bar': {
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
+                    Patterns Learned
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                    {learningStats.topPatterns?.length || 0}
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min((learningStats.topPatterns?.length || 0) * 10, 100)}
+                  sx={{
+                    height: 8,
                     borderRadius: 4,
-                    background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
-                  },
-                }}
-              />
-            </Box>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
-                  Response Time
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
-                  1.2s avg
-                </Typography>
+                    backgroundColor: 'var(--mono-200)',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
+                    },
+                  }}
+                />
               </Box>
-              <LinearProgress
-                variant="determinate"
-                value={85}
-                sx={{
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: 'var(--mono-200)',
-                  '& .MuiLinearProgress-bar': {
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
+                    Total Feedback
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                    {learningStats.totalFeedback}
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(learningStats.totalFeedback * 5, 100)}
+                  sx={{
+                    height: 8,
                     borderRadius: 4,
-                    background: 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)',
-                  },
-                }}
-              />
-            </Box>
+                    backgroundColor: 'var(--mono-200)',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)',
+                    },
+                  }}
+                />
+              </Box>
+            </Grid>
           </Grid>
-        </Grid>
-      </Card>
+        </Card>
+      )}
 
       {/* Recent Events Section */}
       <Card
         sx={{
           background: 'var(--surface-elevated)',
-          border: '1px solid var(--surface-border)',
+          border: '1px solid var(--mono-400)',
           borderRadius: '16px',
           overflow: 'hidden',
         }}
       >
-        <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid var(--surface-border)' }}>
+        <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid var(--mono-400)' }}>
           <Typography
             variant="h6"
             sx={{ fontWeight: 600, color: 'var(--mono-950)', fontSize: { xs: '1rem', sm: '1.25rem' } }}
@@ -555,12 +599,12 @@ export default function AIDiagnostics() {
                   sx={{
                     p: 2,
                     background: 'var(--surface-base)',
-                    border: '1px solid var(--surface-border)',
+                    border: '1px solid var(--mono-400)',
                     borderRadius: '12px',
                     transition: 'all 0.2s ease',
                     '&:hover': {
                       boxShadow: 'var(--shadow-sm)',
-                      borderColor: 'var(--mono-300)',
+                      borderColor: 'var(--mono-400)',
                     },
                   }}
                 >
@@ -634,7 +678,7 @@ export default function AIDiagnostics() {
                         backgroundColor: 'var(--mono-200)',
                         '& .MuiLinearProgress-bar': {
                           borderRadius: 3,
-                          backgroundColor: event.ai_confidence > 0.8 ? '#10b981' : event.ai_confidence > 0.6 ? '#f59e0b' : '#ef4444',
+                          backgroundColor: getConfidenceColor(event.ai_confidence),
                         },
                       }}
                     />
@@ -649,13 +693,13 @@ export default function AIDiagnostics() {
         <TableContainer sx={{ display: { xs: 'none', md: 'block' } }}>
           <Table>
             <TableHead>
-              <TableRow sx={{ backgroundColor: 'var(--mono-50)' }}>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Station</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Problem</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Severity</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>AI Action</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Confidence</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Status</TableCell>
+              <TableRow sx={{ backgroundColor: 'var(--mono-100)' }}>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Station</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Problem</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Severity</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>AI Action</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Confidence</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -665,6 +709,7 @@ export default function AIDiagnostics() {
                   sx={{
                     '&:hover': { backgroundColor: 'var(--mono-50)' },
                     transition: 'background-color 0.15s ease',
+                    '& td': { borderBottom: '1px solid var(--mono-400)', verticalAlign: 'top' },
                   }}
                 >
                   <TableCell>
@@ -720,7 +765,7 @@ export default function AIDiagnostics() {
                           backgroundColor: 'var(--mono-200)',
                           '& .MuiLinearProgress-bar': {
                             borderRadius: 3,
-                            backgroundColor: event.ai_confidence > 0.8 ? '#10b981' : event.ai_confidence > 0.6 ? '#f59e0b' : '#ef4444',
+                            backgroundColor: getConfidenceColor(event.ai_confidence),
                           },
                         }}
                       />
@@ -750,7 +795,7 @@ export default function AIDiagnostics() {
             overflow: 'hidden',
           }}
         >
-          <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid var(--surface-border)' }}>
+          <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid var(--mono-400)' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box
                 sx={{
@@ -784,7 +829,7 @@ export default function AIDiagnostics() {
                   sx={{
                     p: 2,
                     background: 'var(--surface-base)',
-                    border: '1px solid var(--surface-border)',
+                    border: '1px solid var(--mono-400)',
                     borderRadius: '12px',
                     display: 'flex',
                     alignItems: 'center',
@@ -795,7 +840,7 @@ export default function AIDiagnostics() {
                 >
                   <Box sx={{ flex: 1, minWidth: 200 }}>
                     <Typography sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
-                      {session.problemCode.replace(/_/g, ' ')}
+                      {session.problemCode.replaceAll('_', ' ')}
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'var(--mono-500)', mt: 0.5 }}>
                       {session.stationName} - {session.message}
@@ -836,7 +881,7 @@ export default function AIDiagnostics() {
           sx={{
             mt: 4,
             background: 'var(--surface-elevated)',
-            border: '1px solid var(--surface-border)',
+            border: '1px solid var(--mono-400)',
             borderRadius: '16px',
             p: { xs: 2, sm: 3 },
           }}
@@ -918,7 +963,7 @@ export default function AIDiagnostics() {
           </Grid>
 
           {learningStats.topPatterns && learningStats.topPatterns.length > 0 && (
-            <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid var(--surface-border)' }}>
+            <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid var(--mono-400)' }}>
               <Typography variant="subtitle2" sx={{ color: 'var(--mono-600)', mb: 2 }}>
                 Top Learned Patterns
               </Typography>
@@ -926,7 +971,7 @@ export default function AIDiagnostics() {
                 {learningStats.topPatterns.map((pattern) => (
                   <Chip
                     key={pattern.problemCode}
-                    label={`${pattern.problemCode.replace(/_/g, ' ')} (${pattern.successRate.toFixed(0)}%)`}
+                    label={`${pattern.problemCode.replaceAll('_', ' ')} (${pattern.successRate.toFixed(0)}%)`}
                     size="small"
                     sx={{
                       backgroundColor: pattern.successRate >= 70 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
@@ -949,13 +994,6 @@ export default function AIDiagnostics() {
         onSubmit={handleFeedbackSubmit}
       />
 
-      {/* CSS for spin animation */}
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </Box>
   )
 }

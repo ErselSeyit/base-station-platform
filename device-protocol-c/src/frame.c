@@ -4,6 +4,8 @@
  */
 
 #include <string.h>
+#include <stdint.h>
+#include <limits.h>
 #include "devproto/frame.h"
 #include "devproto/crc16.h"
 
@@ -198,6 +200,11 @@ int devproto_frame_parse(devproto_frame_parser_t *parser,
         return DEVPROTO_FRAME_ERR_INVALID;
     }
 
+    /* Limit max_messages to prevent return value truncation */
+    if (max_messages > (size_t)INT32_MAX) {
+        max_messages = (size_t)INT32_MAX;
+    }
+
     size_t msg_count = 0;
 
     for (size_t i = 0; i < len && msg_count < max_messages; i++) {
@@ -231,9 +238,15 @@ int devproto_frame_build(const devproto_message_t *msg,
 {
     if (!msg || !buffer) return -1;
 
+    /* Validate payload length first to prevent integer overflow */
+    if (msg->payload_len > DEVPROTO_MAX_PAYLOAD_SIZE) return -1;
+
+    /* Safe calculation: HEADER_SIZE and CRC_SIZE are constants, payload_len is bounded */
     size_t frame_len = DEVPROTO_HEADER_SIZE + msg->payload_len + DEVPROTO_CRC_SIZE;
     if (buf_size < frame_len) return -1;
-    if (msg->payload_len > DEVPROTO_MAX_PAYLOAD_SIZE) return -1;
+
+    /* Prevent return value truncation (frame_len fits in int due to MAX_PAYLOAD_SIZE limit) */
+    if (frame_len > (size_t)INT32_MAX) return -1;
 
     /* Header */
     buffer[0] = DEVPROTO_HEADER_BYTE0;

@@ -69,17 +69,45 @@ func (c *Client) doRequest(method, url string, body interface{}, result interfac
 		}
 	}
 
-	return lastErr
+	return fmt.Errorf("request failed after %d attempts: %w", c.config.RetryAttempts+1, lastErr)
+}
+
+// marshalBody converts body to JSON reader, returns nil reader if body is nil.
+func marshalBody(body interface{}) (io.Reader, error) {
+	if body == nil {
+		return nil, nil
+	}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
+	return bytes.NewReader(jsonBody), nil
+}
+
+// handleErrorResponse parses error response and returns appropriate error.
+func handleErrorResponse(statusCode int, respBody []byte) error {
+	var errResp ErrorResponse
+	if json.Unmarshal(respBody, &errResp) == nil && errResp.Message != "" {
+		return fmt.Errorf("API error %d: %s", statusCode, errResp.Message)
+	}
+	return fmt.Errorf("API error: status %d", statusCode)
+}
+
+// parseResponse unmarshals response body into result if provided.
+func parseResponse(respBody []byte, result interface{}) error {
+	if result == nil || len(respBody) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(respBody, result); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+	return nil
 }
 
 func (c *Client) doRequestOnce(method, url string, body interface{}, result interface{}) error {
-	var bodyReader io.Reader
-	if body != nil {
-		jsonBody, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("failed to marshal request body: %w", err)
-		}
-		bodyReader = bytes.NewReader(jsonBody)
+	bodyReader, err := marshalBody(body)
+	if err != nil {
+		return err
 	}
 
 	req, err := http.NewRequest(method, url, bodyReader)
@@ -90,7 +118,6 @@ func (c *Client) doRequestOnce(method, url string, body interface{}, result inte
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	// Add authentication header
 	authHeader, err := c.auth.GetAuthHeader()
 	if err != nil {
 		return err
@@ -109,28 +136,17 @@ func (c *Client) doRequestOnce(method, url string, body interface{}, result inte
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		// Token might be expired, try to refresh
-		if err := c.auth.Login(); err != nil {
+		if loginErr := c.auth.Login(); loginErr != nil {
 			return ErrAuthFailed
 		}
 		return fmt.Errorf("authentication required, please retry")
 	}
 
 	if resp.StatusCode >= 400 {
-		var errResp ErrorResponse
-		if json.Unmarshal(respBody, &errResp) == nil && errResp.Message != "" {
-			return fmt.Errorf("API error %d: %s", resp.StatusCode, errResp.Message)
-		}
-		return fmt.Errorf("API error: status %d", resp.StatusCode)
+		return handleErrorResponse(resp.StatusCode, respBody)
 	}
 
-	if result != nil && len(respBody) > 0 {
-		if err := json.Unmarshal(respBody, result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
-		}
-	}
-
-	return nil
+	return parseResponse(respBody, result)
 }
 
 // UploadMetrics uploads a batch of metrics to the monitoring service.
@@ -200,10 +216,41 @@ func (c *Client) SendAlert(alert *AlertEvent) (*AlertResponse, error) {
 
 // GetBaseStation retrieves base station information.
 func (c *Client) GetBaseStation(stationID string) (*BaseStation, error) {
-	url := fmt.Sprintf("%s/api/base-stations/%s", c.config.BaseURL, stationID)
+	url := fmt.Sprintf("%s/api/v1/stations/%s", c.config.BaseURL, stationID)
 
 	var station BaseStation
 	if err := c.doRequest("GET", url, nil, &station); err != nil {
+		return nil, err
+	}
+
+	return &station, nil
+}
+
+// GetBaseStationByName retrieves a base station by name.
+func (c *Client) GetBaseStationByName(stationName string) (*BaseStation, error) {
+	// List all stations and find by name (API doesn't support name filter)
+	url := fmt.Sprintf("%s/api/v1/stations", c.config.BaseURL)
+
+	var stations []BaseStation
+	if err := c.doRequest("GET", url, nil, &stations); err != nil {
+		return nil, err
+	}
+
+	for i := range stations {
+		if stations[i].StationName == stationName {
+			return &stations[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("station not found: %s", stationName)
+}
+
+// RegisterStation registers a new base station or returns existing one.
+func (c *Client) RegisterStation(req *CreateStationRequest) (*BaseStation, error) {
+	url := fmt.Sprintf("%s/api/v1/stations", c.config.BaseURL)
+
+	var station BaseStation
+	if err := c.doRequest("POST", url, req, &station); err != nil {
 		return nil, err
 	}
 
@@ -235,7 +282,11 @@ func (c *Client) Ping() error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	// Drain and close body to allow connection reuse
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check failed: status %d", resp.StatusCode)

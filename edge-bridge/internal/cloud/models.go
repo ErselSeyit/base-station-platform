@@ -73,12 +73,27 @@ type CommandResultResponse struct {
 
 // BaseStation represents a base station from the API.
 type BaseStation struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Location string  `json:"location"`
-	Status   string  `json:"status"`
-	Lat      float64 `json:"lat,omitempty"`
-	Lng      float64 `json:"lng,omitempty"`
+	ID               int64   `json:"id,omitempty"`
+	StationName      string  `json:"stationName"`
+	Location         string  `json:"location"`
+	Latitude         float64 `json:"latitude"`
+	Longitude        float64 `json:"longitude"`
+	StationType      string  `json:"stationType"`
+	Status           string  `json:"status"`
+	PowerConsumption float64 `json:"powerConsumption,omitempty"`
+	Description      string  `json:"description,omitempty"`
+}
+
+// CreateStationRequest represents a request to create/register a station.
+type CreateStationRequest struct {
+	StationName      string  `json:"stationName"`
+	Location         string  `json:"location"`
+	Latitude         float64 `json:"latitude"`
+	Longitude        float64 `json:"longitude"`
+	StationType      string  `json:"stationType"`
+	Status           string  `json:"status,omitempty"`
+	PowerConsumption float64 `json:"powerConsumption,omitempty"`
+	Description      string  `json:"description,omitempty"`
 }
 
 // AlertEvent represents an alert to send to the cloud.

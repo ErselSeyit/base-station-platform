@@ -73,8 +73,8 @@ func NewBufferedTransport(t Transport, bufSize int) *BufferedTransport {
 	}
 }
 
-// ReadByte reads a single byte from the transport.
-func (bt *BufferedTransport) ReadByte(timeout time.Duration) (byte, error) {
+// ReadByteWithTimeout reads a single byte from the transport with timeout.
+func (bt *BufferedTransport) ReadByteWithTimeout(timeout time.Duration) (byte, error) {
 	if bt.bufStart < bt.bufEnd {
 		b := bt.buffer[bt.bufStart]
 		bt.bufStart++
@@ -109,7 +109,7 @@ func (bt *BufferedTransport) ReadBytes(count int, timeout time.Duration) ([]byte
 			return nil, ErrTimeout
 		}
 
-		b, err := bt.ReadByte(remaining)
+		b, err := bt.ReadByteWithTimeout(remaining)
 		if err != nil {
 			if len(result) > 0 {
 				return result, err
