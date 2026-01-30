@@ -2,6 +2,12 @@
 
 bridge:
   station_id: "$STATION_ID"
+  station_name: "$STATION_NAME"
+  location: "$STATION_LOCATION"
+  latitude: $STATION_LATITUDE
+  longitude: $STATION_LONGITUDE
+  station_type: "$STATION_TYPE"
+  description: "$STATION_DESCRIPTION"
   poll_interval: 10s
   metrics_interval: 30s
   log_level: info

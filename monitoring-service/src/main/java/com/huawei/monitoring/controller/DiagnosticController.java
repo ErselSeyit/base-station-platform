@@ -42,6 +42,15 @@ public class DiagnosticController {
     }
 
     /**
+     * Get all diagnostic sessions.
+     */
+    @GetMapping
+    public ResponseEntity<List<DiagnosticSession>> getAllSessions() {
+        List<DiagnosticSession> sessions = sessionService.getAllSessions();
+        return ResponseEntity.ok(sessions);
+    }
+
+    /**
      * Get all diagnostic sessions pending confirmation.
      */
     @GetMapping("/pending")

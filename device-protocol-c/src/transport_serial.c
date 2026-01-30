@@ -14,6 +14,11 @@
 
 #include "devproto/transport.h"
 
+/* CRTSCTS is not defined on all systems (non-POSIX extension) */
+#ifndef CRTSCTS
+#define CRTSCTS 0
+#endif
+
 /**
  * Serial transport private data
  */

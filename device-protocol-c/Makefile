@@ -62,7 +62,7 @@ EXAMPLE_SRCS = $(EXAMPLE_DIR)/host_client.c \
 EXAMPLE_BINS = $(EXAMPLE_SRCS:$(EXAMPLE_DIR)/%.c=$(BUILD_DIR)/%)
 
 # Targets
-.PHONY: all clean test host mips examples install
+.PHONY: all clean test host mips examples install fuzz
 
 all: $(BUILD_DIR) $(LIB_STATIC) $(LIB_SHARED)
 
@@ -129,6 +129,13 @@ install: all
 	install -d $(PREFIX)/lib $(PREFIX)/include/devproto
 	install -m 644 $(LIB_STATIC) $(LIB_SHARED) $(PREFIX)/lib/
 	install -m 644 $(INC_DIR)/devproto/*.h $(PREFIX)/include/devproto/
+
+# Fuzzing (requires clang with libFuzzer)
+fuzz:
+	$(MAKE) -C fuzz all
+
+fuzz-run:
+	$(MAKE) -C fuzz run_frame
 
 # Show configuration
 info:

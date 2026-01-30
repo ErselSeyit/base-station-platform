@@ -31,7 +31,7 @@ func (tt *TCPTransport) Open() error {
 		return nil // Already open
 	}
 
-	addr := fmt.Sprintf("%s:%d", tt.host, tt.port)
+	addr := net.JoinHostPort(tt.host, fmt.Sprintf("%d", tt.port))
 	conn, err := net.DialTimeout("tcp", addr, tt.config.WriteTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to connect to %s: %w", addr, err)
@@ -114,7 +114,7 @@ func (tt *TCPTransport) Port() int {
 
 // Address returns the full address string.
 func (tt *TCPTransport) Address() string {
-	return fmt.Sprintf("%s:%d", tt.host, tt.port)
+	return net.JoinHostPort(tt.host, fmt.Sprintf("%d", tt.port))
 }
 
 // LocalAddr returns the local address if connected.

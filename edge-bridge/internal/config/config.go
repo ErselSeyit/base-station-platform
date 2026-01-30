@@ -19,6 +19,12 @@ type Config struct {
 // BridgeConfig holds bridge-specific settings.
 type BridgeConfig struct {
 	StationID       string        `yaml:"station_id"`
+	StationName     string        `yaml:"station_name"`
+	Location        string        `yaml:"location"`
+	Latitude        float64       `yaml:"latitude"`
+	Longitude       float64       `yaml:"longitude"`
+	StationType     string        `yaml:"station_type"`
+	Description     string        `yaml:"description"`
 	PollInterval    time.Duration `yaml:"poll_interval"`
 	MetricsInterval time.Duration `yaml:"metrics_interval"`
 	LogLevel        string        `yaml:"log_level"`
@@ -61,7 +67,13 @@ type AuthConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Bridge: BridgeConfig{
-			StationID:       "BS-001",
+			StationID:       "MIPS-BS-001",
+			StationName:     "MIPS Virtual Base Station",
+			Location:        "Shenzhen R&D Center",
+			Latitude:        22.5431,
+			Longitude:       114.0579,
+			StationType:     "5G_NR",
+			Description:     "MIPS edge device running virtual base station simulator",
 			PollInterval:    10 * time.Second,
 			MetricsInterval: 30 * time.Second,
 			LogLevel:        "info",
@@ -82,7 +94,7 @@ func DefaultConfig() *Config {
 			Timeout:       30 * time.Second,
 			RetryAttempts: 3,
 			Auth: AuthConfig{
-				Username: "bridge-user",
+				Username: "",
 				Password: "",
 			},
 		},
@@ -138,6 +150,14 @@ func (c *Config) Validate() error {
 
 	if c.Cloud.BaseURL == "" {
 		return fmt.Errorf("cloud.base_url is required")
+	}
+
+	if c.Cloud.Auth.Username == "" {
+		return fmt.Errorf("cloud.auth.username is required")
+	}
+
+	if c.Cloud.Auth.Password == "" {
+		return fmt.Errorf("cloud.auth.password is required")
 	}
 
 	return nil

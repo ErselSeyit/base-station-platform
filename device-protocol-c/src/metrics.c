@@ -4,6 +4,8 @@
  */
 
 #include <string.h>
+#include <stdint.h>
+#include <limits.h>
 #include "devproto/metrics.h"
 
 /**
@@ -79,6 +81,7 @@ int devproto_metric_decode(const devproto_metric_entry_t *entry,
 const char *devproto_metric_name(devproto_metric_type_t type)
 {
     switch (type) {
+    /* System metrics */
     case DEVPROTO_METRIC_CPU_USAGE:        return "CPU_USAGE";
     case DEVPROTO_METRIC_MEMORY_USAGE:     return "MEMORY_USAGE";
     case DEVPROTO_METRIC_TEMPERATURE:      return "TEMPERATURE";
@@ -87,20 +90,58 @@ const char *devproto_metric_name(devproto_metric_type_t type)
     case DEVPROTO_METRIC_VOLTAGE:          return "VOLTAGE";
     case DEVPROTO_METRIC_CURRENT:          return "CURRENT";
     case DEVPROTO_METRIC_POWER:            return "POWER";
+
+    /* RF metrics */
     case DEVPROTO_METRIC_SIGNAL_STRENGTH:  return "SIGNAL_STRENGTH";
     case DEVPROTO_METRIC_SIGNAL_QUALITY:   return "SIGNAL_QUALITY";
     case DEVPROTO_METRIC_INTERFERENCE:     return "INTERFERENCE";
     case DEVPROTO_METRIC_BER:              return "BER";
     case DEVPROTO_METRIC_VSWR:             return "VSWR";
     case DEVPROTO_METRIC_ANTENNA_TILT:     return "ANTENNA_TILT";
+
+    /* Performance metrics */
     case DEVPROTO_METRIC_THROUGHPUT:       return "THROUGHPUT";
     case DEVPROTO_METRIC_LATENCY:          return "LATENCY";
     case DEVPROTO_METRIC_PACKET_LOSS:      return "PACKET_LOSS";
     case DEVPROTO_METRIC_JITTER:           return "JITTER";
     case DEVPROTO_METRIC_CONNECTION_COUNT: return "CONNECTION_COUNT";
+
+    /* Device metrics */
     case DEVPROTO_METRIC_BATTERY_LEVEL:    return "BATTERY_LEVEL";
     case DEVPROTO_METRIC_UPTIME:           return "UPTIME";
     case DEVPROTO_METRIC_ERROR_COUNT:      return "ERROR_COUNT";
+
+    /* 5G NR700 (n28 band) metrics */
+    case DEVPROTO_METRIC_DL_THROUGHPUT_NR700: return "DL_THROUGHPUT_NR700";
+    case DEVPROTO_METRIC_UL_THROUGHPUT_NR700: return "UL_THROUGHPUT_NR700";
+    case DEVPROTO_METRIC_RSRP_NR700:          return "RSRP_NR700";
+    case DEVPROTO_METRIC_SINR_NR700:          return "SINR_NR700";
+
+    /* 5G NR3500 (n78 band) metrics */
+    case DEVPROTO_METRIC_DL_THROUGHPUT_NR3500: return "DL_THROUGHPUT_NR3500";
+    case DEVPROTO_METRIC_UL_THROUGHPUT_NR3500: return "UL_THROUGHPUT_NR3500";
+    case DEVPROTO_METRIC_RSRP_NR3500:          return "RSRP_NR3500";
+    case DEVPROTO_METRIC_SINR_NR3500:          return "SINR_NR3500";
+
+    /* 5G Radio metrics */
+    case DEVPROTO_METRIC_PDCP_THROUGHPUT:      return "PDCP_THROUGHPUT";
+    case DEVPROTO_METRIC_RLC_THROUGHPUT:       return "RLC_THROUGHPUT";
+    case DEVPROTO_METRIC_INITIAL_BLER:         return "INITIAL_BLER";
+    case DEVPROTO_METRIC_AVG_MCS:              return "AVG_MCS";
+    case DEVPROTO_METRIC_RB_PER_SLOT:          return "RB_PER_SLOT";
+    case DEVPROTO_METRIC_RANK_INDICATOR:       return "RANK_INDICATOR";
+
+    /* RF Quality metrics */
+    case DEVPROTO_METRIC_TX_IMBALANCE:         return "TX_IMBALANCE";
+    case DEVPROTO_METRIC_LATENCY_PING:         return "LATENCY_PING";
+    case DEVPROTO_METRIC_HANDOVER_SUCCESS:     return "HANDOVER_SUCCESS_RATE";
+    case DEVPROTO_METRIC_INTERFERENCE_LEVEL:   return "INTERFERENCE_LEVEL";
+
+    /* Carrier Aggregation metrics */
+    case DEVPROTO_METRIC_CA_DL_THROUGHPUT:     return "CA_DL_THROUGHPUT";
+    case DEVPROTO_METRIC_CA_UL_THROUGHPUT:     return "CA_UL_THROUGHPUT";
+
+    /* Special */
     case DEVPROTO_METRIC_ALL:              return "ALL_METRICS";
     default:                               return "UNKNOWN";
     }
@@ -113,6 +154,11 @@ int devproto_metrics_parse(const uint8_t *payload, size_t payload_len,
                            devproto_metric_t *metrics, size_t max_metrics)
 {
     if (!payload || !metrics || max_metrics == 0) return -1;
+
+    /* Limit max_metrics to prevent return value truncation */
+    if (max_metrics > (size_t)INT32_MAX) {
+        max_metrics = (size_t)INT32_MAX;
+    }
 
     size_t count = 0;
     size_t offset = 0;
@@ -140,8 +186,14 @@ int devproto_metrics_build(const devproto_metric_t *metrics, size_t num_metrics,
 {
     if (!metrics || !buffer) return -1;
 
+    /* Prevent integer overflow: check num_metrics before multiplication */
+    if (num_metrics > SIZE_MAX / 5) return -1;
+
     size_t needed = num_metrics * 5;
     if (buf_size < needed) return -1;
+
+    /* Prevent return value truncation */
+    if (needed > (size_t)INT32_MAX) return -1;
 
     size_t offset = 0;
     for (size_t i = 0; i < num_metrics; i++) {

@@ -90,4 +90,9 @@ public interface DiagnosticSessionRepository extends MongoRepository<DiagnosticS
      */
     @Query("{ 'autoApplied': true }")
     List<DiagnosticSession> findAutoAppliedOrderByCreatedAtDesc();
+
+    /**
+     * Find all sessions ordered by creation date (most recent first).
+     */
+    List<DiagnosticSession> findAllByOrderByCreatedAtDesc();
 }
