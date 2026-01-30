@@ -57,15 +57,18 @@ public class AlertingService {
     @Nullable private final RabbitTemplate rabbitTemplate;
     @Nullable private final DiagnosticClient diagnosticClient;
     @Nullable private final DiagnosticSessionService diagnosticSessionService;
+    private final com.huawei.monitoring.config.AlertThresholdConfig thresholdConfig;
 
     @Autowired(required = false)
     public AlertingService(@Nullable RabbitTemplate rabbitTemplate,
                           @Nullable DiagnosticClient diagnosticClient,
-                          @Nullable DiagnosticSessionService diagnosticSessionService) {
+                          @Nullable DiagnosticSessionService diagnosticSessionService,
+                          com.huawei.monitoring.config.AlertThresholdConfig thresholdConfig) {
         this.rabbitTemplate = rabbitTemplate; // Optional - will be null if RabbitMQ not configured
         this.diagnosticClient = diagnosticClient; // AI diagnostic service client
         this.diagnosticSessionService = diagnosticSessionService; // Session tracking for learning
-        // Initialize default rules - in production, these would be from DB/config
+        this.thresholdConfig = thresholdConfig;
+        // Initialize default rules from externalized config
         initializeDefaultRules();
     }
 
@@ -75,9 +78,9 @@ public class AlertingService {
                         .name("CPU Critical")
                         .metricType(MetricType.CPU_USAGE)
                         .operator(AlertRule.Operator.GREATER_THAN)
-                        .threshold(90.0)
+                        .threshold(thresholdConfig.getCpuCritical())
                         .severity(AlertSeverity.CRITICAL)
-                        .message("CPU usage exceeded 90%")
+                        .message("CPU usage exceeded " + (int) thresholdConfig.getCpuCritical() + "%")
                         .build()));
 
         addRule(Objects.requireNonNull(AlertRule.builder()
@@ -85,9 +88,9 @@ public class AlertingService {
                         .name("CPU Warning")
                         .metricType(MetricType.CPU_USAGE)
                         .operator(AlertRule.Operator.GREATER_THAN)
-                        .threshold(75.0)
+                        .threshold(thresholdConfig.getCpuWarning())
                         .severity(AlertSeverity.WARNING)
-                        .message("CPU usage exceeded 75%")
+                        .message("CPU usage exceeded " + (int) thresholdConfig.getCpuWarning() + "%")
                         .build()));
 
         addRule(Objects.requireNonNull(AlertRule.builder()
@@ -95,9 +98,9 @@ public class AlertingService {
                         .name("Memory Critical")
                         .metricType(MetricType.MEMORY_USAGE)
                         .operator(AlertRule.Operator.GREATER_THAN)
-                        .threshold(95.0)
+                        .threshold(thresholdConfig.getMemoryCritical())
                         .severity(AlertSeverity.CRITICAL)
-                        .message("Memory usage exceeded 95%")
+                        .message("Memory usage exceeded " + (int) thresholdConfig.getMemoryCritical() + "%")
                         .build()));
 
         addRule(Objects.requireNonNull(AlertRule.builder()
@@ -105,9 +108,9 @@ public class AlertingService {
                         .name("Temperature Critical")
                         .metricType(MetricType.TEMPERATURE)
                         .operator(AlertRule.Operator.GREATER_THAN)
-                        .threshold(80.0)
+                        .threshold(thresholdConfig.getTemperatureCritical())
                         .severity(AlertSeverity.CRITICAL)
-                        .message("Temperature exceeded safe threshold")
+                        .message("Temperature exceeded safe threshold (" + (int) thresholdConfig.getTemperatureCritical() + "°C)")
                         .build()));
 
         addRule(Objects.requireNonNull(AlertRule.builder()
@@ -115,9 +118,9 @@ public class AlertingService {
                         .name("Weak Signal")
                         .metricType(MetricType.SIGNAL_STRENGTH)
                         .operator(AlertRule.Operator.LESS_THAN)
-                        .threshold(-100.0)
+                        .threshold(thresholdConfig.getSignalWeak())
                         .severity(AlertSeverity.WARNING)
-                        .message("Signal strength below acceptable level")
+                        .message("Signal strength below acceptable level (" + (int) thresholdConfig.getSignalWeak() + " dBm)")
                         .build()));
     }
 

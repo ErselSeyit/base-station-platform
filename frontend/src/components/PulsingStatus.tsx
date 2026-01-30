@@ -29,7 +29,7 @@ interface PulsingStatusProps {
   animate?: boolean
 }
 
-export default function PulsingStatus({ color, size = 12, animate = true }: PulsingStatusProps) {
+export default function PulsingStatus({ color, size = 12, animate = true }: Readonly<PulsingStatusProps>) {
   return (
     <Box
       sx={{

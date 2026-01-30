@@ -159,13 +159,13 @@ export default function Layout({ children }: LayoutProps) {
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('theme')
     if (saved) return saved === 'dark'
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
+    return globalThis.matchMedia('(prefers-color-scheme: dark)').matches
   })
   const navigate = useNavigate()
   const location = useLocation()
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
     localStorage.setItem('theme', isDark ? 'dark' : 'light')
   }, [isDark])
 

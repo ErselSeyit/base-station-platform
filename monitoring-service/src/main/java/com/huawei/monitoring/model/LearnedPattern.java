@@ -215,10 +215,10 @@ public class LearnedPattern {
         this.lastUpdated = LocalDateTime.now();
 
         // Find or create solution record
-        SolutionRecord record = findOrCreateRecord(successfulSolutions, solution);
-        record.incrementCount();
+        SolutionRecord solutionRecord = findOrCreateRecord(successfulSolutions, solution);
+        solutionRecord.incrementCount();
         if (rating != null) {
-            record.addRating(rating);
+            solutionRecord.addRating(rating);
         }
 
         recalculateConfidence();
@@ -231,16 +231,16 @@ public class LearnedPattern {
         this.failedCount++;
         this.lastUpdated = LocalDateTime.now();
 
-        SolutionRecord record = findOrCreateRecord(failedSolutions, solution);
-        record.incrementCount();
+        SolutionRecord solutionRecord = findOrCreateRecord(failedSolutions, solution);
+        solutionRecord.incrementCount();
 
         recalculateConfidence();
     }
 
     private SolutionRecord findOrCreateRecord(List<SolutionRecord> records, AISolution solution) {
-        for (SolutionRecord record : records) {
-            if (record.getAction().equals(solution.getAction())) {
-                return record;
+        for (SolutionRecord existing : records) {
+            if (existing.getAction().equals(solution.getAction())) {
+                return existing;
             }
         }
         SolutionRecord newRecord = new SolutionRecord(solution.getAction(), solution.getCommands());

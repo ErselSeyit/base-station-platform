@@ -11,6 +11,10 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,6 +87,25 @@ public class MonitoringService {
 
     public List<MetricDataDTO> getMetricsByTimeRange(LocalDateTime start, LocalDateTime end) {
         return repository.findByTimestampBetween(start, end).stream()
+                        .map(this::convertToDTO)
+                        .toList();
+    }
+
+    /**
+     * Gets metrics by time range with a limit to prevent OOM on large datasets.
+     * Results are cached in Redis. Cache key rounds to day boundaries to maximize hit rate.
+     *
+     * @param start the start time (must not be null)
+     * @param end the end time (must not be null)
+     * @param limit maximum number of results to return
+     * @param sortAsc true for ascending (oldest first), false for descending (newest first)
+     * @return a list of metric DTOs (never null, may be empty)
+     */
+    @Cacheable(value = "metrics", key = "#start.toLocalDate().toString() + '-' + #end.toLocalDate().toString() + '-' + #limit + '-' + #sortAsc")
+    public List<MetricDataDTO> getMetricsByTimeRangeWithLimit(LocalDateTime start, LocalDateTime end, int limit, boolean sortAsc) {
+        Sort.Direction direction = sortAsc ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(0, limit, Sort.by(direction, "timestamp"));
+        return repository.findByTimestampBetween(start, end, pageable).stream()
                         .map(this::convertToDTO)
                         .toList();
     }

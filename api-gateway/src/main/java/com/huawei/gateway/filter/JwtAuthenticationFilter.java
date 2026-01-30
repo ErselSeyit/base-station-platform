@@ -47,6 +47,9 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     @Value("${security.internal.secret:}")
     private String internalSecret;
 
+    @Value("${security.actuator.allowed-ips:127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}")
+    private String actuatorAllowedIps;
+
     public JwtAuthenticationFilter(JwtValidator jwtValidator) {
         super(Config.class);
         this.jwtValidator = jwtValidator;
@@ -58,66 +61,160 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
             ServerHttpRequest request = exchange.getRequest();
             String path = request.getURI().getPath();
 
+            // Handle actuator endpoints separately
+            if (path.startsWith("/actuator")) {
+                return handleActuatorRequest(exchange, chain, request, path);
+            }
+
             // Skip validation for public endpoints
             if (isPublicEndpoint(path)) {
                 log.debug("Skipping JWT validation for public endpoint: {}", path);
                 return chain.filter(exchange);
             }
 
-            // Extract token from Authorization header
-            String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-            
-            if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-                log.warn("Missing or invalid Authorization header for path: {}", path);
+            // Extract and validate token
+            String token = extractToken(request, path);
+            if (token == null) {
                 return unauthorizedResponse(exchange, "Missing or invalid Authorization header");
             }
 
-            String token = authHeader.substring(BEARER_PREFIX.length());
-            if (token.isBlank()) {
-                log.warn("Empty token in Authorization header for path: {}", path);
-                return unauthorizedResponse(exchange, "Token cannot be empty");
-            }
-
-            // Validate token
             JwtValidator.ValidationResult validationResult = jwtValidator.validateToken(token);
-            
             if (!validationResult.isValid()) {
                 log.warn("Token validation failed for path {}: {}", path, validationResult.getErrorMessage());
                 return unauthorizedResponse(exchange, "Invalid token: " + validationResult.getErrorMessage());
             }
 
-            // Token is valid - add username and role to request headers for downstream services
-            String username = validationResult.getUsername();
-            String role = validationResult.getRole();
-            if (username != null) {
-                ServerHttpRequest.Builder requestBuilder = request.mutate()
-                        .header("X-User-Name", username);
-                if (role != null) {
-                    requestBuilder.header("X-User-Role", role);
-                }
-
-                // Add internal authentication token to prevent header spoofing
-                String internalAuthToken = generateInternalAuthToken(username, role);
-                requestBuilder.header("X-Internal-Auth", internalAuthToken);
-
-                ServerHttpRequest modifiedRequest = requestBuilder.build();
-                exchange = exchange.mutate().request(modifiedRequest).build();
-            }
-
-            log.debug("Token validated successfully for path: {}, user: {}", path, username);
-            return chain.filter(exchange);
+            // Add user context to request
+            ServerWebExchange modifiedExchange = addUserHeaders(exchange, request, validationResult);
+            log.debug("Token validated successfully for path: {}, user: {}", path, validationResult.getUsername());
+            return chain.filter(modifiedExchange);
         };
+    }
+
+    /**
+     * Handles actuator endpoint requests with IP-based access control.
+     */
+    private Mono<Void> handleActuatorRequest(ServerWebExchange exchange,
+            org.springframework.cloud.gateway.filter.GatewayFilterChain chain,
+            ServerHttpRequest request, String path) {
+        String clientIp = getClientIp(request);
+        if (!isAllowedActuatorIp(clientIp)) {
+            log.warn("Actuator access denied from IP: {} for path: {}", clientIp, path);
+            return forbiddenResponse(exchange, "Actuator access denied");
+        }
+        log.debug("Actuator access allowed from internal IP: {}", clientIp);
+        return chain.filter(exchange);
+    }
+
+    /**
+     * Extracts JWT token from Authorization header.
+     * Returns null if header is missing, invalid, or token is empty.
+     */
+    private String extractToken(ServerHttpRequest request, String path) {
+        String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
+            log.warn("Missing or invalid Authorization header for path: {}", path);
+            return null;
+        }
+        String token = authHeader.substring(BEARER_PREFIX.length());
+        if (token.isBlank()) {
+            log.warn("Empty token in Authorization header for path: {}", path);
+            return null;
+        }
+        return token;
+    }
+
+    /**
+     * Adds user context headers to the request for downstream services.
+     */
+    private ServerWebExchange addUserHeaders(ServerWebExchange exchange,
+            ServerHttpRequest request, JwtValidator.ValidationResult validationResult) {
+        String username = validationResult.getUsername();
+        if (username == null) {
+            return exchange;
+        }
+
+        String role = validationResult.getRole();
+        ServerHttpRequest.Builder requestBuilder = request.mutate()
+                .header("X-User-Name", username);
+
+        if (role != null) {
+            requestBuilder.header("X-User-Role", role);
+        }
+
+        String internalAuthToken = generateInternalAuthToken(username, role);
+        requestBuilder.header("X-Internal-Auth", internalAuthToken);
+
+        return exchange.mutate().request(requestBuilder.build()).build();
     }
 
     /**
      * Checks if the endpoint is public (does not require authentication).
      */
     private boolean isPublicEndpoint(String path) {
-        return path.startsWith("/api/v1/auth/login") 
-                || path.startsWith("/api/v1/auth/register") 
-                || path.startsWith("/actuator")
+        return path.startsWith("/api/v1/auth/login")
+                || path.startsWith("/api/v1/auth/register")
+                || path.startsWith("/api/v1/auth/logout")
+                || path.startsWith("/api/reports")
+                || path.startsWith("/reports")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs");
+    }
+
+    /**
+     * Checks if the client IP is allowed to access actuator endpoints.
+     */
+    private boolean isAllowedActuatorIp(String clientIp) {
+        if (clientIp == null) return false;
+
+        for (String allowed : actuatorAllowedIps.split(",")) {
+            allowed = allowed.trim();
+            if (allowed.contains("/")) {
+                // CIDR notation - simplified check for common ranges
+                if (isIpInCidr(clientIp, allowed)) {
+                    return true;
+                }
+            } else if (clientIp.equals(allowed)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Simplified CIDR check for common private IP ranges.
+     */
+    private boolean isIpInCidr(String ip, String cidr) {
+        if (cidr.equals("10.0.0.0/8")) {
+            return ip.startsWith("10.");
+        } else if (cidr.equals("172.16.0.0/12")) {
+            if (ip.startsWith("172.")) {
+                try {
+                    int second = Integer.parseInt(ip.split("\\.")[1]);
+                    return second >= 16 && second <= 31;
+                } catch (NumberFormatException e) {
+                    return false;
+                }
+            }
+        } else if (cidr.equals("192.168.0.0/16")) {
+            return ip.startsWith("192.168.");
+        }
+        return false;
+    }
+
+    /**
+     * Extracts client IP from request, considering X-Forwarded-For header.
+     */
+    private String getClientIp(ServerHttpRequest request) {
+        String xForwardedFor = request.getHeaders().getFirst("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        var remoteAddress = request.getRemoteAddress();
+        if (remoteAddress != null && remoteAddress.getAddress() != null) {
+            return remoteAddress.getAddress().getHostAddress();
+        }
+        return null;
     }
 
     /**
@@ -126,6 +223,16 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private Mono<Void> unauthorizedResponse(ServerWebExchange exchange, String message) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        response.getHeaders().add("X-Error-Message", message);
+        return response.setComplete();
+    }
+
+    /**
+     * Creates a forbidden response.
+     */
+    private Mono<Void> forbiddenResponse(ServerWebExchange exchange, String message) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.FORBIDDEN);
         response.getHeaders().add("X-Error-Message", message);
         return response.setComplete();
     }

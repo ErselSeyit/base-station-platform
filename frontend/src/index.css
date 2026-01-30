@@ -34,7 +34,7 @@
   --surface-base: #ffffff;
   --surface-elevated: #fafafa;
   --surface-overlay: rgba(255, 255, 255, 0.95);
-  --surface-border: #e5e5e5;
+  --surface-border: #a3a3a3;
 
   /* Dark mode */
   --dark-surface-base: #0a0a0a;
@@ -310,6 +310,16 @@ pre,
   }
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes draw {
   to {
     stroke-dashoffset: 0;
@@ -454,14 +464,14 @@ pre,
   font-weight: 500;
   letter-spacing: 0.01em;
   background: var(--mono-100);
-  color: var(--mono-700);
-  border: 1px solid var(--mono-200);
+  color: var(--mono-800);
+  border: 1px solid var(--mono-400);
   transition: all var(--transition-fast) var(--ease-out);
 }
 
 .badge:hover {
   background: var(--mono-200);
-  border-color: var(--mono-300);
+  border-color: var(--mono-500);
 }
 
 /* Data table with minimal chrome */

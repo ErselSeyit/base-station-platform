@@ -96,7 +96,7 @@ export default function Login() {
             transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
             '&:hover': {
               boxShadow: 'var(--shadow-lg)',
-              borderColor: 'var(--mono-300)',
+              borderColor: 'var(--mono-400)',
             },
           }}
         >
@@ -160,7 +160,7 @@ export default function Login() {
                       borderColor: 'var(--surface-border)',
                     },
                     '&:hover fieldset': {
-                      borderColor: 'var(--mono-300)',
+                      borderColor: 'var(--mono-400)',
                     },
                     '&.Mui-focused fieldset': {
                       borderColor: 'var(--mono-950)',
@@ -207,7 +207,7 @@ export default function Login() {
                       borderColor: 'var(--surface-border)',
                     },
                     '&:hover fieldset': {
-                      borderColor: 'var(--mono-300)',
+                      borderColor: 'var(--mono-400)',
                     },
                     '&.Mui-focused fieldset': {
                       borderColor: 'var(--mono-950)',
@@ -293,16 +293,7 @@ export default function Login() {
                 color: 'var(--mono-600)',
               }}
             >
-              Admin: <Box component="strong" sx={{ color: 'var(--mono-950)' }}>admin</Box> / <Box component="strong" sx={{ color: 'var(--mono-950)' }}>admin</Box>
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: '0.8125rem',
-                fontFamily: "'JetBrains Mono', monospace",
-                color: 'var(--mono-600)',
-              }}
-            >
-              User: <Box component="strong" sx={{ color: 'var(--mono-950)' }}>user</Box> / <Box component="strong" sx={{ color: 'var(--mono-950)' }}>user</Box>
+              Admin: <Box component="strong" sx={{ color: 'var(--mono-950)' }}>admin</Box> / <Box component="strong" sx={{ color: 'var(--mono-950)' }}>SecureAdmin2024!</Box>
             </Typography>
           </Box>
         </Box>

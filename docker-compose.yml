@@ -146,6 +146,12 @@ services:
         limits:
           cpus: '0.5'
           memory: 384M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9411/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   prometheus:
     image: prom/prometheus:latest
@@ -203,6 +209,7 @@ services:
       DIAGNOSTIC_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
       API_GATEWAY_URL: http://api-gateway:8080
+      AUTH_ADMIN_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
     ports:
       - "9091:9091"
     networks:
@@ -348,6 +355,8 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       AUTH_ADMIN_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
+      BRIDGE_USERNAME: ${BRIDGE_USERNAME:-bridge-user}
+      AUTH_SERVICE_ACCOUNTS: ${BRIDGE_USERNAME:-bridge-user}
       SECURITY_INTERNAL_ENABLED: "true"
       SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
       JAVA_OPTS: "-Xms256m -Xmx384m -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
@@ -437,7 +446,7 @@ services:
     environment:
       STATION_ID: ${EDGE_STATION_ID:-BS-001}
       CLOUD_BASE_URL: http://api-gateway:8080
-      BRIDGE_USERNAME: ${BRIDGE_USERNAME:-admin}
+      BRIDGE_USERNAME: ${BRIDGE_USERNAME:?BRIDGE_USERNAME is required}
       BRIDGE_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
       DEVICE_HOST: ${DEVICE_HOST:-device-simulator}
       DEVICE_PORT: ${DEVICE_PORT:-9999}
@@ -456,9 +465,11 @@ services:
 
   device-simulator:
     build:
-      context: ./testing
-      dockerfile: Dockerfile.simulator
+      context: ./ai-diagnostic/virtual-basestation
+      dockerfile: Dockerfile
     container_name: device-simulator
+    environment:
+      STATION_ID: ${MIPS_STATION_ID:-MIPS-BS-001}
     ports:
       - "9999:9999"
     networks:
@@ -471,6 +482,43 @@ services:
           memory: 64M
     profiles:
       - edge  # Only start with: docker-compose --profile edge up
+
+  # ============================================
+  # VIRTUAL 5G STATION (realistic 5G NR simulator)
+  # ============================================
+  virtual-5g-station:
+    build:
+      context: ./virtual-5g-station
+      dockerfile: Dockerfile
+    container_name: virtual-5g-station
+    environment:
+      STATION_ID: VIRT-001
+      STATION_NAME: Virtual-5G-Istanbul
+      STATION_REGION: ISTANBUL
+      STATION_CITY: Simulation
+      API_GATEWAY_URL: http://api-gateway:8080
+      STATION_USERNAME: admin
+      STATION_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
+    ports:
+      - "8090:8090"
+    depends_on:
+      - api-gateway
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    profiles:
+      - 5g  # Start with: docker-compose --profile 5g up
 
 volumes:
   postgres-data:

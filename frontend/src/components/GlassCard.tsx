@@ -14,7 +14,7 @@ export default function GlassCard({
   delay = 0,
   sx,
   ...props
-}: GlassCardProps) {
+}: Readonly<GlassCardProps>) {
   return (
     <Card
       component={motion.div}
@@ -39,7 +39,7 @@ export default function GlassCard({
         transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
         '&:hover': hover ? {
           boxShadow: 'var(--shadow-md)',
-          borderColor: 'var(--mono-300)',
+          borderColor: 'var(--mono-400)',
         } : {},
         ...sx,
       }}

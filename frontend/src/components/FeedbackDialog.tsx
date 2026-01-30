@@ -27,7 +27,7 @@ interface FeedbackDialogProps {
   onSubmit: (session: DiagnosticSession) => void
 }
 
-export default function FeedbackDialog({ open, session, onClose, onSubmit }: FeedbackDialogProps) {
+export default function FeedbackDialog({ open, session, onClose, onSubmit }: Readonly<FeedbackDialogProps>) {
   const [wasEffective, setWasEffective] = useState<boolean | null>(null)
   const [rating, setRating] = useState<number>(0)
   const [operatorNotes, setOperatorNotes] = useState('')
@@ -180,7 +180,7 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Fee
                   onClick={() => setRating(star)}
                   sx={{
                     p: 0.5,
-                    color: star <= rating ? '#f59e0b' : 'var(--mono-300)',
+                    color: star <= rating ? '#f59e0b' : 'var(--mono-400)',
                     '&:hover': { color: '#f59e0b' }
                   }}
                 >

@@ -22,7 +22,7 @@ import org.springframework.retry.support.RetryTemplate;
  *
  * Features:
  * - Dead Letter Queue for failed messages
- * - Retry logic with exponential backoff
+ * - Retry logic with exponential backoff (configurable via RetryConfig)
  * - Message TTL and max retries
  */
 @Configuration
@@ -32,10 +32,16 @@ public class RabbitMQConfig {
     public static final String ALERTS_EXCHANGE = "alerts.exchange";
     public static final String ALERT_TRIGGERED_ROUTING_KEY = "alert.triggered";
 
-    // Dead Letter Queue configuration
-    public static final String ALERTS_DLQ = "alerts.dlq";
-    public static final String ALERTS_DLX = "alerts.dlx";
-    public static final String ALERTS_DLQ_ROUTING_KEY = "alert.failed";
+    // Dead Letter Queue configuration (clear naming)
+    public static final String ALERTS_DEADLETTER_QUEUE = "alerts.dlq";
+    public static final String ALERTS_DEADLETTER_EXCHANGE = "alerts.dlx";
+    public static final String ALERTS_DEADLETTER_ROUTING_KEY = "alert.failed";
+
+    private final RabbitMQRetryConfig retryConfig;
+
+    public RabbitMQConfig(RabbitMQRetryConfig retryConfig) {
+        this.retryConfig = retryConfig;
+    }
 
     @Bean
     public Exchange alertsExchange() {
@@ -48,7 +54,7 @@ public class RabbitMQConfig {
      */
     @Bean
     public Exchange deadLetterExchange() {
-        return new TopicExchange(ALERTS_DLX, true, false);
+        return new TopicExchange(ALERTS_DEADLETTER_EXCHANGE, true, false);
     }
 
     /**
@@ -57,7 +63,7 @@ public class RabbitMQConfig {
      */
     @Bean
     public Queue deadLetterQueue() {
-        return QueueBuilder.durable(ALERTS_DLQ)
+        return QueueBuilder.durable(ALERTS_DEADLETTER_QUEUE)
                 .build();
     }
 
@@ -69,7 +75,7 @@ public class RabbitMQConfig {
         return BindingBuilder
                 .bind(deadLetterQueue())
                 .to(deadLetterExchange())
-                .with(ALERTS_DLQ_ROUTING_KEY)
+                .with(ALERTS_DEADLETTER_ROUTING_KEY)
                 .noargs();
     }
 
@@ -91,7 +97,7 @@ public class RabbitMQConfig {
         template.setRetryTemplate(retryTemplate());
 
         // Recovery callback - what to do when all retries fail
-        template.setReturnsCallback(returned -> 
+        template.setReturnsCallback(returned ->
             org.slf4j.LoggerFactory.getLogger(RabbitMQConfig.class).error(
                 "Message returned: exchange={}, routingKey={}, replyText={}",
                 returned.getExchange(),
@@ -105,24 +111,23 @@ public class RabbitMQConfig {
 
     /**
      * Retry template with exponential backoff.
-     * - Initial attempt + 3 retries = 4 total attempts
-     * - Backoff: 1s, 2s, 4s
+     * Configuration is externalized via RetryConfig (application.yml).
      */
     @Bean
     @NonNull
     public RetryTemplate retryTemplate() {
         RetryTemplate retryTemplate = new RetryTemplate();
 
-        // Simple retry policy: max 3 retries
+        // Retry policy from config
         SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy();
-        retryPolicy.setMaxAttempts(3);
+        retryPolicy.setMaxAttempts(retryConfig.getMaxAttempts());
         retryTemplate.setRetryPolicy(retryPolicy);
 
-        // Exponential backoff: starts at 1000ms, multiplier 2.0, max 10000ms
+        // Exponential backoff from config
         ExponentialBackOffPolicy backOffPolicy = new ExponentialBackOffPolicy();
-        backOffPolicy.setInitialInterval(1000L);
-        backOffPolicy.setMultiplier(2.0);
-        backOffPolicy.setMaxInterval(10000L);
+        backOffPolicy.setInitialInterval(retryConfig.getInitialBackoffMs());
+        backOffPolicy.setMultiplier(retryConfig.getMultiplier());
+        backOffPolicy.setMaxInterval(retryConfig.getMaxIntervalMs());
         retryTemplate.setBackOffPolicy(backOffPolicy);
 
         return retryTemplate;

@@ -2,6 +2,7 @@ package com.huawei.monitoring.repository;
 
 import com.huawei.monitoring.model.MetricData;
 import com.huawei.monitoring.model.MetricType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -44,12 +45,23 @@ public interface MetricDataRepository extends MongoRepository<MetricData, String
     
     /**
      * Finds all metric data within a time range.
-     * 
+     *
      * @param start the start time (must not be null)
      * @param end the end time (must not be null)
      * @return a list of metric data (never null, may be empty)
      */
     List<MetricData> findByTimestampBetween(LocalDateTime start, LocalDateTime end);
+
+    /**
+     * Finds metric data within a time range with pagination support.
+     * Use this for large result sets to prevent OOM.
+     *
+     * @param start the start time (must not be null)
+     * @param end the end time (must not be null)
+     * @param pageable pagination parameters (must not be null)
+     * @return a list of metric data (never null, may be empty)
+     */
+    List<MetricData> findByTimestampBetween(LocalDateTime start, LocalDateTime end, Pageable pageable);
     
     /**
      * Finds all metric data for a given station within a time range.

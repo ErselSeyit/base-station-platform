@@ -17,7 +17,7 @@ export default function AnimatedCounter({
   prefix = '',
   suffix = '',
   ...typographyProps
-}: AnimatedCounterProps) {
+}: Readonly<AnimatedCounterProps>) {
   const [count, setCount] = useState(0)
   const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.1 })
 

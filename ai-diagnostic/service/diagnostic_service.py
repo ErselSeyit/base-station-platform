@@ -50,7 +50,7 @@ try:
     SERIAL_AVAILABLE = True
 except ImportError:
     SERIAL_AVAILABLE = False
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Optional, Dict, Any, List, Callable
 from datetime import datetime
 from enum import Enum
@@ -75,6 +75,34 @@ try:
     BI_REPORT_AVAILABLE = True
 except ImportError:
     BI_REPORT_AVAILABLE = False
+
+# Computer Vision service (optional)
+try:
+    from vision_service import get_vision_service, VisionService
+    VISION_AVAILABLE = True
+except ImportError:
+    VISION_AVAILABLE = False
+
+# Alarm Correlation service (optional)
+try:
+    from alarm_correlation import get_alarm_correlation_service, Alarm
+    ALARM_CORRELATION_AVAILABLE = True
+except ImportError:
+    ALARM_CORRELATION_AVAILABLE = False
+
+# Predictive Maintenance service (optional)
+try:
+    from predictive_maintenance import get_predictive_maintenance_service, MetricDataPoint
+    PREDICTIVE_MAINTENANCE_AVAILABLE = True
+except ImportError:
+    PREDICTIVE_MAINTENANCE_AVAILABLE = False
+
+# Config Drift Detection service (optional)
+try:
+    from config_drift_detection import get_config_drift_service
+    CONFIG_DRIFT_AVAILABLE = True
+except ImportError:
+    CONFIG_DRIFT_AVAILABLE = False
 
 try:
     import websockets
@@ -129,14 +157,8 @@ class LearnedPattern:
     resolved_count: int = 0
     failed_count: int = 0
     adjusted_confidence: float = 0.85
-    successful_actions: Optional[List[str]] = None
-    failed_actions: Optional[List[str]] = None
-
-    def __post_init__(self):
-        if self.successful_actions is None:
-            self.successful_actions = []
-        if self.failed_actions is None:
-            self.failed_actions = []
+    successful_actions: List[str] = field(default_factory=list)
+    failed_actions: List[str] = field(default_factory=list)
 
     def success_rate(self) -> float:
         total = self.resolved_count + self.failed_count
@@ -369,6 +391,114 @@ class RuleBasedBackend(AIBackend):
             ],
             "expected_outcome": "Certificate renewed with new expiry date",
             "risk_level": "low"
+        },
+        # 5G NR Specific Rules (based on Huawei SSV criteria)
+        "TX_IMBALANCE_HIGH": {
+            "action": "Investigate RF path imbalance and recalibrate antenna system",
+            "commands": [
+                "radio-cli check-tx-path --all-sectors",
+                "radio-cli measure-vswr --threshold 1.5",
+                "radio-cli calibrate-rf-chain",
+                "radio-cli verify-antenna-connections",
+                "logger -p local0.alert 'TX imbalance exceeded 4dB threshold - SSV FAIL'"
+            ],
+            "expected_outcome": "TX imbalance should drop below 4dB threshold (SSV pass criteria)",
+            "risk_level": "high"
+        },
+        "DL_THROUGHPUT_LOW_NR3500": {
+            "action": "Optimize NR3500 downlink performance",
+            "commands": [
+                "radio-cli check-interference --band NR3500",
+                "radio-cli optimize-mcs --target 26",
+                "radio-cli adjust-power --band NR3500 --mode auto",
+                "radio-cli verify-backhaul-capacity",
+                "logger 'NR3500 DL throughput below 1000 Mbps KPI threshold'"
+            ],
+            "expected_outcome": "DL throughput should reach >= 1000 Mbps (NR3500 100MHz RANK4 256QAM)",
+            "risk_level": "medium"
+        },
+        "UL_THROUGHPUT_LOW_NR3500": {
+            "action": "Optimize NR3500 uplink performance",
+            "commands": [
+                "radio-cli check-ul-interference --band NR3500",
+                "radio-cli optimize-ul-grant",
+                "radio-cli adjust-ul-power --band NR3500",
+                "radio-cli verify-ul-sync",
+                "logger 'NR3500 UL throughput below 75 Mbps KPI threshold'"
+            ],
+            "expected_outcome": "UL throughput should reach >= 75 Mbps (NR3500 100MHz RANK1 256QAM)",
+            "risk_level": "medium"
+        },
+        "DL_THROUGHPUT_LOW_NR700": {
+            "action": "Optimize NR700 coverage layer performance",
+            "commands": [
+                "radio-cli check-interference --band NR700",
+                "radio-cli optimize-coverage-layer",
+                "radio-cli adjust-power --band NR700 --mode coverage",
+                "logger 'NR700 DL throughput below 50 Mbps KPI threshold'"
+            ],
+            "expected_outcome": "DL throughput should reach >= 50 Mbps (NR700 10MHz RANK2 256QAM)",
+            "risk_level": "low"
+        },
+        "LATENCY_HIGH": {
+            "action": "Reduce 5G air interface and backhaul latency",
+            "commands": [
+                "radio-cli optimize-scheduling --low-latency",
+                "radio-cli check-harq-timing",
+                "tc qdisc replace dev eth0 root fq_codel target 5ms",
+                "radio-cli verify-fronthaul-latency",
+                "logger 'Latency exceeded 15ms 5G target'"
+            ],
+            "expected_outcome": "Latency should drop below 15ms (5G target)",
+            "risk_level": "medium"
+        },
+        "SINR_DEGRADATION": {
+            "action": "Improve signal-to-interference ratio",
+            "commands": [
+                "radio-cli scan-interference --detailed",
+                "radio-cli optimize-beamforming",
+                "radio-cli adjust-tilt --optimize-sinr",
+                "radio-cli check-pci-collision",
+                "logger 'SINR below 10dB - coverage degradation detected'"
+            ],
+            "expected_outcome": "SINR should improve above 15dB for good coverage",
+            "risk_level": "medium"
+        },
+        "HANDOVER_FAILURE": {
+            "action": "Investigate and fix inter-cell handover issues",
+            "commands": [
+                "radio-cli check-neighbor-relations",
+                "radio-cli verify-x2-connectivity",
+                "radio-cli analyze-handover-logs --last 100",
+                "radio-cli optimize-handover-params",
+                "logger -p local0.alert 'Handover success rate below 100% - SSV FAIL'"
+            ],
+            "expected_outcome": "Handover success rate should reach 100% (SSV criteria)",
+            "risk_level": "high"
+        },
+        "RSRP_WEAK": {
+            "action": "Improve reference signal coverage",
+            "commands": [
+                "radio-cli increase-rs-power",
+                "radio-cli optimize-antenna-tilt",
+                "radio-cli check-feeder-loss",
+                "radio-cli verify-antenna-gain",
+                "logger 'RSRP below -100dBm - weak coverage area'"
+            ],
+            "expected_outcome": "RSRP should improve above -85dBm for good coverage",
+            "risk_level": "low"
+        },
+        "BLER_HIGH": {
+            "action": "Reduce block error rate",
+            "commands": [
+                "radio-cli analyze-bler-distribution",
+                "radio-cli optimize-harq-retx",
+                "radio-cli adjust-mcs-table",
+                "radio-cli check-timing-advance",
+                "logger 'Initial BLER exceeding 10% threshold'"
+            ],
+            "expected_outcome": "BLER should drop below 10% for stable transmission",
+            "risk_level": "medium"
         }
     }
 
@@ -456,8 +586,8 @@ Respond with JSON: {{"action": "...", "commands": [...], "expected_outcome": "..
 class ProtocolAdapter(ABC):
     """Base class for communication protocol adapters"""
 
-    def __init__(self, on_problem: Callable[[Problem], Solution]):
-        self.on_problem = on_problem
+    def __init__(self, on_problem: Optional[Callable[[Problem], Solution]] = None):
+        self.on_problem: Optional[Callable[[Problem], Solution]] = on_problem
         self.running = False
 
     @abstractmethod
@@ -479,7 +609,7 @@ class ProtocolAdapter(ABC):
 class TCPAdapter(ProtocolAdapter):
     """TCP/IP Socket adapter for Ethernet communication"""
 
-    def __init__(self, on_problem: Callable, host: str = "0.0.0.0", port: int = 9090):
+    def __init__(self, on_problem: Optional[Callable[[Problem], Solution]] = None, host: str = "0.0.0.0", port: int = 9090):
         super().__init__(on_problem)
         self.host = host
         self.port = port
@@ -495,7 +625,7 @@ class TCPAdapter(ProtocolAdapter):
         logger.info(f"TCP adapter listening on {self.host}:{self.port}")
 
         def accept_loop():
-            while self.running:
+            while self.running and self.server:
                 try:
                     self.server.settimeout(1.0)
                     conn, addr = self.server.accept()
@@ -524,8 +654,9 @@ class TCPAdapter(ProtocolAdapter):
                 problem_data = json.loads(data.decode().strip())
                 problem = Problem(**problem_data, source_protocol="tcp")
 
-                solution = self.on_problem(problem)
-                self.send_solution(solution, conn)
+                if self.on_problem:
+                    solution = self.on_problem(problem)
+                    self.send_solution(solution, conn)
 
         except Exception as e:
             logger.error(f"TCP client error: {e}")
@@ -548,7 +679,7 @@ class TCPAdapter(ProtocolAdapter):
 class SerialAdapter(ProtocolAdapter):
     """Serial/UART adapter for RS-232, RS-485, USB Serial"""
 
-    def __init__(self, on_problem: Callable, port: str = "/dev/ttyUSB0",
+    def __init__(self, on_problem: Optional[Callable[[Problem], Solution]] = None, port: str = "/dev/ttyUSB0",
                  baudrate: int = 115200, timeout: float = 1.0):
         super().__init__(on_problem)
         self.port = port
@@ -564,6 +695,25 @@ class SerialAdapter(ProtocolAdapter):
         ports = serial.tools.list_ports.comports()
         return [p.device for p in ports]
 
+    def _read_loop(self):
+        """Read serial data in a loop and process complete lines."""
+        buffer = ""
+        while self.running and self.serial_conn:
+            try:
+                if self.serial_conn.in_waiting:
+                    data = self.serial_conn.read(self.serial_conn.in_waiting).decode()
+                    buffer = self._process_buffer(buffer + data)
+            except Exception as e:
+                logger.error(f"Serial read error: {e}")
+
+    def _process_buffer(self, buffer: str) -> str:
+        """Process buffer, handling complete lines and returning remainder."""
+        while '\n' in buffer:
+            line, buffer = buffer.split('\n', 1)
+            if line.strip():
+                self._process_message(line.strip())
+        return buffer
+
     def start(self):
         if not SERIAL_AVAILABLE:
             logger.warning("Serial not available - install pyserial")
@@ -577,23 +727,7 @@ class SerialAdapter(ProtocolAdapter):
                 timeout=self.timeout
             )
             logger.info(f"Serial adapter connected to {self.port} at {self.baudrate} baud")
-
-            def read_loop():
-                buffer = ""
-                while self.running:
-                    try:
-                        if self.serial_conn.in_waiting:
-                            data = self.serial_conn.read(self.serial_conn.in_waiting).decode()
-                            buffer += data
-
-                            while '\n' in buffer:
-                                line, buffer = buffer.split('\n', 1)
-                                if line.strip():
-                                    self._process_message(line.strip())
-                    except Exception as e:
-                        logger.error(f"Serial read error: {e}")
-
-            threading.Thread(target=read_loop, daemon=True).start()
+            threading.Thread(target=self._read_loop, daemon=True).start()
 
         except serial.SerialException as e:
             logger.error(f"Failed to open serial port {self.port}: {e}")
@@ -603,8 +737,9 @@ class SerialAdapter(ProtocolAdapter):
         try:
             problem_data = json.loads(message)
             problem = Problem(**problem_data, source_protocol="serial")
-            solution = self.on_problem(problem)
-            self.send_solution(solution, None)
+            if self.on_problem:
+                solution = self.on_problem(problem)
+                self.send_solution(solution, None)
         except json.JSONDecodeError:
             logger.warning(f"Invalid JSON from serial: {message[:100]}")
 
@@ -622,7 +757,7 @@ class SerialAdapter(ProtocolAdapter):
 class MQTTAdapter(ProtocolAdapter):
     """MQTT adapter for IoT communication"""
 
-    def __init__(self, on_problem: Callable, broker: str = "localhost", port: int = 1883,
+    def __init__(self, on_problem: Optional[Callable[[Problem], Solution]] = None, broker: str = "localhost", port: int = 1883,
                  topic_problems: str = "basestation/+/problems",
                  topic_solutions: str = "basestation/{station_id}/solutions"):
         super().__init__(on_problem)
@@ -648,8 +783,9 @@ class MQTTAdapter(ProtocolAdapter):
             try:
                 problem_data = json.loads(msg.payload.decode())
                 problem = Problem(**problem_data, source_protocol="mqtt")
-                solution = self.on_problem(problem)
-                self.send_solution(solution, problem.station_id)
+                if self.on_problem:
+                    solution = self.on_problem(problem)
+                    self.send_solution(solution, problem.station_id)
             except Exception as e:
                 logger.error(f"MQTT message error: {e}")
 
@@ -677,18 +813,18 @@ class MQTTAdapter(ProtocolAdapter):
 class HTTPAdapter(ProtocolAdapter):
     """HTTP/REST API adapter with HMAC authentication and OpenTelemetry tracing"""
 
-    def __init__(self, on_problem: Callable, host: str = "0.0.0.0", port: int = 9091):
+    def __init__(self, on_problem: Optional[Callable[[Problem], Solution]] = None, host: str = "0.0.0.0", port: int = 9091):
         super().__init__(on_problem)
         self.host = host
         self.port = port
-        self.app = None
+        self.app: Optional["Flask"] = None
         self.secret = os.environ.get("DIAGNOSTIC_SECRET", "")
         self.tracer = None
         # References to diagnostic logs and learning engine (set by DiagnosticService)
         self.problem_log: List[Problem] = []
         self.solution_log: List[Solution] = []
         self.learning_engine: Optional[LearningEngine] = None
-        self.diagnostic_service = None  # Reference to parent service for feedback
+        self.diagnostic_service: Optional["DiagnosticService"] = None  # Reference to parent service
         require_auth = os.environ.get("DIAGNOSTIC_REQUIRE_AUTH", "false").lower() == "true"
         if not self.secret:
             if require_auth:
@@ -751,6 +887,468 @@ class HTTPAdapter(ProtocolAdapter):
             return f(*args, **kwargs)
         return decorated
 
+    def _handle_diagnose(self):
+        """Handle POST /diagnose request."""
+        if not self.on_problem:
+            return jsonify({"error": "Diagnostic handler not configured"}), 503
+        problem_data = request.json
+        problem = Problem(**problem_data, source_protocol="http")
+        solution = self.on_problem(problem)
+        return jsonify(asdict(solution))
+
+    def _handle_health(self):
+        """Handle GET /health request."""
+        return jsonify({
+            "status": "ok",
+            "authenticated": bool(self.secret),
+            "tracing": OTEL_AVAILABLE and self.tracer is not None
+        })
+
+    def _handle_bi_report(self):
+        """Handle GET /reports/bi request."""
+        if not BI_REPORT_AVAILABLE:
+            return jsonify({"error": "BI report generation not available"}), 503
+
+        api_url = os.environ.get("API_GATEWAY_URL", "http://localhost:8080")
+        generator = BIReportGenerator(api_url)
+        pdf_bytes = generator.generate_report_bytes()
+
+        if pdf_bytes is None:
+            return jsonify({"error": "Failed to generate report"}), 500
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"bi-report-{timestamp}.pdf"
+
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Length': str(len(pdf_bytes))
+            }
+        )
+
+    def _build_diagnostic_entry(self, index: int, problem: Problem) -> dict:
+        """Build a diagnostic entry with optional solution."""
+        entry = {
+            "id": problem.id,
+            "timestamp": problem.timestamp,
+            "station_id": problem.station_id,
+            "category": problem.category,
+            "severity": problem.severity,
+            "code": problem.code,
+            "message": problem.message,
+            "source_protocol": problem.source_protocol,
+            "solution": None
+        }
+        if index < len(self.solution_log):
+            sol = self.solution_log[index]
+            entry["solution"] = {
+                "action": sol.action,
+                "commands": sol.commands,
+                "expected_outcome": sol.expected_outcome,
+                "risk_level": sol.risk_level,
+                "confidence": sol.confidence,
+                "reasoning": sol.reasoning
+            }
+        return entry
+
+    def _handle_diagnostics_log(self):
+        """Handle GET /reports/diagnostics request."""
+        diagnostics = [
+            self._build_diagnostic_entry(i, problem)
+            for i, problem in enumerate(self.problem_log)
+        ]
+        return jsonify({"total": len(diagnostics), "diagnostics": diagnostics})
+
+    def _handle_feedback(self):
+        """Handle POST /learning/feedback request."""
+        if not self.diagnostic_service:
+            return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
+
+        data = request.json
+        problem_code = data.get('problem_code')
+        if not problem_code:
+            return jsonify({"error": "problem_code is required"}), 400
+
+        pattern = self.diagnostic_service.record_feedback(
+            problem_code,
+            data.get('category', 'unknown'),
+            data.get('was_effective', False),
+            data.get('action', '')
+        )
+
+        return jsonify({
+            "problem_code": pattern.problem_code,
+            "success_rate": pattern.success_rate(),
+            "resolved_count": pattern.resolved_count,
+            "failed_count": pattern.failed_count,
+            "adjusted_confidence": pattern.adjusted_confidence
+        })
+
+    @staticmethod
+    def _serialize_pattern(pattern) -> dict:
+        """Serialize a learning pattern to dict."""
+        return {
+            "problem_code": pattern.problem_code,
+            "category": pattern.category,
+            "resolved_count": pattern.resolved_count,
+            "failed_count": pattern.failed_count,
+            "success_rate": pattern.success_rate(),
+            "adjusted_confidence": pattern.adjusted_confidence,
+            "successful_actions": pattern.successful_actions,
+            "failed_actions": pattern.failed_actions
+        }
+
+    def _handle_learning_stats(self):
+        """Handle GET /learning/stats request."""
+        if not self.learning_engine:
+            return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
+        return jsonify(self.learning_engine.get_stats())
+
+    def _handle_patterns(self):
+        """Handle GET /learning/patterns request."""
+        if not self.learning_engine:
+            return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
+
+        patterns = self.learning_engine.get_all_patterns()
+        return jsonify({
+            "total": len(patterns),
+            "patterns": [self._serialize_pattern(p) for p in patterns]
+        })
+
+    def _handle_pattern(self, problem_code: str):
+        """Handle GET /learning/patterns/<problem_code> request."""
+        if not self.learning_engine:
+            return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
+
+        pattern = self.learning_engine.get_pattern(problem_code)
+        if not pattern:
+            return jsonify({"error": "Pattern not found"}), 404
+
+        return jsonify(self._serialize_pattern(pattern))
+
+    # =========================================================================
+    # Computer Vision Endpoints
+    # =========================================================================
+
+    def _handle_vision_analyze_led(self):
+        """Handle POST /vision/analyze-led request.
+
+        Accepts either:
+        - JSON with base64_image field
+        - multipart/form-data with image file
+        """
+        if not VISION_AVAILABLE:
+            return jsonify({"error": "Vision service not available - install opencv-python-headless"}), 503
+
+        vision_service = get_vision_service()
+
+        try:
+            if request.content_type and 'multipart/form-data' in request.content_type:
+                # Handle file upload
+                if 'image' not in request.files:
+                    return jsonify({"error": "No image file provided"}), 400
+                file = request.files['image']
+                image_data = file.read()
+                station_id = request.form.get('station_id', 'unknown')
+                expected_leds = int(request.form.get('expected_leds', 0))
+            else:
+                # Handle JSON with base64
+                data = request.json
+                if not data or 'base64_image' not in data:
+                    return jsonify({"error": "base64_image field is required"}), 400
+                station_id = data.get('station_id', 'unknown')
+                expected_leds = data.get('expected_leds', 0)
+                result = vision_service.analyze_from_base64(
+                    data['base64_image'], station_id, expected_leds
+                )
+                return jsonify(vision_service.to_dict(result))
+
+            result = vision_service.analyze_led_panel(image_data, station_id, expected_leds)
+            return jsonify(vision_service.to_dict(result))
+
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Vision analysis error: {e}")
+            return jsonify({"error": f"Analysis failed: {str(e)}"}), 500
+
+    # =========================================================================
+    # Alarm Correlation Endpoints
+    # =========================================================================
+
+    def _handle_alarms_correlate(self):
+        """Handle POST /alarms/correlate request.
+
+        Body: {"alarms": [{"alarm_id": "...", "station_id": "...", ...}, ...]}
+        """
+        if not ALARM_CORRELATION_AVAILABLE:
+            return jsonify({"error": "Alarm correlation service not available - install scikit-learn"}), 503
+
+        correlation_service = get_alarm_correlation_service()
+
+        try:
+            data = request.json
+            if not data or 'alarms' not in data:
+                return jsonify({"error": "alarms field is required"}), 400
+
+            # Convert JSON to Alarm objects
+            from alarm_correlation import AlarmSeverity
+            alarms = []
+            for alarm_data in data['alarms']:
+                # Map severity string to enum
+                severity_str = alarm_data['severity'].upper()
+                try:
+                    severity = AlarmSeverity[severity_str]
+                except KeyError:
+                    severity = AlarmSeverity.WARNING
+
+                alarm = Alarm(
+                    alarm_id=alarm_data['alarm_id'],
+                    station_id=alarm_data['station_id'],
+                    timestamp=datetime.fromisoformat(alarm_data['timestamp']),
+                    alarm_type=alarm_data['alarm_type'],
+                    severity=severity,
+                    message=alarm_data.get('message', ''),
+                    metric_type=alarm_data.get('metric_type'),
+                    metric_value=alarm_data.get('metric_value')
+                )
+                alarms.append(alarm)
+
+            # Run correlation analysis
+            result = correlation_service.correlate_alarms(alarms)
+
+            return jsonify(result.to_dict())
+
+        except KeyError as e:
+            return jsonify({"error": f"Missing required field: {e}"}), 400
+        except Exception as e:
+            logger.error(f"Alarm correlation error: {e}")
+            return jsonify({"error": f"Correlation failed: {str(e)}"}), 500
+
+    # =========================================================================
+    # Predictive Maintenance Endpoints
+    # =========================================================================
+
+    def _handle_maintenance_health(self, station_id: str):
+        """Handle GET /maintenance/<station_id>/health request."""
+        if not PREDICTIVE_MAINTENANCE_AVAILABLE:
+            return jsonify({"error": "Predictive maintenance service not available - install scikit-learn"}), 503
+
+        maintenance_service = get_predictive_maintenance_service()
+
+        try:
+            # Get metric data from query params or use defaults
+            include_recommendations = request.args.get('include_recommendations', 'true').lower() == 'true'
+
+            report = maintenance_service.get_station_health_report(station_id)
+            result = report  # Already a dict
+
+            if not include_recommendations:
+                result.pop('recommendations', None)
+
+            return jsonify(result)
+
+        except Exception as e:
+            logger.error(f"Maintenance health report error: {e}")
+            return jsonify({"error": f"Health report failed: {str(e)}"}), 500
+
+    def _handle_maintenance_analyze(self):
+        """Handle POST /maintenance/analyze request.
+
+        Body: {
+            "station_id": "BS-001",
+            "metrics": [
+                {"metric_type": "FAN_SPEED", "value": 2500, "timestamp": "..."},
+                ...
+            ]
+        }
+        """
+        if not PREDICTIVE_MAINTENANCE_AVAILABLE:
+            return jsonify({"error": "Predictive maintenance service not available"}), 503
+
+        maintenance_service = get_predictive_maintenance_service()
+
+        try:
+            data = request.json
+            if not data:
+                return jsonify({"error": "Request body is required"}), 400
+
+            station_id = data.get('station_id', 'unknown')
+            metrics_data = data.get('metrics', [])
+
+            # Convert to MetricDataPoint objects and add to service
+            for m in metrics_data:
+                point = MetricDataPoint(
+                    timestamp=datetime.fromisoformat(m['timestamp']),
+                    metric_type=m['metric_type'],
+                    value=m['value'],
+                    station_id=station_id
+                )
+                maintenance_service.add_metric(point)
+
+            # Generate health report (already returns dict)
+            report = maintenance_service.get_station_health_report(station_id)
+            return jsonify(report)
+
+        except KeyError as e:
+            return jsonify({"error": f"Missing required field: {e}"}), 400
+        except Exception as e:
+            logger.error(f"Maintenance analysis error: {e}")
+            return jsonify({"error": f"Analysis failed: {str(e)}"}), 500
+
+    # =========================================================================
+    # Configuration Drift Detection Endpoints
+    # =========================================================================
+
+    def _handle_config_drift_detect(self):
+        """Handle POST /config/drift request.
+
+        Body: {
+            "station_id": "BS-001",
+            "current_config": {"param1": "value1", ...},
+            "baseline_config": {"param1": "baseline1", ...}  # optional
+        }
+        """
+        if not CONFIG_DRIFT_AVAILABLE:
+            return jsonify({"error": "Config drift detection service not available"}), 503
+
+        drift_service = get_config_drift_service()
+
+        try:
+            data = request.json
+            if not data:
+                return jsonify({"error": "Request body is required"}), 400
+
+            station_id = data.get('station_id', 'unknown')
+            current_config = data.get('current_config')
+
+            if not current_config:
+                return jsonify({"error": "current_config is required"}), 400
+
+            # Set baseline if provided
+            baseline_config = data.get('baseline_config')
+            if baseline_config:
+                drift_service.set_baseline(station_id, baseline_config)
+
+            # Detect drift
+            report = drift_service.detect_drift(station_id, current_config)
+
+            if report is None:
+                return jsonify({
+                    "error": "No baseline configuration found for station",
+                    "hint": "Provide baseline_config in the request or call /config/baseline first"
+                }), 400
+
+            return jsonify(report.to_dict())
+
+        except Exception as e:
+            logger.error(f"Config drift detection error: {e}")
+            return jsonify({"error": f"Drift detection failed: {str(e)}"}), 500
+
+    def _handle_config_baseline_set(self):
+        """Handle POST /config/baseline request.
+
+        Body: {
+            "station_id": "BS-001",
+            "config": {"param1": "value1", ...}
+        }
+        """
+        if not CONFIG_DRIFT_AVAILABLE:
+            return jsonify({"error": "Config drift detection service not available"}), 503
+
+        drift_service = get_config_drift_service()
+
+        try:
+            data = request.json
+            if not data:
+                return jsonify({"error": "Request body is required"}), 400
+
+            station_id = data.get('station_id')
+            config = data.get('config')
+
+            if not station_id:
+                return jsonify({"error": "station_id is required"}), 400
+            if not config:
+                return jsonify({"error": "config is required"}), 400
+
+            drift_service.set_baseline(station_id, config)
+
+            return jsonify({
+                "status": "ok",
+                "station_id": station_id,
+                "parameters_count": len(config),
+                "message": "Baseline configuration saved"
+            })
+
+        except Exception as e:
+            logger.error(f"Config baseline set error: {e}")
+            return jsonify({"error": f"Failed to set baseline: {str(e)}"}), 500
+
+    def _handle_config_baseline_get(self, station_id: str):
+        """Handle GET /config/baseline/<station_id> request."""
+        if not CONFIG_DRIFT_AVAILABLE:
+            return jsonify({"error": "Config drift detection service not available"}), 503
+
+        drift_service = get_config_drift_service()
+
+        baseline = drift_service.get_baseline(station_id)
+        if baseline is None:
+            return jsonify({"error": "No baseline found for station"}), 404
+
+        return jsonify({
+            "station_id": station_id,
+            "baseline": baseline
+        })
+
+    def _add_cors_headers(self, response):
+        """Add CORS headers to response."""
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-HMAC-Signature'
+        return response
+
+    def _register_routes(self):
+        """Register all Flask routes."""
+        assert self.app is not None, "Flask app must be initialized before registering routes"
+        app = self.app  # Local reference for type narrowing
+
+        app.after_request(self._add_cors_headers)
+
+        app.route('/diagnose', methods=['POST'])(
+            self._require_auth(self._handle_diagnose))
+        app.route('/health', methods=['GET'])(self._handle_health)
+        app.route('/reports/bi', methods=['GET'])(self._handle_bi_report)
+        app.route('/reports/diagnostics', methods=['GET'])(self._handle_diagnostics_log)
+        app.route('/learning/feedback', methods=['POST'])(
+            self._require_auth(self._handle_feedback))
+        app.route('/learning/stats', methods=['GET'])(self._handle_learning_stats)
+        app.route('/learning/patterns', methods=['GET'])(self._handle_patterns)
+        app.route('/learning/patterns/<problem_code>', methods=['GET'])(self._handle_pattern)
+
+        # Computer Vision endpoints
+        app.route('/vision/analyze-led', methods=['POST'])(
+            self._require_auth(self._handle_vision_analyze_led))
+
+        # Alarm Correlation endpoints
+        app.route('/alarms/correlate', methods=['POST'])(
+            self._require_auth(self._handle_alarms_correlate))
+
+        # Predictive Maintenance endpoints
+        app.route('/maintenance/<station_id>/health', methods=['GET'])(
+            self._handle_maintenance_health)
+        app.route('/maintenance/analyze', methods=['POST'])(
+            self._require_auth(self._handle_maintenance_analyze))
+
+        # Configuration Drift Detection endpoints
+        app.route('/config/drift', methods=['POST'])(
+            self._require_auth(self._handle_config_drift_detect))
+        app.route('/config/baseline', methods=['POST'])(
+            self._require_auth(self._handle_config_baseline_set))
+        app.route('/config/baseline/<station_id>', methods=['GET'])(
+            self._handle_config_baseline_get)
+
     def start(self):
         if not FLASK_AVAILABLE:
             logger.warning("Flask not available - install flask")
@@ -758,179 +1356,13 @@ class HTTPAdapter(ProtocolAdapter):
 
         self.running = True
         self.app = Flask(__name__)
-
-        # Enable CORS for browser requests
-        @self.app.after_request
-        def add_cors_headers(response):
-            response.headers['Access-Control-Allow-Origin'] = '*'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-HMAC-Signature'
-            return response
-
-        # Setup OpenTelemetry tracing
         self._setup_tracing()
+        self._register_routes()
 
-        @self.app.route('/diagnose', methods=['POST'])
-        @self._require_auth
-        def diagnose():
-            problem_data = request.json
-            problem = Problem(**problem_data, source_protocol="http")
-            solution = self.on_problem(problem)
-            return jsonify(asdict(solution))
-
-        @self.app.route('/health', methods=['GET'])
-        def health():
-            return jsonify({
-                "status": "ok",
-                "authenticated": bool(self.secret),
-                "tracing": OTEL_AVAILABLE and self.tracer is not None
-            })
-
-        @self.app.route('/reports/bi', methods=['GET'])
-        def generate_bi_report():
-            """Generate BI report PDF on-demand"""
-            if not BI_REPORT_AVAILABLE:
-                return jsonify({"error": "BI report generation not available"}), 503
-
-            api_url = os.environ.get("API_GATEWAY_URL", "http://localhost:8080")
-            generator = BIReportGenerator(api_url)
-            pdf_bytes = generator.generate_report_bytes()
-
-            if pdf_bytes is None:
-                return jsonify({"error": "Failed to generate report"}), 500
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"bi-report-{timestamp}.pdf"
-
-            return Response(
-                pdf_bytes,
-                mimetype='application/pdf',
-                headers={
-                    'Content-Disposition': f'attachment; filename="{filename}"',
-                    'Content-Length': str(len(pdf_bytes))
-                }
-            )
-
-        @self.app.route('/reports/diagnostics', methods=['GET'])
-        def get_diagnostics_log():
-            """Return AI diagnostics problem and solution logs"""
-            diagnostics = []
-
-            # Pair problems with their solutions
-            for i, problem in enumerate(self.problem_log):
-                entry = {
-                    "id": problem.id,
-                    "timestamp": problem.timestamp,
-                    "station_id": problem.station_id,
-                    "category": problem.category,
-                    "severity": problem.severity,
-                    "code": problem.code,
-                    "message": problem.message,
-                    "source_protocol": problem.source_protocol,
-                    "solution": None
-                }
-
-                # Find matching solution
-                if i < len(self.solution_log):
-                    sol = self.solution_log[i]
-                    entry["solution"] = {
-                        "action": sol.action,
-                        "commands": sol.commands,
-                        "expected_outcome": sol.expected_outcome,
-                        "risk_level": sol.risk_level,
-                        "confidence": sol.confidence,
-                        "reasoning": sol.reasoning
-                    }
-
-                diagnostics.append(entry)
-
-            return jsonify({
-                "total": len(diagnostics),
-                "diagnostics": diagnostics
-            })
-
-        @self.app.route('/learning/feedback', methods=['POST'])
-        @self._require_auth
-        def submit_feedback():
-            """Submit feedback on a diagnostic solution for learning."""
-            if not self.diagnostic_service:
-                return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
-
-            data = request.json
-            problem_code = data.get('problem_code')
-            category = data.get('category', 'unknown')
-            was_effective = data.get('was_effective', False)
-            action = data.get('action', '')
-
-            if not problem_code:
-                return jsonify({"error": "problem_code is required"}), 400
-
-            pattern = self.diagnostic_service.record_feedback(
-                problem_code, category, was_effective, action
-            )
-
-            return jsonify({
-                "problem_code": pattern.problem_code,
-                "success_rate": pattern.success_rate(),
-                "resolved_count": pattern.resolved_count,
-                "failed_count": pattern.failed_count,
-                "adjusted_confidence": pattern.adjusted_confidence
-            })
-
-        @self.app.route('/learning/stats', methods=['GET'])
-        def get_learning_stats():
-            """Get learning statistics."""
-            if not self.learning_engine:
-                return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
-            return jsonify(self.learning_engine.get_stats())
-
-        @self.app.route('/learning/patterns', methods=['GET'])
-        def get_patterns():
-            """Get all learned patterns."""
-            if not self.learning_engine:
-                return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
-
-            patterns = self.learning_engine.get_all_patterns()
-            return jsonify({
-                "total": len(patterns),
-                "patterns": [
-                    {
-                        "problem_code": p.problem_code,
-                        "category": p.category,
-                        "resolved_count": p.resolved_count,
-                        "failed_count": p.failed_count,
-                        "success_rate": p.success_rate(),
-                        "adjusted_confidence": p.adjusted_confidence,
-                        "successful_actions": p.successful_actions,
-                        "failed_actions": p.failed_actions
-                    }
-                    for p in patterns
-                ]
-            })
-
-        @self.app.route('/learning/patterns/<problem_code>', methods=['GET'])
-        def get_pattern(problem_code):
-            """Get a specific learned pattern."""
-            if not self.learning_engine:
-                return jsonify({"error": LEARNING_ENGINE_NOT_AVAILABLE}), 503
-
-            pattern = self.learning_engine.get_pattern(problem_code)
-            if not pattern:
-                return jsonify({"error": "Pattern not found"}), 404
-
-            return jsonify({
-                "problem_code": pattern.problem_code,
-                "category": pattern.category,
-                "resolved_count": pattern.resolved_count,
-                "failed_count": pattern.failed_count,
-                "success_rate": pattern.success_rate(),
-                "adjusted_confidence": pattern.adjusted_confidence,
-                "successful_actions": pattern.successful_actions,
-                "failed_actions": pattern.failed_actions
-            })
-
+        app = self.app
+        assert app is not None  # Type narrowing for lambda
         threading.Thread(
-            target=lambda: self.app.run(host=self.host, port=self.port, threaded=True),
+            target=lambda: app.run(host=self.host, port=self.port, threaded=True),
             daemon=True
         ).start()
 
@@ -1072,7 +1504,22 @@ def main():
     logger.info("="*60)
     logger.info(f"  TCP:  localhost:{args.tcp_port}")
     if FLASK_AVAILABLE:
-        logger.info(f"  HTTP: http://localhost:{args.http_port}/diagnose")
+        logger.info(f"  HTTP: http://localhost:{args.http_port}")
+        logger.info("  Endpoints:")
+        logger.info("    POST /diagnose           - AI diagnosis")
+        logger.info("    GET  /health             - Health check")
+        logger.info("    GET  /reports/bi         - BI report PDF")
+        logger.info("    GET  /reports/diagnostics- Diagnostic log")
+        if VISION_AVAILABLE:
+            logger.info("    POST /vision/analyze-led - LED panel analysis")
+        if ALARM_CORRELATION_AVAILABLE:
+            logger.info("    POST /alarms/correlate   - Alarm correlation")
+        if PREDICTIVE_MAINTENANCE_AVAILABLE:
+            logger.info("    GET  /maintenance/{id}/health - Health report")
+            logger.info("    POST /maintenance/analyze     - Analyze metrics")
+        if CONFIG_DRIFT_AVAILABLE:
+            logger.info("    POST /config/drift       - Detect drift")
+            logger.info("    POST /config/baseline    - Set baseline")
     if args.serial:
         logger.info(f"  Serial: {args.serial}")
     if args.mqtt_broker:

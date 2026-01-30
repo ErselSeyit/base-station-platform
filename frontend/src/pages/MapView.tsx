@@ -207,7 +207,7 @@ export default function MapView() {
                     textTransform: 'none',
                     fontSize: '0.8125rem',
                     '&:hover': {
-                      borderColor: 'var(--mono-300)',
+                      borderColor: 'var(--mono-400)',
                       background: 'var(--mono-50)',
                     },
                   }}
@@ -236,7 +236,7 @@ export default function MapView() {
           transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           '&:hover': {
             boxShadow: 'var(--shadow-md)',
-            borderColor: 'var(--mono-300)',
+            borderColor: 'var(--mono-400)',
           },
         }}
       >
@@ -320,7 +320,7 @@ export default function MapView() {
             transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
             '&:hover': {
               boxShadow: 'var(--shadow-md)',
-              borderColor: 'var(--mono-300)',
+              borderColor: 'var(--mono-400)',
             },
           }}
         >

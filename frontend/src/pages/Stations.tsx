@@ -249,7 +249,7 @@ export default function Stations() {
                 transition: 'all 0.2s ease',
                 '&:hover': {
                   boxShadow: 'var(--shadow-md)',
-                  borderColor: 'var(--mono-300)',
+                  borderColor: 'var(--mono-400)',
                 },
               }}
             >
@@ -310,7 +310,7 @@ export default function Stations() {
                     borderColor: 'var(--surface-border)',
                     color: 'var(--mono-700)',
                     '&:hover': {
-                      borderColor: 'var(--mono-300)',
+                      borderColor: 'var(--mono-400)',
                       background: 'var(--mono-50)',
                     },
                   }}

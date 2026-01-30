@@ -6,8 +6,8 @@ spring:
       enabled: true
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/authdb}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -21,6 +21,17 @@ auth:
   admin:
     username: ${AUTH_ADMIN_USERNAME:admin}
     password: ${AUTH_ADMIN_PASSWORD:}
+  bridge:
+    username: ${BRIDGE_USERNAME:bridge-user}
+  # Comma-separated list of service accounts exempt from rate limiting
+  service-accounts: ${AUTH_SERVICE_ACCOUNTS:}
+  # Login attempt rate limiting configuration
+  login-attempts:
+    max-attempts: ${AUTH_MAX_LOGIN_ATTEMPTS:5}
+    initial-lockout-seconds: ${AUTH_INITIAL_LOCKOUT_SECONDS:60}
+    max-lockout-seconds: ${AUTH_MAX_LOCKOUT_SECONDS:3600}
+    backoff-multiplier: ${AUTH_BACKOFF_MULTIPLIER:2.0}
+    cleanup-threshold-seconds: ${AUTH_CLEANUP_THRESHOLD_SECONDS:86400}
 
 server:
   port: 8084
@@ -31,6 +42,11 @@ jwt:
   # Generate a secure secret: openssl rand -base64 32
   secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000} # 24 hours default
+  cookie:
+    # Use secure cookies in production (HTTPS only)
+    secure: ${JWT_COOKIE_SECURE:false}
+    # Cookie max age in seconds (default 24 hours)
+    max-age: ${JWT_COOKIE_MAX_AGE:86400}
 
 management:
   endpoints:

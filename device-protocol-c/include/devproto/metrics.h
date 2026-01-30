@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 /**
- * Metric types - compatible with Python MetricType enum
+ * Metric types - compatible with Python MetricType enum and Go edge-bridge
  */
 typedef enum {
     /* System metrics (0x01-0x0F) */
@@ -48,6 +48,36 @@ typedef enum {
     DEVPROTO_METRIC_BATTERY_LEVEL    = 0x30,
     DEVPROTO_METRIC_UPTIME           = 0x31,
     DEVPROTO_METRIC_ERROR_COUNT      = 0x32,
+
+    /* 5G NR700 (n28 band) metrics (0x40-0x4F) */
+    DEVPROTO_METRIC_DL_THROUGHPUT_NR700 = 0x40,
+    DEVPROTO_METRIC_UL_THROUGHPUT_NR700 = 0x41,
+    DEVPROTO_METRIC_RSRP_NR700          = 0x42,
+    DEVPROTO_METRIC_SINR_NR700          = 0x43,
+
+    /* 5G NR3500 (n78 band) metrics (0x50-0x5F) */
+    DEVPROTO_METRIC_DL_THROUGHPUT_NR3500 = 0x50,
+    DEVPROTO_METRIC_UL_THROUGHPUT_NR3500 = 0x51,
+    DEVPROTO_METRIC_RSRP_NR3500          = 0x52,
+    DEVPROTO_METRIC_SINR_NR3500          = 0x53,
+
+    /* 5G Radio metrics (0x60-0x6F) */
+    DEVPROTO_METRIC_PDCP_THROUGHPUT      = 0x60,
+    DEVPROTO_METRIC_RLC_THROUGHPUT       = 0x61,
+    DEVPROTO_METRIC_INITIAL_BLER         = 0x62,
+    DEVPROTO_METRIC_AVG_MCS              = 0x63,
+    DEVPROTO_METRIC_RB_PER_SLOT          = 0x64,
+    DEVPROTO_METRIC_RANK_INDICATOR       = 0x65,
+
+    /* RF Quality metrics (0x70-0x7F) */
+    DEVPROTO_METRIC_TX_IMBALANCE         = 0x70,
+    DEVPROTO_METRIC_LATENCY_PING         = 0x71,
+    DEVPROTO_METRIC_HANDOVER_SUCCESS     = 0x72,
+    DEVPROTO_METRIC_INTERFERENCE_LEVEL   = 0x73,
+
+    /* Carrier Aggregation metrics (0x78-0x7F) */
+    DEVPROTO_METRIC_CA_DL_THROUGHPUT     = 0x78,
+    DEVPROTO_METRIC_CA_UL_THROUGHPUT     = 0x79,
 
     /* Special values */
     DEVPROTO_METRIC_ALL              = 0xFF
