@@ -99,3 +99,7 @@ backups/
 # AI tool local files
 .claude/
 
+# REST client files
+*.rest
+*.http
+
