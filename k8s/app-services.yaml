@@ -722,13 +722,22 @@ spec:
       - name: device-simulator
         image: base-station-platform-device-simulator:1.0.0
         imagePullPolicy: IfNotPresent
-        # Use mips_device.py for binary protocol (0xAA55 frames) expected by edge-bridge
-        command: ["python", "virtual-basestation/mips_device.py", "--port", "9999"]
+        # Use virtual_station.py for HTTP/REST API metrics
+        command: ["python", "virtual_station.py"]
         ports:
-        - containerPort: 9999
+        - containerPort: 8090
         env:
         - name: STATION_ID
           value: "MIPS-BS-001"
+        - name: STATION_NAME
+          value: "Virtual-5G-Station-001"
+        - name: API_GATEWAY_URL
+          value: "http://api-gateway:8080"
+        - name: AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: admin-password
         resources:
           limits:
             cpu: "100m"
