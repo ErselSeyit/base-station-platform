@@ -477,6 +477,10 @@ export default function SONRecommendations() {
                 fontWeight: 600,
                 minWidth: 'auto',
                 px: 3,
+                color: CSS_VARS.mono700,
+                '&.Mui-selected': {
+                  color: CSS_VARS.accentPrimary,
+                },
               },
             }}
           >
