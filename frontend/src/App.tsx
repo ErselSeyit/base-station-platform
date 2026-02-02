@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { CircularProgress, Box } from '@mui/material'
 import Layout from './components/Layout'
@@ -35,6 +35,22 @@ function ProtectedRoute({ children }: { readonly children: React.ReactNode }) {
 }
 
 function App() {
+  const [isValidating, setIsValidating] = useState(true)
+
+  // Validate session on mount to restore auth state from HttpOnly cookies
+  useEffect(() => {
+    const validateAuth = async () => {
+      await authService.validateSession()
+      setIsValidating(false)
+    }
+    validateAuth()
+  }, [])
+
+  // Show loader while validating session
+  if (isValidating) {
+    return <PageLoader />
+  }
+
   return (
     <>
       <ToastProvider />

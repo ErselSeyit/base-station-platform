@@ -415,28 +415,42 @@ interface MetricSectionProps {
 }
 
 export const MetricSection = ({ title, subtitle, icon, status, metrics, baseDelay, compact }: MetricSectionProps) => {
-  if (metrics.length === 0) return null
-
   return (
     <Box sx={{ marginBottom: compact ? 0 : '32px' }}>
       <SectionHeader title={title} subtitle={subtitle} icon={icon} status={status} compact={compact} />
-      <Grid container spacing={compact ? 1.5 : 2} alignItems="stretch">
-        {metrics.map((m, idx) => (
-          <Grid item xs={6} sm={compact ? 6 : 4} md={compact ? 6 : 3} key={m.type}>
-            <MetricCard
-              label={m.config.label}
-              fullLabel={m.config.fullLabel}
-              value={m.value}
-              unit={m.config.unit}
-              status={m.config.getStatus(m.value)}
-              showProgress={m.config.showProgress}
-              progressMax={m.config.progressMax}
-              delay={baseDelay + idx * 0.05}
-              format={m.config.format}
-            />
-          </Grid>
-        ))}
-      </Grid>
+      {metrics.length === 0 ? (
+        <Box
+          sx={{
+            padding: '48px 24px',
+            textAlign: 'center',
+            background: 'var(--surface-elevated)',
+            border: '1px solid var(--surface-border)',
+            borderRadius: '12px',
+          }}
+        >
+          <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-500)' }}>
+            No data available yet. Waiting for live metrics...
+          </Typography>
+        </Box>
+      ) : (
+        <Grid container spacing={compact ? 1.5 : 2} alignItems="stretch">
+          {metrics.map((m, idx) => (
+            <Grid item xs={6} sm={compact ? 6 : 4} md={compact ? 6 : 3} key={m.type}>
+              <MetricCard
+                label={m.config.label}
+                fullLabel={m.config.fullLabel}
+                value={m.value}
+                unit={m.config.unit}
+                status={m.config.getStatus(m.value)}
+                showProgress={m.config.showProgress}
+                progressMax={m.config.progressMax}
+                delay={baseDelay + idx * 0.05}
+                format={m.config.format}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      )}
     </Box>
   )
 }

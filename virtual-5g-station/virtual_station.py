@@ -173,6 +173,9 @@ class Virtual5GStation:
         # Authenticate with the platform
         await self._authenticate()
 
+        # Register station if it doesn't exist
+        await self._register_station()
+
         logger.info(f"Station {self.station_name} started")
 
         # Start background tasks
@@ -215,6 +218,45 @@ class Virtual5GStation:
                     logger.warning(f"Authentication failed: {resp.status}")
         except Exception as e:
             logger.error(f"Authentication error: {e}")
+
+    async def _register_station(self):
+        """Register this virtual station with the platform if it doesn't exist."""
+        if not self.auth_token:
+            logger.warning("Cannot register station: not authenticated")
+            return
+
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            stations_url = f"{self.api_gateway_url}/api/v1/stations"
+
+            # Check if station already exists
+            async with self.session.get(stations_url, headers=headers) as resp:
+                if resp.status == 200:
+                    stations = await resp.json()
+                    # Check if our station ID exists
+                    if any(s.get('id') == self.station_id or s.get('stationName') == self.station_name for s in stations):
+                        logger.info(f"Station {self.station_name} already registered")
+                        return
+
+            # Register new station
+            station_data = {
+                "stationName": self.station_name,
+                "location": f"{self.city}, {self.region}",
+                "latitude": 39.9042,  # Default coordinates
+                "longitude": 116.4074,
+                "stationType": "MACRO_CELL",
+                "status": "ACTIVE",
+                "powerConsumption": 4200.0,
+                "description": f"Virtual 5G station for testing and simulation"
+            }
+
+            async with self.session.post(stations_url, json=station_data, headers=headers) as resp:
+                if resp.status in (200, 201):
+                    logger.info(f"Successfully registered station {self.station_name}")
+                else:
+                    logger.warning(f"Failed to register station: {resp.status}")
+        except Exception as e:
+            logger.error(f"Station registration error: {e}")
 
     async def _metrics_loop(self):
         """Main loop for generating and sending metrics."""
