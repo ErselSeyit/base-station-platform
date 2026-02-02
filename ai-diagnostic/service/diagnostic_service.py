@@ -149,9 +149,16 @@ except ImportError:
 
 # SON Scheduler (optional)
 try:
+    import sys
+    import os
+    # Add service directory to path if not already there
+    service_dir = os.path.dirname(os.path.abspath(__file__))
+    if service_dir not in sys.path:
+        sys.path.insert(0, service_dir)
     from son_scheduler import get_son_scheduler
     SON_SCHEDULER_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    logger.warning(f"SON scheduler not available: {e}")
     SON_SCHEDULER_AVAILABLE = False
 
 try:
