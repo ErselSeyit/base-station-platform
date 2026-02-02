@@ -463,12 +463,19 @@ spec:
         - name: CLOUD_URL
           value: "http://api-gateway:8080"
         - name: CLOUD_USER
-          value: "admin"
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: username
         - name: CLOUD_PASSWORD
           valueFrom:
             secretKeyRef:
               name: auth-credentials
-              key: admin-password
+              key: password
+        - name: MONITORING_SERVICE_URL
+          value: "http://monitoring-service:8082"
+        - name: SON_ANALYSIS_INTERVAL
+          value: "300"
         livenessProbe:
           httpGet:
             path: /health

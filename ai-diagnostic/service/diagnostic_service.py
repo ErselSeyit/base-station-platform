@@ -147,6 +147,13 @@ try:
 except ImportError:
     DRONE_INTEGRATION_AVAILABLE = False
 
+# SON Scheduler (optional)
+try:
+    from son_scheduler import get_son_scheduler
+    SON_SCHEDULER_AVAILABLE = True
+except ImportError:
+    SON_SCHEDULER_AVAILABLE = False
+
 try:
     import websockets
     import asyncio
@@ -2430,6 +2437,23 @@ def main():
         service.add_adapter(MQTTAdapter(None, broker=args.mqtt_broker))
 
     service.start()
+
+    # Start SON scheduler if available
+    if SON_SCHEDULER_AVAILABLE:
+        try:
+            monitoring_url = os.environ.get("MONITORING_SERVICE_URL", "http://monitoring-service:8082")
+            son_interval = int(os.environ.get("SON_ANALYSIS_INTERVAL", "300"))  # 5 minutes default
+            
+            scheduler = get_son_scheduler(
+                monitoring_url=monitoring_url,
+                auth_user=args.cloud_user or "admin",
+                auth_password=args.cloud_password or "AdminPass12345!",
+                interval_seconds=son_interval
+            )
+            scheduler.start()
+            logger.info(f"SON scheduler started (interval: {son_interval}s)")
+        except Exception as e:
+            logger.error(f"Failed to start SON scheduler: {e}")
 
     logger.info("\n" + "="*60)
     logger.info("AI Diagnostic Service is running")
