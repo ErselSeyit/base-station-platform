@@ -80,6 +80,26 @@ const CONFIDENCE_BAR_WIDTH = 60
 const CONFIDENCE_BAR_HEIGHT = 6
 const ACTION_DESCRIPTION_MAX_WIDTH = 250
 
+const LAYOUT = {
+  MAX_WIDTH: '1400px',
+  REFRESH_BUTTON_SIZE: 40,
+} as const
+
+const FONT_SIZE = {
+  OVERLINE: '0.6875rem',
+  CAPTION: '0.7rem',
+  BODY_SMALL: '0.8125rem',
+  BODY_MEDIUM: '0.875rem',
+  H4_SMALL: '1.5rem',
+  H4_MEDIUM: '1.75rem',
+  H4_LARGE: '2.125rem',
+} as const
+
+const FONT_WEIGHT = {
+  SEMIBOLD: 600,
+  BOLD: 700,
+} as const
+
 // Function type icons
 function getFunctionIcon(functionType: SONFunction) {
   const iconProps = { sx: { fontSize: ICON_SIZE.MEDIUM } }
@@ -158,13 +178,13 @@ function StatCard({ title, value, statusKey, icon }: Readonly<{
         <Box>
           <Typography
             variant="overline"
-            sx={{ color: CSS_VARS.mono500, fontSize: '0.6875rem', fontWeight: 600 }}
+            sx={{ color: CSS_VARS.mono500, fontSize: FONT_SIZE.OVERLINE, fontWeight: FONT_WEIGHT.SEMIBOLD }}
           >
             {title}
           </Typography>
           <Typography
             variant="h4"
-            sx={{ fontWeight: 700, color: style.colorVar, fontSize: { xs: '1.5rem', sm: '1.75rem' } }}
+            sx={{ fontWeight: FONT_WEIGHT.BOLD, color: style.colorVar, fontSize: { xs: FONT_SIZE.H4_SMALL, sm: FONT_SIZE.H4_MEDIUM } }}
           >
             {value}
           </Typography>
@@ -204,13 +224,13 @@ function CustomStatCard({ title, value, colorVar, bgColor, icon }: Readonly<{
         <Box>
           <Typography
             variant="overline"
-            sx={{ color: CSS_VARS.mono500, fontSize: '0.6875rem', fontWeight: 600 }}
+            sx={{ color: CSS_VARS.mono500, fontSize: FONT_SIZE.OVERLINE, fontWeight: FONT_WEIGHT.SEMIBOLD }}
           >
             {title}
           </Typography>
           <Typography
             variant="h4"
-            sx={{ fontWeight: 700, color: colorVar, fontSize: { xs: '1.5rem', sm: '1.75rem' } }}
+            sx={{ fontWeight: FONT_WEIGHT.BOLD, color: colorVar, fontSize: { xs: FONT_SIZE.H4_SMALL, sm: FONT_SIZE.H4_MEDIUM } }}
           >
             {value}
           </Typography>
@@ -353,7 +373,7 @@ export default function SONRecommendations() {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, maxWidth: '1400px', margin: '0 auto' }}>
+    <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, maxWidth: LAYOUT.MAX_WIDTH, margin: '0 auto' }}>
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: { xs: 3, md: 4 }, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
@@ -371,15 +391,15 @@ export default function SONRecommendations() {
             <Typography
               variant="h4"
               sx={{
-                fontWeight: 700,
+                fontWeight: FONT_WEIGHT.BOLD,
                 color: CSS_VARS.mono950,
                 letterSpacing: '-0.02em',
-                fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                fontSize: { xs: FONT_SIZE.H4_SMALL, sm: FONT_SIZE.H4_MEDIUM, md: FONT_SIZE.H4_LARGE },
               }}
             >
               SON Recommendations
             </Typography>
-            <Typography variant="body2" sx={{ color: CSS_VARS.mono500, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+            <Typography variant="body2" sx={{ color: CSS_VARS.mono500, fontSize: { xs: FONT_SIZE.BODY_SMALL, sm: FONT_SIZE.BODY_MEDIUM } }}>
               AI-powered network optimization with operator approval workflow
             </Typography>
           </Box>
@@ -388,8 +408,8 @@ export default function SONRecommendations() {
           <IconButton
             onClick={() => refetch()}
             sx={{
-              width: 40,
-              height: 40,
+              width: LAYOUT.REFRESH_BUTTON_SIZE,
+              height: LAYOUT.REFRESH_BUTTON_SIZE,
               background: CSS_VARS.surfaceElevated,
               border: `1px solid ${CSS_VARS.mono400}`,
               borderRadius: BORDER_RADIUS.MEDIUM,
@@ -474,7 +494,7 @@ export default function SONRecommendations() {
               px: 2,
               '& .MuiTab-root': {
                 textTransform: 'none',
-                fontWeight: 600,
+                fontWeight: FONT_WEIGHT.SEMIBOLD,
                 minWidth: 'auto',
                 px: 3,
                 color: CSS_VARS.mono700,
@@ -496,12 +516,12 @@ export default function SONRecommendations() {
           <Table>
             <TableHead>
               <TableRow sx={{ backgroundColor: CSS_VARS.surfaceSubtle }}>
-                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Function</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Station</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Action</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Confidence</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD, color: CSS_VARS.mono950 }}>Function</TableCell>
+                <TableCell sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD, color: CSS_VARS.mono950 }}>Station</TableCell>
+                <TableCell sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD, color: CSS_VARS.mono950 }}>Action</TableCell>
+                <TableCell sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD, color: CSS_VARS.mono950 }}>Confidence</TableCell>
+                <TableCell sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD, color: CSS_VARS.mono950 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD, color: CSS_VARS.mono950 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -535,7 +555,7 @@ export default function SONRecommendations() {
                           {getFunctionIcon(rec.functionType)}
                         </Box>
                         <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: CSS_VARS.mono950 }}>
+                          <Typography variant="body2" sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD, color: CSS_VARS.mono950 }}>
                             {rec.functionType}
                           </Typography>
                           <Typography variant="caption" sx={{ color: CSS_VARS.mono500 }}>
@@ -569,8 +589,8 @@ export default function SONRecommendations() {
                             mt: 0.5,
                             backgroundColor: RGBA.activeMedium,
                             color: CSS_VARS.statusActive,
-                            fontWeight: 600,
-                            fontSize: '0.7rem',
+                            fontWeight: FONT_WEIGHT.SEMIBOLD,
+                            fontSize: FONT_SIZE.CAPTION,
                           }}
                         />
                       )}
@@ -591,7 +611,7 @@ export default function SONRecommendations() {
                             },
                           }}
                         />
-                        <Typography variant="caption" sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>
+                        <Typography variant="caption" sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD, color: CSS_VARS.mono700 }}>
                           {((rec.confidence ?? 0) * 100).toFixed(0)}%
                         </Typography>
                       </Box>
@@ -647,9 +667,9 @@ export default function SONRecommendations() {
 
       {/* Reject Dialog */}
       <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 600 }}>Reject Recommendation</DialogTitle>
+        <DialogTitle sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD }}>Reject Recommendation</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2, color: 'var(--mono-600)' }}>
+          <Typography variant="body2" sx={{ mb: 2, color: CSS_VARS.mono600 }}>
             Please provide a reason for rejecting this recommendation.
           </Typography>
           <TextField
@@ -678,7 +698,7 @@ export default function SONRecommendations() {
 
       {/* Rollback Dialog */}
       <Dialog open={rollbackDialogOpen} onClose={() => setRollbackDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 600 }}>Rollback Changes</DialogTitle>
+        <DialogTitle sx={{ fontWeight: FONT_WEIGHT.SEMIBOLD }}>Rollback Changes</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2, color: CSS_VARS.mono600 }}>
             This will revert the changes made by this recommendation. Please provide a reason.
