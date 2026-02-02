@@ -399,8 +399,9 @@ class Virtual5GStation:
         ])
 
         # Batch request format expected by the API
+        # Use numeric station ID from database (station.id = 1)
         batch_request = {
-            "stationId": self.station_id,
+            "stationId": 1,
             "metrics": metrics_list
         }
 
