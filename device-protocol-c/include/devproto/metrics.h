@@ -79,6 +79,73 @@ typedef enum {
     DEVPROTO_METRIC_CA_DL_THROUGHPUT     = 0x78,
     DEVPROTO_METRIC_CA_UL_THROUGHPUT     = 0x79,
 
+    /* ========================================================================
+     * Extended Metrics (Phase 2 Enhancement)
+     * ======================================================================== */
+
+    /* Power & Energy metrics (0x80-0x8F) */
+    DEVPROTO_METRIC_UTILITY_VOLTAGE_L1    = 0x80,  /* V, 0-500 */
+    DEVPROTO_METRIC_UTILITY_VOLTAGE_L2    = 0x81,  /* V, 0-500 */
+    DEVPROTO_METRIC_UTILITY_VOLTAGE_L3    = 0x82,  /* V, 0-500 */
+    DEVPROTO_METRIC_POWER_FACTOR          = 0x83,  /* ratio, 0-1.0 */
+    DEVPROTO_METRIC_GENERATOR_FUEL_LEVEL  = 0x84,  /* %, 0-100 */
+    DEVPROTO_METRIC_GENERATOR_RUNTIME     = 0x85,  /* hours */
+    DEVPROTO_METRIC_BATTERY_SOC           = 0x86,  /* %, 0-100 (State of Charge) */
+    DEVPROTO_METRIC_BATTERY_DOD           = 0x87,  /* %, 0-100 (Depth of Discharge) */
+    DEVPROTO_METRIC_BATTERY_CELL_TEMP_MIN = 0x88,  /* °C, -20 to 80 */
+    DEVPROTO_METRIC_BATTERY_CELL_TEMP_MAX = 0x89,  /* °C, -20 to 80 */
+    DEVPROTO_METRIC_SOLAR_PANEL_VOLTAGE   = 0x8A,  /* V, 0-100 */
+    DEVPROTO_METRIC_SOLAR_CHARGE_CURRENT  = 0x8B,  /* A, 0-50 */
+    DEVPROTO_METRIC_SITE_POWER_KWH        = 0x8C,  /* kWh cumulative */
+
+    /* Environmental & Safety metrics (0x90-0x9F) */
+    DEVPROTO_METRIC_WIND_SPEED            = 0x90,  /* km/h, 0-200 */
+    DEVPROTO_METRIC_WIND_DIRECTION        = 0x91,  /* degrees, 0-360 */
+    DEVPROTO_METRIC_PRECIPITATION         = 0x92,  /* mm/h, 0-500 */
+    DEVPROTO_METRIC_LIGHTNING_DISTANCE    = 0x93,  /* km, 0-50 */
+    DEVPROTO_METRIC_TILT_ANGLE            = 0x94,  /* degrees, -10 to 10 */
+    DEVPROTO_METRIC_VIBRATION_LEVEL       = 0x95,  /* mm/s, 0-100 */
+    DEVPROTO_METRIC_WATER_LEVEL           = 0x96,  /* mm, 0-1000 */
+    DEVPROTO_METRIC_PM25_LEVEL            = 0x97,  /* µg/m³, 0-500 */
+    DEVPROTO_METRIC_SMOKE_DETECTED        = 0x98,  /* bool, 0-1 */
+    DEVPROTO_METRIC_CO_LEVEL              = 0x99,  /* ppm, 0-1000 */
+    DEVPROTO_METRIC_DOOR_STATUS           = 0x9A,  /* bool, 0=closed, 1=open */
+    DEVPROTO_METRIC_MOTION_DETECTED       = 0x9B,  /* bool, 0-1 */
+
+    /* Transport/Backhaul metrics (0xA0-0xAF) */
+    DEVPROTO_METRIC_FIBER_RX_POWER        = 0xA0,  /* dBm, -40 to 10 */
+    DEVPROTO_METRIC_FIBER_TX_POWER        = 0xA1,  /* dBm, -10 to 10 */
+    DEVPROTO_METRIC_FIBER_BER             = 0xA2,  /* ratio, 0 to 1e-3 */
+    DEVPROTO_METRIC_FIBER_OSNR            = 0xA3,  /* dB, 0-40 */
+    DEVPROTO_METRIC_MW_RSL                = 0xA4,  /* dBm, -80 to 0 (Received Signal Level) */
+    DEVPROTO_METRIC_MW_SNR                = 0xA5,  /* dB, 0-50 */
+    DEVPROTO_METRIC_MW_MODULATION         = 0xA6,  /* enum, 0-11 (QPSK to 4096QAM) */
+    DEVPROTO_METRIC_ETH_UTILIZATION       = 0xA7,  /* %, 0-100 */
+    DEVPROTO_METRIC_ETH_ERRORS            = 0xA8,  /* count */
+    DEVPROTO_METRIC_ETH_LATENCY           = 0xA9,  /* ms, 0-1000 */
+    DEVPROTO_METRIC_PTP_OFFSET            = 0xAA,  /* ns, -1e6 to 1e6 */
+    DEVPROTO_METRIC_GPS_SATELLITES        = 0xAB,  /* count, 0-24 */
+
+    /* Advanced Radio metrics (0xB0-0xBF) */
+    DEVPROTO_METRIC_BEAM_WEIGHT_MAG       = 0xB0,  /* ratio, 0-1 */
+    DEVPROTO_METRIC_BEAM_WEIGHT_PHASE     = 0xB1,  /* degrees, -180 to 180 */
+    DEVPROTO_METRIC_PRECODING_RANK        = 0xB2,  /* layers, 1-8 */
+    DEVPROTO_METRIC_PIM_LEVEL             = 0xB3,  /* dBm, -150 to 0 (Passive Intermod) */
+    DEVPROTO_METRIC_CO_CHANNEL_INTERF     = 0xB4,  /* dBm, -120 to 0 */
+    DEVPROTO_METRIC_OCCUPIED_BANDWIDTH    = 0xB5,  /* MHz, 0-100 */
+    DEVPROTO_METRIC_ACLR                  = 0xB6,  /* dB, 0-80 (Adjacent Channel Leakage) */
+    DEVPROTO_METRIC_GTP_THROUGHPUT        = 0xB7,  /* Mbps, 0-10000 */
+    DEVPROTO_METRIC_PACKET_DELAY          = 0xB8,  /* ms, 0-1000 */
+    DEVPROTO_METRIC_RRC_SETUP_SUCCESS     = 0xB9,  /* %, 0-100 */
+    DEVPROTO_METRIC_PAGING_SUCCESS        = 0xBA,  /* %, 0-100 */
+
+    /* Network Slicing metrics (0xC0-0xCF) - 5G specific */
+    DEVPROTO_METRIC_SLICE_THROUGHPUT      = 0xC0,  /* Mbps, 0-10000 */
+    DEVPROTO_METRIC_SLICE_LATENCY         = 0xC1,  /* ms, 0-1000 */
+    DEVPROTO_METRIC_SLICE_PACKET_LOSS     = 0xC2,  /* %, 0-100 */
+    DEVPROTO_METRIC_SLICE_PRB_UTIL        = 0xC3,  /* %, 0-100 (PRB utilization) */
+    DEVPROTO_METRIC_SLICE_SLA_COMPLIANCE  = 0xC4,  /* %, 0-100 */
+
     /* Special values */
     DEVPROTO_METRIC_ALL              = 0xFF
 } devproto_metric_type_t;

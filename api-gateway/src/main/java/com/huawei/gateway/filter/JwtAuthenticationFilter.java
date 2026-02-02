@@ -16,10 +16,13 @@ import com.huawei.gateway.util.JwtValidator;
 
 import reactor.core.publisher.Mono;
 
+import org.springframework.http.HttpCookie;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -106,22 +109,36 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
         return chain.filter(exchange);
     }
 
+    private static final String AUTH_COOKIE_NAME = "auth_token";
+
     /**
-     * Extracts JWT token from Authorization header.
-     * Returns null if header is missing, invalid, or token is empty.
+     * Extracts JWT token from Authorization header or HttpOnly cookie.
+     * Priority: Authorization header > auth_token cookie
+     * Returns null if neither source contains a valid token.
      */
     private String extractToken(ServerHttpRequest request, String path) {
+        // First, try Authorization header
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-            log.warn("Missing or invalid Authorization header for path: {}", path);
-            return null;
+        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
+            String token = authHeader.substring(BEARER_PREFIX.length());
+            if (!token.isBlank()) {
+                log.debug("Token extracted from Authorization header for path: {}", path);
+                return token;
+            }
         }
-        String token = authHeader.substring(BEARER_PREFIX.length());
-        if (token.isBlank()) {
-            log.warn("Empty token in Authorization header for path: {}", path);
-            return null;
+
+        // Fall back to HttpOnly cookie
+        List<HttpCookie> cookies = request.getCookies().get(AUTH_COOKIE_NAME);
+        if (cookies != null && !cookies.isEmpty()) {
+            String token = cookies.getFirst().getValue();
+            if (!token.isBlank()) {
+                log.debug("Token extracted from auth_token cookie for path: {}", path);
+                return token;
+            }
         }
-        return token;
+
+        log.warn("No valid token found in Authorization header or cookie for path: {}", path);
+        return null;
     }
 
     /**
@@ -155,10 +172,9 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
         return path.startsWith("/api/v1/auth/login")
                 || path.startsWith("/api/v1/auth/register")
                 || path.startsWith("/api/v1/auth/logout")
-                || path.startsWith("/api/reports")
-                || path.startsWith("/reports")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs");
+        // REMOVED: /api/reports and /reports - now require authentication
     }
 
     /**
@@ -268,8 +284,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
             byte[] hash = hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (Exception e) {
-            log.error("Failed to compute HMAC", e);
-            return "ERROR";
+            throw new IllegalStateException("HMAC computation failed - cannot generate secure token", e);
         }
     }
 

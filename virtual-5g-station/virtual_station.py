@@ -196,10 +196,14 @@ class Virtual5GStation:
     async def _authenticate(self):
         """Authenticate with the API gateway."""
         try:
+            password = os.environ.get("STATION_PASSWORD") or os.environ.get("AUTH_ADMIN_PASSWORD")
+            if not password:
+                raise ValueError("STATION_PASSWORD or AUTH_ADMIN_PASSWORD environment variable is required")
+
             auth_url = f"{self.api_gateway_url}/api/v1/auth/login"
             auth_data = {
                 "username": os.environ.get("STATION_USERNAME", "admin"),
-                "password": os.environ.get("STATION_PASSWORD", os.environ.get("AUTH_ADMIN_PASSWORD", "admin"))
+                "password": password
             }
 
             async with self.session.post(auth_url, json=auth_data) as resp:

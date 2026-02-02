@@ -2,9 +2,19 @@
  * API Client - Base axios instance with interceptors and error handling.
  *
  * This module provides the core HTTP client configuration used by all API modules.
+ * Includes automatic token refresh on 401 errors using HttpOnly refresh cookies.
  */
-import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios'
+import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { logger } from '../logger'
+import {
+  setStoredAuthUser,
+  clearStoredTokens,
+  hasRefreshToken,
+  isRefreshInProgress,
+  setRefreshInProgress,
+  subscribeToRefresh,
+  notifyRefreshSubscribers,
+} from '../tokenManager'
 
 /**
  * API Configuration
@@ -30,6 +40,19 @@ export interface ApiError {
 }
 
 /**
+ * Endpoints that should not trigger token refresh on 401.
+ */
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout']
+
+/**
+ * Check if URL is an auth endpoint.
+ */
+function isAuthEndpoint(url: string | undefined): boolean {
+  if (!url) return false
+  return AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
+}
+
+/**
  * Creates and configures the base axios instance.
  */
 function createApiClient(): AxiosInstance {
@@ -39,20 +62,15 @@ function createApiClient(): AxiosInstance {
       'Content-Type': 'application/json',
     },
     timeout: 30000, // 30 second timeout
-    withCredentials: true, // Send cookies with requests (HttpOnly auth_token)
+    withCredentials: true, // Send cookies with requests (HttpOnly tokens)
   })
 
   // Add request interceptor
   client.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      // Inject JWT token if available
-      const token = globalThis.window === undefined ? null : localStorage.getItem('token')
-      if (token && config.headers) {
-        config.headers.Authorization = `Bearer ${token}`
-        logger.api.debug(`Attaching token to request: ${config.url}`)
-      } else {
-        logger.api.warn(`No token available for request: ${config.url}`)
-      }
+      // Authentication is handled via HttpOnly cookies
+      // No need to inject Authorization header - cookies are sent automatically
+      // with withCredentials: true
 
       // Add correlation ID for distributed tracing
       const correlationId = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
@@ -60,26 +78,42 @@ function createApiClient(): AxiosInstance {
         config.headers['X-Correlation-ID'] = correlationId
       }
 
+      logger.api.debug(`Request: ${config.method?.toUpperCase()} ${config.url}`)
       return config
     },
     (error: AxiosError<{ message?: string; error?: string }>) => {
       // Request setup error (rare)
       logger.api.error('Request setup error', { message: error.message })
-      return Promise.reject(new Error(normalizeError(error).message))
+      throw new Error(normalizeError(error).message)
     }
   )
 
-  // Add response interceptor
+  // Add response interceptor with token refresh
   client.interceptors.response.use(
-    (response) => response,
-    (error: AxiosError<{ message?: string; error?: string; status?: number }>) => {
+    (response: AxiosResponse) => response,
+    async (error: AxiosError<{ message?: string; error?: string; status?: number }>) => {
+      const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
       const normalized = normalizeError(error)
+
+      // Handle 401 with automatic token refresh
+      if (normalized.status === 401 && !isAuthEndpoint(originalRequest?.url) && !originalRequest?._retry) {
+        // Try to refresh the token
+        const refreshed = await attemptTokenRefresh(client)
+
+        if (refreshed && originalRequest) {
+          // Mark request as retried to prevent infinite loops
+          originalRequest._retry = true
+          logger.api.info('Retrying request after token refresh')
+          return client(originalRequest)
+        }
+      }
+
       logErrorByStatus(normalized, error)
 
-      // Reject with Error instance for proper error handling
+      // Throw Error instance for proper error handling
       const apiError = new Error(normalized.message)
       Object.assign(apiError, normalized)
-      return Promise.reject(apiError)
+      throw apiError
     }
   )
 
@@ -87,14 +121,60 @@ function createApiClient(): AxiosInstance {
 }
 
 /**
- * Handles unauthorized errors by clearing token and dispatching auth event.
+ * Attempt to refresh the access token using HttpOnly refresh cookie.
+ * Returns true if refresh was successful, false otherwise.
+ */
+async function attemptTokenRefresh(client: AxiosInstance): Promise<boolean> {
+  // Check if we believe we have a session
+  if (!hasRefreshToken()) {
+    logger.api.debug('No session available for refresh')
+    handleUnauthorizedError()
+    return false
+  }
+
+  // If already refreshing, wait for that to complete
+  if (isRefreshInProgress()) {
+    return new Promise((resolve) => {
+      subscribeToRefresh(resolve)
+    })
+  }
+
+  setRefreshInProgress(true)
+  logger.api.info('Attempting token refresh')
+
+  try {
+    // Backend reads refresh token from HttpOnly cookie
+    const response = await client.post('/auth/refresh')
+    const data = response.data
+
+    // Update stored user info (tokens are in HttpOnly cookies)
+    if (data.username && data.role) {
+      setStoredAuthUser({ username: data.username, role: data.role })
+    }
+
+    logger.api.info('Token refresh successful')
+    notifyRefreshSubscribers(true)
+    return true
+  } catch (refreshError) {
+    logger.api.warn('Token refresh failed', { error: refreshError instanceof Error ? refreshError.message : String(refreshError) })
+    clearStoredTokens()
+    handleUnauthorizedError()
+    notifyRefreshSubscribers(false)
+    return false
+  } finally {
+    setRefreshInProgress(false)
+  }
+}
+
+/**
+ * Handles unauthorized errors by dispatching auth event.
+ * The HttpOnly cookies will be cleared by the server on logout.
  */
 function handleUnauthorizedError(): void {
-  if (globalThis.window !== undefined) {
-    localStorage.removeItem('token')
+  if (globalThis.window) {
     globalThis.dispatchEvent(new CustomEvent('auth:unauthorized'))
   }
-  logger.api.warn('Unauthorized - token cleared')
+  logger.api.warn('Unauthorized - session expired')
 }
 
 /**
@@ -102,14 +182,12 @@ function handleUnauthorizedError(): void {
  */
 function logErrorByStatus(normalized: ApiError, error: AxiosError): void {
   if (normalized.status === 401) {
-    // Only clear token for authenticated endpoints, not login/register failures
+    // Only warn for authenticated endpoints, not login/register failures
     const url = error.config?.url || ''
-    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register')
-    if (isAuthEndpoint) {
-      logger.api.warn('Login/Register failed - invalid credentials')
-    } else {
-      handleUnauthorizedError()
+    if (isAuthEndpoint(url)) {
+      logger.api.warn('Auth endpoint failed - invalid credentials or token')
     }
+    // handleUnauthorizedError is called in the interceptor after refresh attempt
   } else if (normalized.status === 403) {
     logger.api.warn('Forbidden - insufficient permissions')
   } else if (normalized.status === 429) {

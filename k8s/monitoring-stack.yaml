@@ -590,6 +590,45 @@ spec:
     targetPort: 9096
     name: grpc
 ---
+# Loki NetworkPolicy - Restrict access to internal pods only
+# This prevents unauthorized external access to log data
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: loki-internal-only
+  namespace: basestation-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: loki
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from Promtail (log collector)
+  - from:
+    - podSelector:
+        matchLabels:
+          app: promtail
+    ports:
+    - protocol: TCP
+      port: 3100
+  # Allow from Grafana (log viewer)
+  - from:
+    - podSelector:
+        matchLabels:
+          app: grafana
+    ports:
+    - protocol: TCP
+      port: 3100
+  # Allow from any pod in the same namespace for queries
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 3100
+    - protocol: TCP
+      port: 9096
+---
 # ============================================================================
 # Promtail - Log Collection Agent
 # ============================================================================

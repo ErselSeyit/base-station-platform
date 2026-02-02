@@ -40,82 +40,79 @@ stations.forEach(station => {
     for (let hour = 0; hour < 24; hour++) {
         const timestamp = getTimestamp(hour);
 
-        // CPU Usage (40-95%)
-        metrics.push({
-            stationId: station.id,
-            stationName: station.name,
-            metricType: 'CPU_USAGE',
-            value: randomInRange(40, 95),
-            unit: '%',
-            timestamp: timestamp,
-            status: 'NORMAL'
-        });
-
-        // Memory Usage (50-90%)
-        metrics.push({
-            stationId: station.id,
-            stationName: station.name,
-            metricType: 'MEMORY_USAGE',
-            value: randomInRange(50, 90),
-            unit: '%',
-            timestamp: timestamp,
-            status: 'NORMAL'
-        });
-
-        // Signal Strength (-80 to -40 dBm)
-        metrics.push({
-            stationId: station.id,
-            stationName: station.name,
-            metricType: 'SIGNAL_STRENGTH',
-            value: randomInRange(-80, -40),
-            unit: 'dBm',
-            timestamp: timestamp,
-            status: 'NORMAL'
-        });
-
-        // Power Consumption (1000-3000 W)
-        metrics.push({
-            stationId: station.id,
-            stationName: station.name,
-            metricType: 'POWER_CONSUMPTION',
-            value: randomInRange(1000, 3000),
-            unit: 'W',
-            timestamp: timestamp,
-            status: 'NORMAL'
-        });
-
-        // Temperature (20-70°C)
-        metrics.push({
-            stationId: station.id,
-            stationName: station.name,
-            metricType: 'TEMPERATURE',
-            value: randomInRange(20, 70),
-            unit: '°C',
-            timestamp: timestamp,
-            status: 'NORMAL'
-        });
-
-        // Connection Count (100-5000)
-        metrics.push({
-            stationId: station.id,
-            stationName: station.name,
-            metricType: 'CONNECTION_COUNT',
-            value: Math.floor(randomInRange(100, 5000)),
-            unit: 'connections',
-            timestamp: timestamp,
-            status: 'NORMAL'
-        });
-
-        // Data Throughput (100-1000 Mbps)
-        metrics.push({
-            stationId: station.id,
-            stationName: station.name,
-            metricType: 'DATA_THROUGHPUT',
-            value: randomInRange(100, 1000),
-            unit: 'Mbps',
-            timestamp: timestamp,
-            status: 'NORMAL'
-        });
+        // Push all metric types for this station/hour in a single call
+        metrics.push(
+            // CPU Usage (40-95%)
+            {
+                stationId: station.id,
+                stationName: station.name,
+                metricType: 'CPU_USAGE',
+                value: randomInRange(40, 95),
+                unit: '%',
+                timestamp: timestamp,
+                status: 'NORMAL'
+            },
+            // Memory Usage (50-90%)
+            {
+                stationId: station.id,
+                stationName: station.name,
+                metricType: 'MEMORY_USAGE',
+                value: randomInRange(50, 90),
+                unit: '%',
+                timestamp: timestamp,
+                status: 'NORMAL'
+            },
+            // Signal Strength (-80 to -40 dBm)
+            {
+                stationId: station.id,
+                stationName: station.name,
+                metricType: 'SIGNAL_STRENGTH',
+                value: randomInRange(-80, -40),
+                unit: 'dBm',
+                timestamp: timestamp,
+                status: 'NORMAL'
+            },
+            // Power Consumption (1000-3000 W)
+            {
+                stationId: station.id,
+                stationName: station.name,
+                metricType: 'POWER_CONSUMPTION',
+                value: randomInRange(1000, 3000),
+                unit: 'W',
+                timestamp: timestamp,
+                status: 'NORMAL'
+            },
+            // Temperature (20-70°C)
+            {
+                stationId: station.id,
+                stationName: station.name,
+                metricType: 'TEMPERATURE',
+                value: randomInRange(20, 70),
+                unit: '°C',
+                timestamp: timestamp,
+                status: 'NORMAL'
+            },
+            // Connection Count (100-5000)
+            {
+                stationId: station.id,
+                stationName: station.name,
+                metricType: 'CONNECTION_COUNT',
+                value: Math.floor(randomInRange(100, 5000)),
+                unit: 'connections',
+                timestamp: timestamp,
+                status: 'NORMAL'
+            },
+            // Data Throughput (100-1000 Mbps)
+            {
+                stationId: station.id,
+                stationName: station.name,
+                metricType: 'DATA_THROUGHPUT',
+                value: randomInRange(100, 1000),
+                unit: 'Mbps',
+                timestamp: timestamp,
+                status: 'NORMAL'
+            }
+        );
     }
 });
 
@@ -135,24 +132,27 @@ for (let hour = 0; hour < 5; hour++) {
 
 // Station 12 (ERROR state) - high error rate
 for (let hour = 0; hour < 8; hour++) {
-    metrics.push({
-        stationId: 12,
-        stationName: 'BS-SHENZHEN-003',
-        metricType: 'CPU_USAGE',
-        value: randomInRange(95, 100),
-        unit: '%',
-        timestamp: getTimestamp(hour),
-        status: 'ERROR'
-    });
-    metrics.push({
-        stationId: 12,
-        stationName: 'BS-SHENZHEN-003',
-        metricType: 'TEMPERATURE',
-        value: randomInRange(80, 95),
-        unit: '°C',
-        timestamp: getTimestamp(hour),
-        status: 'ERROR'
-    });
+    const errorTimestamp = getTimestamp(hour);
+    metrics.push(
+        {
+            stationId: 12,
+            stationName: 'BS-SHENZHEN-003',
+            metricType: 'CPU_USAGE',
+            value: randomInRange(95, 100),
+            unit: '%',
+            timestamp: errorTimestamp,
+            status: 'ERROR'
+        },
+        {
+            stationId: 12,
+            stationName: 'BS-SHENZHEN-003',
+            metricType: 'TEMPERATURE',
+            value: randomInRange(80, 95),
+            unit: '°C',
+            timestamp: errorTimestamp,
+            status: 'ERROR'
+        }
+    );
 }
 
 // Insert all metrics

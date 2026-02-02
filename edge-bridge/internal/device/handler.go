@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/huawei/edge-bridge/internal/protocol"
+	"edge-bridge/internal/protocol"
 )
 
 // MessageHandler processes incoming protocol messages.

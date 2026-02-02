@@ -5,107 +5,20 @@ import {
   Cancel as FailIcon,
   Warning as WarnIcon,
 } from '@mui/icons-material'
+import { CSS_VARS, METRIC_STATUS_STYLES, type MetricStatusType } from '../constants/designSystem'
+import {
+  type MetricStatus,
+  METRICS_CONFIG,
+  SSV_METRIC_TYPES,
+  countMetricStatuses,
+} from '../constants/metricsConfig'
 
-type MetricStatus = 'pass' | 'warning' | 'fail'
-
-// Helper to evaluate thresholds (higher is better)
-function evalHigher(v: number, passThreshold: number, warnThreshold: number): MetricStatus {
-  if (v >= passThreshold) return 'pass'
-  if (v >= warnThreshold) return 'warning'
-  return 'fail'
-}
-
-// Helper to evaluate thresholds (lower is better)
-function evalLower(v: number, passThreshold: number, warnThreshold: number): MetricStatus {
-  if (v <= passThreshold) return 'pass'
-  if (v <= warnThreshold) return 'warning'
-  return 'fail'
-}
-
-// SSV Thresholds for 5G metrics
-const SSV_CONFIG: Record<string, {
-  label: string
-  unit: string
-  band?: string
-  getStatus: (v: number) => MetricStatus
-  threshold: string
-}> = {
-  DL_THROUGHPUT_NR3500: {
-    label: 'DL',
-    unit: 'Mbps',
-    band: '3.5G',
-    getStatus: (v) => evalHigher(v, 1000, 500),
-    threshold: '≥1000',
-  },
-  UL_THROUGHPUT_NR3500: {
-    label: 'UL',
-    unit: 'Mbps',
-    band: '3.5G',
-    getStatus: (v) => evalHigher(v, 75, 40),
-    threshold: '≥75',
-  },
-  RSRP_NR3500: {
-    label: 'RSRP',
-    unit: 'dBm',
-    band: '3.5G',
-    getStatus: (v) => evalHigher(v, -85, -100),
-    threshold: '≥-85',
-  },
-  SINR_NR3500: {
-    label: 'SINR',
-    unit: 'dB',
-    band: '3.5G',
-    getStatus: (v) => evalHigher(v, 10, 5),
-    threshold: '≥10',
-  },
-  DL_THROUGHPUT_NR700: {
-    label: 'DL',
-    unit: 'Mbps',
-    band: '700M',
-    getStatus: (v) => evalHigher(v, 50, 25),
-    threshold: '≥50',
-  },
-  UL_THROUGHPUT_NR700: {
-    label: 'UL',
-    unit: 'Mbps',
-    band: '700M',
-    getStatus: (v) => evalHigher(v, 20, 10),
-    threshold: '≥20',
-  },
-  LATENCY_PING: {
-    label: 'Latency',
-    unit: 'ms',
-    getStatus: (v) => evalLower(v, 15, 30),
-    threshold: '≤15',
-  },
-  TX_IMBALANCE: {
-    label: 'TX Imbal',
-    unit: 'dB',
-    getStatus: (v) => evalLower(Math.abs(v), 4, 6),
-    threshold: '≤4',
-  },
-}
-
-const STATUS_STYLES = {
-  pass: {
-    bg: 'rgba(22, 163, 74, 0.1)',
-    border: 'rgba(22, 163, 74, 0.3)',
-    color: '#16a34a',
-    icon: PassIcon,
-  },
-  warning: {
-    bg: 'rgba(234, 88, 12, 0.1)',
-    border: 'rgba(234, 88, 12, 0.3)',
-    color: '#ea580c',
-    icon: WarnIcon,
-  },
-  fail: {
-    bg: 'rgba(220, 38, 38, 0.1)',
-    border: 'rgba(220, 38, 38, 0.3)',
-    color: '#dc2626',
-    icon: FailIcon,
-  },
-}
+// Icons for metric status (component-specific, can't be in shared config)
+const STATUS_ICONS = {
+  pass: PassIcon,
+  warning: WarnIcon,
+  fail: FailIcon,
+} as const
 
 interface MetricValue {
   readonly type: string
@@ -120,27 +33,28 @@ interface NR5GQuickStatusProps {
 export default function NR5GQuickStatus({ metrics, delay = 0 }: NR5GQuickStatusProps) {
   if (metrics.length === 0) return null
 
-  // Group by band
-  const nr3500 = metrics.filter((m) => m.type.includes('NR3500'))
-  const nr700 = metrics.filter((m) => m.type.includes('NR700'))
-  const other = metrics.filter((m) => !m.type.includes('NR3500') && !m.type.includes('NR700'))
+  // Filter to only SSV metrics
+  const ssvMetrics = metrics.filter(m => SSV_METRIC_TYPES.has(m.type))
 
-  // Calculate summary
-  const allStatuses = metrics.map((m) => {
-    const config = SSV_CONFIG[m.type]
-    return config ? config.getStatus(m.value) : 'pass'
+  // Group by band
+  const nr3500 = ssvMetrics.filter((m) => m.type.includes('NR3500'))
+  const nr700 = ssvMetrics.filter((m) => m.type.includes('NR700'))
+  const other = ssvMetrics.filter((m) => !m.type.includes('NR3500') && !m.type.includes('NR700'))
+
+  // Calculate summary using centralized config
+  const allStatuses: MetricStatus[] = ssvMetrics.map((m) => {
+    const config = METRICS_CONFIG[m.type]
+    return config ? config.getMetricStatus(m.value) : 'pass'
   })
-  const passCount = allStatuses.filter((s) => s === 'pass').length
-  const warnCount = allStatuses.filter((s) => s === 'warning').length
-  const failCount = allStatuses.filter((s) => s === 'fail').length
+  const { pass: passCount, warning: warnCount, fail: failCount } = countMetricStatuses(allStatuses)
 
   const renderMetricChip = (m: MetricValue, idx: number) => {
-    const config = SSV_CONFIG[m.type]
+    const config = METRICS_CONFIG[m.type]
     if (!config) return null
 
-    const status = config.getStatus(m.value)
-    const styles = STATUS_STYLES[status]
-    const Icon = styles.icon
+    const status = config.getMetricStatus(m.value) as MetricStatusType
+    const styles = METRIC_STATUS_STYLES[status]
+    const Icon = STATUS_ICONS[status]
 
     return (
       <Box
@@ -172,7 +86,7 @@ export default function NR5GQuickStatus({ metrics, delay = 0 }: NR5GQuickStatusP
               lineHeight: 1,
             }}
           >
-            {config.label} {config.band && <span style={{ opacity: 0.7 }}>({config.band})</span>}
+            {config.label} {config.bandShort && <span style={{ opacity: 0.7 }}>({config.bandShort})</span>}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
             <Typography
@@ -184,7 +98,7 @@ export default function NR5GQuickStatus({ metrics, delay = 0 }: NR5GQuickStatusP
                 lineHeight: 1.2,
               }}
             >
-              {m.value.toFixed(1)}
+              {config.format(m.value)}
             </Typography>
             <Typography
               sx={{
@@ -231,24 +145,24 @@ export default function NR5GQuickStatus({ metrics, delay = 0 }: NR5GQuickStatusP
         <Box sx={{ display: 'flex', gap: '12px' }}>
           {passCount > 0 && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <PassIcon sx={{ fontSize: 14, color: '#16a34a' }} />
-              <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#16a34a' }}>
+              <PassIcon sx={{ fontSize: 14, color: CSS_VARS.statusActive }} />
+              <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: CSS_VARS.statusActive }}>
                 {passCount} Pass
               </Typography>
             </Box>
           )}
           {warnCount > 0 && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <WarnIcon sx={{ fontSize: 14, color: '#ea580c' }} />
-              <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#ea580c' }}>
+              <WarnIcon sx={{ fontSize: 14, color: CSS_VARS.statusMaintenance }} />
+              <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: CSS_VARS.statusMaintenance }}>
                 {warnCount} Warn
               </Typography>
             </Box>
           )}
           {failCount > 0 && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <FailIcon sx={{ fontSize: 14, color: '#dc2626' }} />
-              <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#dc2626' }}>
+              <FailIcon sx={{ fontSize: 14, color: CSS_VARS.statusOffline }} />
+              <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: CSS_VARS.statusOffline }}>
                 {failCount} Fail
               </Typography>
             </Box>

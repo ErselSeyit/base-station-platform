@@ -43,8 +43,8 @@ jwt:
   secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000} # 24 hours default
   cookie:
-    # Use secure cookies in production (HTTPS only)
-    secure: ${JWT_COOKIE_SECURE:false}
+    # Secure cookies enabled by default (HTTPS only) - set to false for local HTTP dev
+    secure: ${JWT_COOKIE_SECURE:true}
     # Cookie max age in seconds (default 24 hours)
     max-age: ${JWT_COOKIE_MAX_AGE:86400}
 

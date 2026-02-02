@@ -45,6 +45,17 @@ spring:
                 redis-rate-limiter.replenishRate: 50
                 redis-rate-limiter.burstCapacity: 100
                 redis-rate-limiter.requestedTokens: 1
+        - id: son-service
+          uri: ${ROUTE_MONITORING_URL:http://monitoring-service:8082}
+          predicates:
+            - Path=/api/v1/son,/api/v1/son/**
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                redis-rate-limiter.requestedTokens: 1
         - id: diagnostics-service
           uri: ${ROUTE_MONITORING_URL:http://monitoring-service:8082}
           predicates:

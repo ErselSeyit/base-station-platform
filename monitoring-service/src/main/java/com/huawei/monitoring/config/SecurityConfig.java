@@ -23,6 +23,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import static com.huawei.common.security.Roles.*;
+
 /**
  * Security configuration for monitoring-service.
  * 
@@ -46,11 +48,18 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())  // CSRF disabled - stateless API with JWT
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Permit health and actuator endpoints
-                .requestMatchers("/actuator/**").permitAll()
+                // Permit only health check publicly, secure other actuator endpoints
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers("/actuator/**").hasRole(ADMIN)
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                // Permit WebSocket endpoints (WebSocket has its own auth)
+                // Permit WebSocket endpoints (WebSocket has its own auth via origin validation)
                 .requestMatchers("/ws/**").permitAll()
+                // Metrics endpoints - read for all, write for operators+
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/metrics/**").hasAnyRole(ADMIN, OPERATOR, USER)
+                .requestMatchers("/api/v1/metrics/**").hasAnyRole(ADMIN, OPERATOR)
+                // Alerts - read for all, acknowledge for operators+
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/alerts/**").hasAnyRole(ADMIN, OPERATOR, USER)
+                .requestMatchers("/api/v1/alerts/**").hasAnyRole(ADMIN, OPERATOR)
                 // All other requests require authentication
                 .anyRequest().authenticated()
             )

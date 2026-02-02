@@ -9,8 +9,8 @@ spring:
       host: ${SPRING_DATA_MONGODB_HOST:mongodb}
       port: ${SPRING_DATA_MONGODB_PORT:27017}
       database: ${SPRING_DATA_MONGODB_DATABASE:monitoringdb}
-      username: ${SPRING_DATA_MONGODB_USERNAME:}
-      password: ${SPRING_DATA_MONGODB_PASSWORD:}
+      username: ${SPRING_DATA_MONGODB_USERNAME}
+      password: ${SPRING_DATA_MONGODB_PASSWORD}
       authentication-database: ${SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE:admin}
     redis:
       host: ${SPRING_DATA_REDIS_HOST:redis}
@@ -18,8 +18,8 @@ spring:
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:rabbitmq}
     port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:}
-    password: ${SPRING_RABBITMQ_PASSWORD:}
+    username: ${SPRING_RABBITMQ_USERNAME}
+    password: ${SPRING_RABBITMQ_PASSWORD}
   cache:
     type: redis
     redis:

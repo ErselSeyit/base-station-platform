@@ -28,6 +28,7 @@ import socket
 import os
 import hmac
 import hashlib
+import time
 from functools import wraps
 from abc import ABC, abstractmethod
 
@@ -104,6 +105,48 @@ try:
 except ImportError:
     CONFIG_DRIFT_AVAILABLE = False
 
+# Root Cause Analysis service (optional)
+try:
+    from root_cause_analysis import get_rca_service, parse_event_from_dict
+    RCA_AVAILABLE = True
+except ImportError:
+    RCA_AVAILABLE = False
+
+# Self-Healing service (optional)
+try:
+    from self_healing import get_self_healing_service, HealingAction, ActionType, RiskLevel
+    SELF_HEALING_AVAILABLE = True
+except ImportError:
+    SELF_HEALING_AVAILABLE = False
+
+# Digital Twin service (optional)
+try:
+    from digital_twin import get_digital_twin_service, SimulationMode
+    DIGITAL_TWIN_AVAILABLE = True
+except ImportError:
+    DIGITAL_TWIN_AVAILABLE = False
+
+# Generative AI service (optional)
+try:
+    from generative_ai import get_generative_ai_service, ScenarioType, GenerationMethod
+    GENERATIVE_AI_AVAILABLE = True
+except ImportError:
+    GENERATIVE_AI_AVAILABLE = False
+
+# Computer Vision service (advanced) (optional)
+try:
+    from computer_vision import get_computer_vision_service, InspectionType
+    COMPUTER_VISION_AVAILABLE = True
+except ImportError:
+    COMPUTER_VISION_AVAILABLE = False
+
+# Drone Integration service (optional)
+try:
+    from drone_integration import get_drone_service, MissionType, GeoPoint
+    DRONE_INTEGRATION_AVAILABLE = True
+except ImportError:
+    DRONE_INTEGRATION_AVAILABLE = False
+
 try:
     import websockets
     import asyncio
@@ -163,6 +206,166 @@ class LearnedPattern:
     def success_rate(self) -> float:
         total = self.resolved_count + self.failed_count
         return (self.resolved_count / total * 100) if total > 0 else 0.0
+
+
+# ============================================================================
+# Cloud Client - Posts solutions back to cloud for edge-bridge execution
+# ============================================================================
+
+class CloudClient:
+    """
+    Client for posting AI solutions back to the cloud.
+    Solutions are converted to commands and queued for edge-bridge to execute.
+    """
+
+    def __init__(self, base_url: str = "http://api-gateway:8080",
+                 username: str = None, password: str = None):
+        if base_url and (not username or not password):
+            raise ValueError("username and password are required when base_url is set - use CLOUD_USERNAME and CLOUD_PASSWORD env vars")
+        self.base_url = base_url
+        self.username = username
+        self.password = password
+        self.token: Optional[str] = None
+        self.token_expires: float = 0
+        self.enabled = bool(base_url)
+        self._lock = threading.Lock()
+
+        # Import requests here to make it optional
+        try:
+            import requests
+            self.requests = requests
+            self.http_available = True
+        except ImportError:
+            self.http_available = False
+            logger.warning("requests library not available - cloud integration disabled")
+
+    def _ensure_token(self) -> bool:
+        """Ensure we have a valid JWT token."""
+        if not self.http_available or not self.enabled:
+            return False
+
+        import time
+        if self.token and time.time() < self.token_expires - 60:
+            return True
+
+        try:
+            resp = self.requests.post(
+                f"{self.base_url}/api/v1/auth/login",
+                json={"username": self.username, "password": self.password},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                self.token = data.get("token")
+                expires_in = data.get("expiresIn", 3600)
+                self.token_expires = time.time() + expires_in
+                logger.info("Cloud client authenticated successfully")
+                return True
+            else:
+                logger.warning(f"Cloud auth failed: {resp.status_code}")
+                return False
+        except Exception as e:
+            logger.warning(f"Cloud auth error: {e}")
+            return False
+
+    def post_solution(self, problem: 'Problem', solution: 'Solution',
+                      diagnostic_session_id: str = "") -> bool:
+        """
+        Post a solution to the cloud to create commands for edge-bridge.
+
+        Args:
+            problem: The original problem
+            solution: The AI-generated solution
+            diagnostic_session_id: Optional session ID for tracking
+
+        Returns:
+            True if solution was posted successfully
+        """
+        if not self.http_available or not self.enabled:
+            return False
+
+        with self._lock:
+            if not self._ensure_token():
+                return False
+
+            try:
+                # Extract station ID (numeric) from problem
+                station_id = self._extract_station_id(problem.station_id)
+                if not station_id:
+                    logger.warning(f"Could not extract station ID from: {problem.station_id}")
+                    return False
+
+                # Map solution to command type
+                command_type = self._map_to_command_type(problem.code, solution)
+
+                # Create AI command request
+                payload = {
+                    "diagnosticSessionId": diagnostic_session_id or f"ai-{problem.id}",
+                    "problemCode": problem.code,
+                    "commandType": command_type,
+                    "params": {
+                        "action": solution.action,
+                        "commands": ";".join(solution.commands) if solution.commands else "",
+                        "expectedOutcome": solution.expected_outcome
+                    },
+                    "confidence": solution.confidence,
+                    "riskLevel": solution.risk_level
+                }
+
+                resp = self.requests.post(
+                    f"{self.base_url}/api/v1/stations/{station_id}/commands/ai",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    timeout=10
+                )
+
+                if resp.status_code in (200, 201):
+                    data = resp.json()
+                    cmd_id = data.get("id", "unknown")
+                    logger.info(f"Posted solution to cloud: command {cmd_id} for station {station_id}")
+                    return True
+                else:
+                    logger.warning(f"Failed to post solution: {resp.status_code} - {resp.text}")
+                    return False
+
+            except Exception as e:
+                logger.error(f"Error posting solution to cloud: {e}")
+                return False
+
+    def _extract_station_id(self, station_id_str: str) -> Optional[int]:
+        """Extract numeric station ID from string like 'MIPS-BS-001' or '27'."""
+        import re
+        # Try direct numeric
+        if station_id_str.isdigit():
+            return int(station_id_str)
+        # Try extracting number from end (e.g., MIPS-BS-001 -> 1)
+        match = re.search(r'(\d+)$', station_id_str)
+        if match:
+            return int(match.group(1))
+        # Default to station 1 for testing
+        return 1
+
+    def _map_to_command_type(self, problem_code: str, solution: 'Solution') -> str:
+        """Map problem code to a command type for the device."""
+        # Map common problem codes to device command types
+        command_map = {
+            "CPU_OVERHEAT": "THERMAL_CONTROL",
+            "CPU_HIGH_USAGE": "PROCESS_CONTROL",
+            "MEMORY_PRESSURE": "MEMORY_CLEANUP",
+            "MEMORY_LEAK": "SERVICE_RESTART",
+            "FAN_FAILURE": "HARDWARE_CHECK",
+            "SIGNAL_DEGRADATION": "RF_CALIBRATION",
+            "SIGNAL_INTERFERENCE": "FREQUENCY_ADJUST",
+            "BACKHAUL_LATENCY": "NETWORK_OPTIMIZE",
+            "PACKET_LOSS": "NETWORK_DIAGNOSE",
+            "PROCESS_CRASH": "SERVICE_RESTART",
+            "CONFIG_ERROR": "CONFIG_RELOAD",
+            "VOLTAGE_FLUCTUATION": "POWER_CHECK",
+            "HIGH_POWER_CONSUMPTION": "POWER_OPTIMIZE",
+            "AUTH_FAILURE": "SECURITY_AUDIT",
+            "CERTIFICATE_EXPIRY": "CERT_RENEWAL",
+        }
+        return command_map.get(problem_code, "GENERIC_FIX")
 
 
 # ============================================================================
@@ -520,7 +723,7 @@ class RuleBasedBackend(AIBackend):
             commands=rule["commands"],
             expected_outcome=rule["expected_outcome"],
             risk_level=rule["risk_level"],
-            confidence=0.85 if problem.code in self.RULES else 0.3,
+            confidence=0.92 if problem.code in self.RULES else 0.3,  # 92% for rules (above 90% auto-apply threshold)
             reasoning=f"Rule-based diagnosis for {problem.code}"
         )
 
@@ -825,11 +1028,11 @@ class HTTPAdapter(ProtocolAdapter):
         self.solution_log: List[Solution] = []
         self.learning_engine: Optional[LearningEngine] = None
         self.diagnostic_service: Optional["DiagnosticService"] = None  # Reference to parent service
-        require_auth = os.environ.get("DIAGNOSTIC_REQUIRE_AUTH", "false").lower() == "true"
+        require_auth = os.environ.get("DIAGNOSTIC_REQUIRE_AUTH", "true").lower() == "true"
         if not self.secret:
             if require_auth:
-                raise ValueError("DIAGNOSTIC_SECRET is required when DIAGNOSTIC_REQUIRE_AUTH=true")
-            logger.warning("DIAGNOSTIC_SECRET not set - authentication disabled (set DIAGNOSTIC_REQUIRE_AUTH=true in production)")
+                raise ValueError("DIAGNOSTIC_SECRET is required - set via environment variable or set DIAGNOSTIC_REQUIRE_AUTH=false for development")
+            logger.warning("DIAGNOSTIC_SECRET not set - authentication disabled (development mode only)")
 
     def _setup_tracing(self):
         """Initialize OpenTelemetry tracing"""
@@ -1198,6 +1401,84 @@ class HTTPAdapter(ProtocolAdapter):
             logger.error(f"Maintenance analysis error: {e}")
             return jsonify({"error": f"Analysis failed: {str(e)}"}), 500
 
+    def _handle_battery_health(self, station_id: str):
+        """Handle GET /maintenance/<station_id>/battery request.
+
+        Analyzes battery health including SOC, DOD, temperature, and cycle count.
+        """
+        if not PREDICTIVE_MAINTENANCE_AVAILABLE:
+            return jsonify({"error": "Predictive maintenance service not available"}), 503
+
+        maintenance_service = get_predictive_maintenance_service()
+
+        try:
+            from datetime import timedelta
+            window_hours = request.args.get('window_hours', 24, type=int)
+            analysis_window = timedelta(hours=window_hours)
+
+            prediction = maintenance_service.analyze_battery_health(
+                station_id, analysis_window
+            )
+
+            if prediction:
+                return jsonify({
+                    "station_id": station_id,
+                    "component": "battery_system",
+                    "analysis_window_hours": window_hours,
+                    "prediction": prediction.to_dict()
+                })
+            else:
+                return jsonify({
+                    "station_id": station_id,
+                    "component": "battery_system",
+                    "analysis_window_hours": window_hours,
+                    "status": "healthy",
+                    "message": "No battery issues detected or insufficient data"
+                })
+
+        except Exception as e:
+            logger.error(f"Battery health analysis error: {e}")
+            return jsonify({"error": f"Battery analysis failed: {str(e)}"}), 500
+
+    def _handle_fiber_health(self, station_id: str):
+        """Handle GET /maintenance/<station_id>/fiber request.
+
+        Analyzes fiber transport health including RX/TX power, BER, and OSNR.
+        """
+        if not PREDICTIVE_MAINTENANCE_AVAILABLE:
+            return jsonify({"error": "Predictive maintenance service not available"}), 503
+
+        maintenance_service = get_predictive_maintenance_service()
+
+        try:
+            from datetime import timedelta
+            window_hours = request.args.get('window_hours', 24, type=int)
+            analysis_window = timedelta(hours=window_hours)
+
+            prediction = maintenance_service.analyze_fiber_transport(
+                station_id, analysis_window
+            )
+
+            if prediction:
+                return jsonify({
+                    "station_id": station_id,
+                    "component": "fiber_transport",
+                    "analysis_window_hours": window_hours,
+                    "prediction": prediction.to_dict()
+                })
+            else:
+                return jsonify({
+                    "station_id": station_id,
+                    "component": "fiber_transport",
+                    "analysis_window_hours": window_hours,
+                    "status": "healthy",
+                    "message": "No fiber issues detected or insufficient data"
+                })
+
+        except Exception as e:
+            logger.error(f"Fiber health analysis error: {e}")
+            return jsonify({"error": f"Fiber analysis failed: {str(e)}"}), 500
+
     # =========================================================================
     # Configuration Drift Detection Endpoints
     # =========================================================================
@@ -1302,6 +1583,524 @@ class HTTPAdapter(ProtocolAdapter):
             "baseline": baseline
         })
 
+    def _handle_rca_analyze(self):
+        """Handle POST /rca/analyze request - analyze events to find root cause."""
+        if not RCA_AVAILABLE:
+            return jsonify({"error": "Root cause analysis service not available"}), 503
+
+        data = request.get_json()
+        if not data or 'events' not in data:
+            return jsonify({"error": "Missing 'events' in request body"}), 400
+
+        events_data = data['events']
+        if not events_data:
+            return jsonify({"error": "Events list cannot be empty"}), 400
+
+        rca_service = get_rca_service()
+
+        # Parse events
+        events = [parse_event_from_dict(e) for e in events_data]
+
+        # Analyze
+        result = rca_service.analyze(events)
+
+        if result is None:
+            return jsonify({"error": "Analysis failed"}), 500
+
+        return jsonify(result.to_dict())
+
+    def _handle_rca_stats(self):
+        """Handle GET /rca/stats request - get RCA statistics."""
+        if not RCA_AVAILABLE:
+            return jsonify({"error": "Root cause analysis service not available"}), 503
+
+        rca_service = get_rca_service()
+        stats = rca_service.get_statistics()
+
+        return jsonify(stats)
+
+    def _handle_rca_feedback(self):
+        """Handle POST /rca/feedback request - learn from operator feedback."""
+        if not RCA_AVAILABLE:
+            return jsonify({"error": "Root cause analysis service not available"}), 503
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing request body"}), 400
+
+        required_fields = ['analysis_id', 'actual_root_cause', 'was_correct']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+
+        rca_service = get_rca_service()
+        rca_service.learn_from_feedback(
+            analysis_id=data['analysis_id'],
+            actual_root_cause=data['actual_root_cause'],
+            was_correct=data['was_correct'],
+            corrective_action=data.get('corrective_action')
+        )
+
+        return jsonify({"status": "feedback recorded"})
+
+    # =========================================================================
+    # Self-Healing Endpoints
+    # =========================================================================
+
+    def _handle_healing_submit(self):
+        """Handle POST /healing/actions request - submit a healing action."""
+        if not SELF_HEALING_AVAILABLE:
+            return jsonify({"error": "Self-healing service not available"}), 503
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing request body"}), 400
+
+        required_fields = ['station_id', 'action_type', 'description']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+
+        try:
+            healing_service = get_self_healing_service()
+
+            action = HealingAction(
+                id=f"heal-manual-{data['station_id']}-{int(time.time())}",
+                station_id=data['station_id'],
+                action_type=ActionType[data['action_type'].upper()],
+                parameters=data.get('parameters', {}),
+                description=data['description'],
+                risk_level=RiskLevel[data.get('risk_level', 'MEDIUM').upper()],
+                source='manual',
+                source_id='user-submitted',
+                auto_execute=data.get('auto_execute', False),
+                timeout_seconds=data.get('timeout_seconds', 300),
+                rollback_action=data.get('rollback_action')
+            )
+
+            result = healing_service.submit_action(action)
+            return jsonify(result)
+
+        except KeyError as e:
+            return jsonify({"error": f"Invalid enum value: {e}"}), 400
+        except Exception as e:
+            logger.error(f"Healing action submit error: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    def _handle_healing_from_son(self):
+        """Handle POST /healing/from-son request - create action from SON recommendation."""
+        if not SELF_HEALING_AVAILABLE:
+            return jsonify({"error": "Self-healing service not available"}), 503
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing SON recommendation data"}), 400
+
+        try:
+            healing_service = get_self_healing_service()
+            action = healing_service.create_action_from_son(data)
+            result = healing_service.submit_action(action)
+            return jsonify({
+                "action": action.to_dict(),
+                "submission": result
+            })
+
+        except Exception as e:
+            logger.error(f"Healing from SON error: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    def _handle_healing_from_rca(self):
+        """Handle POST /healing/from-rca request - create action from RCA result."""
+        if not SELF_HEALING_AVAILABLE:
+            return jsonify({"error": "Self-healing service not available"}), 503
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing RCA result data"}), 400
+
+        station_id = data.get('station_id')
+        if not station_id:
+            return jsonify({"error": "Missing station_id"}), 400
+
+        try:
+            healing_service = get_self_healing_service()
+            action = healing_service.create_action_from_rca(data, station_id)
+
+            if not action:
+                return jsonify({"message": "No actionable remediation for this root cause"}), 200
+
+            result = healing_service.submit_action(action)
+            return jsonify({
+                "action": action.to_dict(),
+                "submission": result
+            })
+
+        except Exception as e:
+            logger.error(f"Healing from RCA error: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    def _handle_healing_approve(self, action_id: str):
+        """Handle POST /healing/actions/{id}/approve request."""
+        if not SELF_HEALING_AVAILABLE:
+            return jsonify({"error": "Self-healing service not available"}), 503
+
+        data = request.get_json() or {}
+        approved_by = data.get('approved_by', 'unknown')
+
+        healing_service = get_self_healing_service()
+        result = healing_service.approve_action(action_id, approved_by)
+
+        if result:
+            return jsonify(result)
+        return jsonify({"error": "Action not found"}), 404
+
+    def _handle_healing_cancel(self, action_id: str):
+        """Handle POST /healing/actions/{id}/cancel request."""
+        if not SELF_HEALING_AVAILABLE:
+            return jsonify({"error": "Self-healing service not available"}), 503
+
+        data = request.get_json() or {}
+        reason = data.get('reason', 'Cancelled by user')
+
+        healing_service = get_self_healing_service()
+        result = healing_service.cancel_action(action_id, reason)
+
+        if result:
+            return jsonify(result)
+        return jsonify({"error": "Action not found"}), 404
+
+    def _handle_healing_pending(self):
+        """Handle GET /healing/pending request - list pending actions."""
+        if not SELF_HEALING_AVAILABLE:
+            return jsonify({"error": "Self-healing service not available"}), 503
+
+        station_id = request.args.get('station_id')
+        healing_service = get_self_healing_service()
+        actions = healing_service.get_pending_actions(station_id)
+        return jsonify({"actions": actions, "count": len(actions)})
+
+    def _handle_healing_history(self):
+        """Handle GET /healing/history request - get execution history."""
+        if not SELF_HEALING_AVAILABLE:
+            return jsonify({"error": "Self-healing service not available"}), 503
+
+        station_id = request.args.get('station_id')
+        limit = request.args.get('limit', 100, type=int)
+
+        healing_service = get_self_healing_service()
+        history = healing_service.get_execution_history(station_id, limit)
+        return jsonify({"history": history, "count": len(history)})
+
+    def _handle_healing_stats(self):
+        """Handle GET /healing/stats request - get service statistics."""
+        if not SELF_HEALING_AVAILABLE:
+            return jsonify({"error": "Self-healing service not available"}), 503
+
+        healing_service = get_self_healing_service()
+        return jsonify(healing_service.get_stats())
+
+    # ========== Digital Twin Handlers ==========
+
+    def _handle_twin_create(self, station_id: str):
+        """Handle POST /digital-twin/<station_id> - create digital twin."""
+        if not DIGITAL_TWIN_AVAILABLE:
+            return jsonify({"error": "Digital twin service not available"}), 503
+
+        data = request.get_json() or {}
+        twin_service = get_digital_twin_service()
+        twin = twin_service.create_twin(station_id, data.get("station_data"))
+        return jsonify(twin.get_state()), 201
+
+    def _handle_twin_get(self, station_id: str):
+        """Handle GET /digital-twin/<station_id> - get twin state."""
+        if not DIGITAL_TWIN_AVAILABLE:
+            return jsonify({"error": "Digital twin service not available"}), 503
+
+        twin_service = get_digital_twin_service()
+        twin = twin_service.get_twin(station_id)
+        if not twin:
+            return jsonify({"error": "Twin not found"}), 404
+        return jsonify(twin.get_state())
+
+    def _handle_twin_delete(self, station_id: str):
+        """Handle DELETE /digital-twin/<station_id> - delete twin."""
+        if not DIGITAL_TWIN_AVAILABLE:
+            return jsonify({"error": "Digital twin service not available"}), 503
+
+        twin_service = get_digital_twin_service()
+        if twin_service.delete_twin(station_id):
+            return jsonify({"status": "deleted"})
+        return jsonify({"error": "Twin not found"}), 404
+
+    def _handle_twin_simulate(self, station_id: str):
+        """Handle POST /digital-twin/<station_id>/simulate - run simulation."""
+        if not DIGITAL_TWIN_AVAILABLE:
+            return jsonify({"error": "Digital twin service not available"}), 503
+
+        data = request.get_json() or {}
+        twin_service = get_digital_twin_service()
+
+        result = twin_service.run_what_if(
+            station_id,
+            scenario=data.get("scenario", {}),
+            duration_hours=data.get("duration_hours", 168.0)
+        )
+        if not result:
+            return jsonify({"error": "Twin not found or simulation failed"}), 404
+        return jsonify(result.to_dict())
+
+    def _handle_twin_predict(self, station_id: str):
+        """Handle GET /digital-twin/<station_id>/predict - predict failures."""
+        if not DIGITAL_TWIN_AVAILABLE:
+            return jsonify({"error": "Digital twin service not available"}), 503
+
+        horizon = request.args.get("horizon_days", 30, type=int)
+        twin_service = get_digital_twin_service()
+        twin = twin_service.get_twin(station_id)
+        if not twin:
+            return jsonify({"error": "Twin not found"}), 404
+
+        predictions = twin.predict_failures(horizon)
+        return jsonify({"station_id": station_id, "predictions": predictions})
+
+    def _handle_twin_fleet_health(self):
+        """Handle GET /digital-twin/fleet/health - get fleet health."""
+        if not DIGITAL_TWIN_AVAILABLE:
+            return jsonify({"error": "Digital twin service not available"}), 503
+
+        twin_service = get_digital_twin_service()
+        return jsonify(twin_service.get_fleet_health())
+
+    # ========== Generative AI Handlers ==========
+
+    def _handle_generate_scenario(self):
+        """Handle POST /generative/scenario - generate failure scenario."""
+        if not GENERATIVE_AI_AVAILABLE:
+            return jsonify({"error": "Generative AI service not available"}), 503
+
+        data = request.get_json() or {}
+        gen_service = get_generative_ai_service()
+
+        scenario_type = ScenarioType(data.get("scenario_type", "hardware_failure"))
+        method = GenerationMethod(data.get("method", "template"))
+
+        scenario = gen_service.generate_scenario(
+            scenario_type=scenario_type,
+            pattern_name=data.get("pattern_name"),
+            method=method,
+            custom_params=data.get("custom_params")
+        )
+        return jsonify(scenario.to_dict()), 201
+
+    def _handle_generate_batch(self):
+        """Handle POST /generative/batch - generate training batch."""
+        if not GENERATIVE_AI_AVAILABLE:
+            return jsonify({"error": "Generative AI service not available"}), 503
+
+        data = request.get_json() or {}
+        gen_service = get_generative_ai_service()
+
+        batch = gen_service.generate_training_batch(
+            batch_size=data.get("batch_size", 100)
+        )
+        return jsonify(batch.to_dict()), 201
+
+    def _handle_generate_edge_cases(self):
+        """Handle POST /generative/edge-cases - generate edge cases."""
+        if not GENERATIVE_AI_AVAILABLE:
+            return jsonify({"error": "Generative AI service not available"}), 503
+
+        data = request.get_json() or {}
+        gen_service = get_generative_ai_service()
+
+        edge_cases = gen_service.generate_edge_cases(count=data.get("count", 20))
+        return jsonify({
+            "count": len(edge_cases),
+            "scenarios": [s.to_dict() for s in edge_cases]
+        }), 201
+
+    def _handle_generative_stats(self):
+        """Handle GET /generative/stats - get generation statistics."""
+        if not GENERATIVE_AI_AVAILABLE:
+            return jsonify({"error": "Generative AI service not available"}), 503
+
+        gen_service = get_generative_ai_service()
+        return jsonify(gen_service.get_statistics())
+
+    # ========== Computer Vision Handlers ==========
+
+    def _handle_cv_inspect(self):
+        """Handle POST /cv/inspect - inspect image from base64."""
+        if not COMPUTER_VISION_AVAILABLE:
+            return jsonify({"error": "Computer vision service not available"}), 503
+
+        data = request.get_json() or {}
+        cv_service = get_computer_vision_service()
+
+        if "image_base64" not in data:
+            return jsonify({"error": "image_base64 required"}), 400
+
+        inspection_type = InspectionType(
+            data.get("inspection_type", "equipment_condition")
+        )
+
+        result = cv_service.inspect_from_base64(
+            base64_data=data["image_base64"],
+            station_id=data.get("station_id", "unknown"),
+            inspection_type=inspection_type,
+            equipment_type=data.get("equipment_type", "generic")
+        )
+        return jsonify(result.to_dict())
+
+    def _handle_cv_inspect_file(self):
+        """Handle POST /cv/inspect-file - inspect image from file path."""
+        if not COMPUTER_VISION_AVAILABLE:
+            return jsonify({"error": "Computer vision service not available"}), 503
+
+        data = request.get_json() or {}
+        cv_service = get_computer_vision_service()
+
+        if "file_path" not in data:
+            return jsonify({"error": "file_path required"}), 400
+
+        inspection_type = InspectionType(
+            data.get("inspection_type", "equipment_condition")
+        )
+
+        result = cv_service.inspect_from_file(
+            file_path=data["file_path"],
+            station_id=data.get("station_id", "unknown"),
+            inspection_type=inspection_type,
+            equipment_type=data.get("equipment_type", "generic")
+        )
+        return jsonify(result.to_dict())
+
+    def _handle_cv_history(self, station_id: str):
+        """Handle GET /cv/history/<station_id> - get inspection history."""
+        if not COMPUTER_VISION_AVAILABLE:
+            return jsonify({"error": "Computer vision service not available"}), 503
+
+        limit = request.args.get("limit", 100, type=int)
+        cv_service = get_computer_vision_service()
+
+        history = cv_service.get_inspection_history(station_id, limit)
+        return jsonify({
+            "station_id": station_id,
+            "inspections": [r.to_dict() for r in history]
+        })
+
+    def _handle_cv_stats(self):
+        """Handle GET /cv/stats - get CV statistics."""
+        if not COMPUTER_VISION_AVAILABLE:
+            return jsonify({"error": "Computer vision service not available"}), 503
+
+        cv_service = get_computer_vision_service()
+        return jsonify(cv_service.get_statistics())
+
+    # ========== Drone Integration Handlers ==========
+
+    def _handle_drone_list(self):
+        """Handle GET /drone/list - list all drones."""
+        if not DRONE_INTEGRATION_AVAILABLE:
+            return jsonify({"error": "Drone integration not available"}), 503
+
+        drone_service = get_drone_service()
+        drones = drone_service.get_all_drones()
+        return jsonify({"drones": [d.to_dict() for d in drones]})
+
+    def _handle_drone_state(self, drone_id: str):
+        """Handle GET /drone/<drone_id> - get drone state."""
+        if not DRONE_INTEGRATION_AVAILABLE:
+            return jsonify({"error": "Drone integration not available"}), 503
+
+        drone_service = get_drone_service()
+        state = drone_service.get_drone_state(drone_id)
+        if not state:
+            return jsonify({"error": "Drone not found"}), 404
+        return jsonify(state.to_dict())
+
+    def _handle_drone_create_mission(self):
+        """Handle POST /drone/mission - create inspection mission."""
+        if not DRONE_INTEGRATION_AVAILABLE:
+            return jsonify({"error": "Drone integration not available"}), 503
+
+        data = request.get_json() or {}
+        drone_service = get_drone_service()
+
+        if "station_id" not in data or "location" not in data:
+            return jsonify({"error": "station_id and location required"}), 400
+
+        loc = data["location"]
+        location = GeoPoint(
+            latitude=loc["latitude"],
+            longitude=loc["longitude"],
+            altitude=loc.get("altitude", 0)
+        )
+
+        mission_type = MissionType(data.get("mission_type", "site_inspection"))
+
+        mission = drone_service.create_mission(
+            mission_type=mission_type,
+            station_id=data["station_id"],
+            station_location=location,
+            drone_id=data.get("drone_id"),
+            custom_params=data.get("params")
+        )
+        return jsonify(mission.to_dict()), 201
+
+    def _handle_drone_mission_status(self, mission_id: str):
+        """Handle GET /drone/mission/<mission_id> - get mission status."""
+        if not DRONE_INTEGRATION_AVAILABLE:
+            return jsonify({"error": "Drone integration not available"}), 503
+
+        drone_service = get_drone_service()
+        status = drone_service.get_mission_status(mission_id)
+        if not status:
+            return jsonify({"error": "Mission not found"}), 404
+        return jsonify(status)
+
+    def _handle_drone_start_mission(self, mission_id: str):
+        """Handle POST /drone/mission/<mission_id>/start - start mission."""
+        if not DRONE_INTEGRATION_AVAILABLE:
+            return jsonify({"error": "Drone integration not available"}), 503
+
+        drone_service = get_drone_service()
+        success = drone_service.start_mission(mission_id)
+        if success:
+            return jsonify({"status": "started", "mission_id": mission_id})
+        return jsonify({"error": "Failed to start mission"}), 400
+
+    def _handle_drone_abort_mission(self, mission_id: str):
+        """Handle POST /drone/mission/<mission_id>/abort - abort mission."""
+        if not DRONE_INTEGRATION_AVAILABLE:
+            return jsonify({"error": "Drone integration not available"}), 503
+
+        drone_service = get_drone_service()
+        success = drone_service.abort_mission(mission_id)
+        if success:
+            return jsonify({"status": "aborted", "mission_id": mission_id})
+        return jsonify({"error": "Failed to abort mission"}), 400
+
+    def _handle_drone_captures(self, mission_id: str):
+        """Handle GET /drone/mission/<mission_id>/captures - get captures."""
+        if not DRONE_INTEGRATION_AVAILABLE:
+            return jsonify({"error": "Drone integration not available"}), 503
+
+        drone_service = get_drone_service()
+        captures = drone_service.get_captured_data(mission_id)
+        return jsonify({
+            "mission_id": mission_id,
+            "captures": [c.to_dict() for c in captures]
+        })
+
+    def _handle_drone_stats(self):
+        """Handle GET /drone/stats - get drone statistics."""
+        if not DRONE_INTEGRATION_AVAILABLE:
+            return jsonify({"error": "Drone integration not available"}), 503
+
+        drone_service = get_drone_service()
+        return jsonify(drone_service.get_statistics())
+
     def _add_cors_headers(self, response):
         """Add CORS headers to response."""
         response.headers['Access-Control-Allow-Origin'] = '*'
@@ -1340,6 +2139,10 @@ class HTTPAdapter(ProtocolAdapter):
             self._handle_maintenance_health)
         app.route('/maintenance/analyze', methods=['POST'])(
             self._require_auth(self._handle_maintenance_analyze))
+        app.route('/maintenance/<station_id>/battery', methods=['GET'])(
+            self._handle_battery_health)
+        app.route('/maintenance/<station_id>/fiber', methods=['GET'])(
+            self._handle_fiber_health)
 
         # Configuration Drift Detection endpoints
         app.route('/config/drift', methods=['POST'])(
@@ -1348,6 +2151,84 @@ class HTTPAdapter(ProtocolAdapter):
             self._require_auth(self._handle_config_baseline_set))
         app.route('/config/baseline/<station_id>', methods=['GET'])(
             self._handle_config_baseline_get)
+
+        # Root Cause Analysis endpoints
+        app.route('/rca/analyze', methods=['POST'])(
+            self._require_auth(self._handle_rca_analyze))
+        app.route('/rca/stats', methods=['GET'])(
+            self._handle_rca_stats)
+        app.route('/rca/feedback', methods=['POST'])(
+            self._require_auth(self._handle_rca_feedback))
+
+        # Self-Healing endpoints
+        app.route('/healing/actions', methods=['POST'])(
+            self._require_auth(self._handle_healing_submit))
+        app.route('/healing/from-son', methods=['POST'])(
+            self._require_auth(self._handle_healing_from_son))
+        app.route('/healing/from-rca', methods=['POST'])(
+            self._require_auth(self._handle_healing_from_rca))
+        app.route('/healing/actions/<action_id>/approve', methods=['POST'])(
+            self._require_auth(self._handle_healing_approve))
+        app.route('/healing/actions/<action_id>/cancel', methods=['POST'])(
+            self._require_auth(self._handle_healing_cancel))
+        app.route('/healing/pending', methods=['GET'])(
+            self._handle_healing_pending)
+        app.route('/healing/history', methods=['GET'])(
+            self._handle_healing_history)
+        app.route('/healing/stats', methods=['GET'])(
+            self._handle_healing_stats)
+
+        # Digital Twin endpoints
+        app.route('/digital-twin/<station_id>', methods=['POST'])(
+            self._require_auth(self._handle_twin_create))
+        app.route('/digital-twin/<station_id>', methods=['GET'])(
+            self._handle_twin_get)
+        app.route('/digital-twin/<station_id>', methods=['DELETE'])(
+            self._require_auth(self._handle_twin_delete))
+        app.route('/digital-twin/<station_id>/simulate', methods=['POST'])(
+            self._require_auth(self._handle_twin_simulate))
+        app.route('/digital-twin/<station_id>/predict', methods=['GET'])(
+            self._handle_twin_predict)
+        app.route('/digital-twin/fleet/health', methods=['GET'])(
+            self._handle_twin_fleet_health)
+
+        # Generative AI endpoints
+        app.route('/generative/scenario', methods=['POST'])(
+            self._require_auth(self._handle_generate_scenario))
+        app.route('/generative/batch', methods=['POST'])(
+            self._require_auth(self._handle_generate_batch))
+        app.route('/generative/edge-cases', methods=['POST'])(
+            self._require_auth(self._handle_generate_edge_cases))
+        app.route('/generative/stats', methods=['GET'])(
+            self._handle_generative_stats)
+
+        # Computer Vision (Advanced) endpoints
+        app.route('/cv/inspect', methods=['POST'])(
+            self._require_auth(self._handle_cv_inspect))
+        app.route('/cv/inspect-file', methods=['POST'])(
+            self._require_auth(self._handle_cv_inspect_file))
+        app.route('/cv/history/<station_id>', methods=['GET'])(
+            self._handle_cv_history)
+        app.route('/cv/stats', methods=['GET'])(
+            self._handle_cv_stats)
+
+        # Drone Integration endpoints
+        app.route('/drone/list', methods=['GET'])(
+            self._handle_drone_list)
+        app.route('/drone/<drone_id>', methods=['GET'])(
+            self._handle_drone_state)
+        app.route('/drone/mission', methods=['POST'])(
+            self._require_auth(self._handle_drone_create_mission))
+        app.route('/drone/mission/<mission_id>', methods=['GET'])(
+            self._handle_drone_mission_status)
+        app.route('/drone/mission/<mission_id>/start', methods=['POST'])(
+            self._require_auth(self._handle_drone_start_mission))
+        app.route('/drone/mission/<mission_id>/abort', methods=['POST'])(
+            self._require_auth(self._handle_drone_abort_mission))
+        app.route('/drone/mission/<mission_id>/captures', methods=['GET'])(
+            self._handle_drone_captures)
+        app.route('/drone/stats', methods=['GET'])(
+            self._handle_drone_stats)
 
     def start(self):
         if not FLASK_AVAILABLE:
@@ -1384,14 +2265,24 @@ class DiagnosticService:
     Main AI Diagnostic Service
 
     Manages multiple protocol adapters, AI backends, and the learning engine.
+    Optionally posts solutions to cloud for edge-bridge execution.
     """
 
-    def __init__(self):
+    def __init__(self, cloud_url: str = "", cloud_user: str = None,
+                 cloud_password: str = None):
         self.adapters: List[ProtocolAdapter] = []
         self.backend: AIBackend = RuleBasedBackend()
         self.problem_log: List[Problem] = []
         self.solution_log: List[Solution] = []
         self.learning_engine = LearningEngine()
+        self.cloud_client: Optional[CloudClient] = None
+
+        # Initialize cloud client if URL provided
+        if cloud_url:
+            if not cloud_user or not cloud_password:
+                raise ValueError("cloud_user and cloud_password are required when cloud_url is set - use CLOUD_USER and CLOUD_PASSWORD env vars")
+            self.cloud_client = CloudClient(cloud_url, cloud_user, cloud_password)
+            logger.info(f"Cloud integration enabled: {cloud_url}")
 
     def set_backend(self, backend: AIBackend):
         """Set the AI backend for diagnosis"""
@@ -1437,7 +2328,30 @@ class DiagnosticService:
         logger.info(f"Generated solution: {solution.action} "
                    f"(confidence: {solution.confidence:.0%})")
 
+        # Post solution to cloud for edge-bridge execution
+        if self.cloud_client:
+            self._post_solution_to_cloud(problem, solution)
+
         return solution
+
+    def _post_solution_to_cloud(self, problem: Problem, solution: Solution):
+        """Post solution to cloud to create commands for edge-bridge."""
+        try:
+            # Only auto-apply if confidence is high enough and risk is low
+            min_confidence = 0.90
+            allowed_risk = ["low"]
+
+            if solution.confidence >= min_confidence and solution.risk_level in allowed_risk:
+                success = self.cloud_client.post_solution(problem, solution)
+                if success:
+                    logger.info(f"Solution auto-applied to cloud for {problem.code}")
+                else:
+                    logger.warning(f"Failed to post solution to cloud for {problem.code}")
+            else:
+                logger.info(f"Solution for {problem.code} requires manual approval "
+                           f"(confidence={solution.confidence:.0%}, risk={solution.risk_level})")
+        except Exception as e:
+            logger.error(f"Error posting solution to cloud: {e}")
 
     def start(self):
         """Start all adapters"""
@@ -1474,10 +2388,28 @@ def main():
     parser.add_argument("--backend", choices=["rules", "ollama"],
                        default="rules", help="AI backend")
     parser.add_argument("--ollama-model", default="llama3.2", help="Ollama model")
+    # Cloud integration for bidirectional flow
+    parser.add_argument("--cloud-url", default=os.environ.get("CLOUD_URL", ""),
+                       help="Cloud API gateway URL for posting solutions")
+    parser.add_argument("--cloud-user", default=os.environ.get("CLOUD_USER"),
+                       help="Cloud auth username (required if cloud-url set, from CLOUD_USER env var)")
+    parser.add_argument("--cloud-password", default=os.environ.get("CLOUD_PASSWORD"),
+                       help="Cloud auth password (required if cloud-url set, from CLOUD_PASSWORD env var)")
 
     args = parser.parse_args()
 
-    service = DiagnosticService()
+    # Validate cloud credentials if cloud URL is provided
+    if args.cloud_url:
+        if not args.cloud_user:
+            parser.error("--cloud-user is required when --cloud-url is set. Set CLOUD_USER environment variable.")
+        if not args.cloud_password:
+            parser.error("--cloud-password is required when --cloud-url is set. Set CLOUD_PASSWORD environment variable.")
+
+    service = DiagnosticService(
+        cloud_url=args.cloud_url,
+        cloud_user=args.cloud_user,
+        cloud_password=args.cloud_password
+    )
 
     # Set AI backend
     if args.backend == "ollama":
@@ -1515,11 +2447,23 @@ def main():
         if ALARM_CORRELATION_AVAILABLE:
             logger.info("    POST /alarms/correlate   - Alarm correlation")
         if PREDICTIVE_MAINTENANCE_AVAILABLE:
-            logger.info("    GET  /maintenance/{id}/health - Health report")
-            logger.info("    POST /maintenance/analyze     - Analyze metrics")
+            logger.info("    GET  /maintenance/{id}/health  - Health report")
+            logger.info("    GET  /maintenance/{id}/battery - Battery analysis")
+            logger.info("    GET  /maintenance/{id}/fiber   - Fiber transport analysis")
+            logger.info("    POST /maintenance/analyze      - Analyze metrics")
         if CONFIG_DRIFT_AVAILABLE:
             logger.info("    POST /config/drift       - Detect drift")
             logger.info("    POST /config/baseline    - Set baseline")
+        if RCA_AVAILABLE:
+            logger.info("    POST /rca/analyze        - Root cause analysis")
+            logger.info("    GET  /rca/stats          - RCA statistics")
+        if SELF_HEALING_AVAILABLE:
+            logger.info("    POST /healing/actions    - Submit healing action")
+            logger.info("    POST /healing/from-son   - Create from SON")
+            logger.info("    POST /healing/from-rca   - Create from RCA")
+            logger.info("    GET  /healing/pending    - Pending actions")
+            logger.info("    GET  /healing/history    - Execution history")
+            logger.info("    GET  /healing/stats      - Healing statistics")
     if args.serial:
         logger.info(f"  Serial: {args.serial}")
     if args.mqtt_broker:

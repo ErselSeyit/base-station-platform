@@ -2,7 +2,11 @@ package com.huawei.auth.controller;
 
 import com.huawei.auth.dto.LoginRequest;
 import com.huawei.auth.dto.LoginResponse;
+import com.huawei.auth.dto.RefreshTokenRequest;
+import com.huawei.auth.dto.TokenResponse;
+import com.huawei.auth.model.RefreshToken;
 import com.huawei.auth.service.LoginAttemptService;
+import com.huawei.auth.service.RefreshTokenService;
 import com.huawei.auth.service.SecurityAuditService;
 import com.huawei.auth.service.UserService;
 import com.huawei.auth.util.JwtUtil;
@@ -33,10 +37,18 @@ public class AuthController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
+    // Constants for response keys and cookie attributes
+    private static final String ERROR_KEY = "error";
+    private static final String AUTH_TOKEN_COOKIE = "auth_token";
+    private static final String SAME_SITE_ATTR = "SameSite";
+    private static final String SAME_SITE_STRICT = "Strict";
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final JwtUtil jwtUtil;
     private final LoginAttemptService loginAttemptService;
     private final UserService userService;
     private final SecurityAuditService auditService;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${jwt.cookie.secure:true}")
     private boolean secureCookie;
@@ -44,12 +56,17 @@ public class AuthController {
     @Value("${jwt.cookie.max-age:86400}")
     private int cookieMaxAge;
 
+    @Value("${jwt.expiration:86400000}")
+    private long accessTokenExpirationMs;
+
     public AuthController(JwtUtil jwtUtil, LoginAttemptService loginAttemptService,
-                          UserService userService, SecurityAuditService auditService) {
+                          UserService userService, SecurityAuditService auditService,
+                          RefreshTokenService refreshTokenService) {
         this.jwtUtil = jwtUtil;
         this.loginAttemptService = loginAttemptService;
         this.userService = userService;
         this.auditService = auditService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Operation(
@@ -76,7 +93,7 @@ public class AuthController {
             auditService.logAccountLocked(username, clientIp, remainingSeconds);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(Map.of(
-                            "error", "Account temporarily locked due to too many failed attempts",
+                            ERROR_KEY, "Account temporarily locked due to too many failed attempts",
                             "retryAfterSeconds", remainingSeconds
                     ));
         }
@@ -91,12 +108,12 @@ public class AuthController {
             String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
 
             // Set HttpOnly cookie for secure token storage
-            Cookie authCookie = new Cookie("auth_token", token);
+            Cookie authCookie = new Cookie(AUTH_TOKEN_COOKIE, token);
             authCookie.setHttpOnly(true);
             authCookie.setSecure(secureCookie);
             authCookie.setPath("/");
             authCookie.setMaxAge(cookieMaxAge);
-            authCookie.setAttribute("SameSite", "Strict");
+            authCookie.setAttribute(SAME_SITE_ATTR, SAME_SITE_STRICT);
             httpResponse.addCookie(authCookie);
 
             // Still return token in response for backward compatibility with localStorage
@@ -110,7 +127,7 @@ public class AuthController {
             auditService.logLoginFailure(username, clientIp, "Invalid credentials", remaining);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of(
-                            "error", "Invalid credentials",
+                            ERROR_KEY, "Invalid credentials",
                             "remainingAttempts", remaining
                     ));
         }
@@ -126,17 +143,17 @@ public class AuthController {
             @Parameter(description = "JWT token (optional)") @RequestHeader(value = "Authorization", required = false) String authHeader,
             HttpServletResponse httpResponse) {
         // Clear the auth cookie
-        Cookie authCookie = new Cookie("auth_token", "");
+        Cookie authCookie = new Cookie(AUTH_TOKEN_COOKIE, "");
         authCookie.setHttpOnly(true);
         authCookie.setSecure(secureCookie);
         authCookie.setPath("/");
         authCookie.setMaxAge(0); // Delete the cookie
-        authCookie.setAttribute("SameSite", "Strict");
+        authCookie.setAttribute(SAME_SITE_ATTR, SAME_SITE_STRICT);
         httpResponse.addCookie(authCookie);
 
         // Log the logout for audit purposes
         String username = null;
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
             String token = authHeader.substring(7);
             try {
                 username = jwtUtil.extractUsername(token);
@@ -167,7 +184,7 @@ public class AuthController {
     @GetMapping("/validate")
     public ResponseEntity<Void> validateToken(
             @Parameter(description = "Bearer token", required = true) @RequestHeader("Authorization") String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
             String token = authHeader.substring(7);
             try {
                 String username = jwtUtil.extractUsername(token);
@@ -180,5 +197,105 @@ public class AuthController {
             }
         }
         return ResponseEntity.status(401).build();
+    }
+
+    @Operation(
+            summary = "Refresh access token",
+            description = "Uses a valid refresh token to obtain a new access token. " +
+                    "The refresh token is rotated for security (old token invalidated, new one issued).")
+    @ApiResponse(responseCode = "200", description = "Token refreshed successfully",
+            content = @Content(schema = @Schema(implementation = TokenResponse.class)))
+    @ApiResponse(responseCode = "401", description = "Invalid or expired refresh token")
+    @PostMapping("/refresh")
+    public ResponseEntity<Object> refreshToken(
+            @Parameter(description = "Refresh token request") @Valid @RequestBody RefreshTokenRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        String clientIp = getClientIp(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
+
+        // Verify the refresh token
+        var refreshTokenOpt = refreshTokenService.verifyRefreshToken(request.getRefreshToken());
+        if (refreshTokenOpt.isEmpty()) {
+            log.warn("Invalid refresh token from IP '{}'", clientIp);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(ERROR_KEY, "Invalid or expired refresh token"));
+        }
+
+        RefreshToken oldRefreshToken = refreshTokenOpt.get();
+        var user = oldRefreshToken.getUser();
+
+        // Check if user account is still active
+        if (!user.canLogin()) {
+            log.warn("Refresh token used for disabled account: {}", user.getUsername());
+            refreshTokenService.revokeAllUserTokens(user, "Account disabled");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(ERROR_KEY, "Account is disabled"));
+        }
+
+        // Generate new access token
+        String newAccessToken = jwtUtil.generateToken(user.getUsername(), user.getRole());
+
+        // Rotate the refresh token (revoke old, create new)
+        RefreshToken newRefreshToken = refreshTokenService.rotateRefreshToken(
+                oldRefreshToken, clientIp, userAgent);
+
+        // Set new access token cookie
+        Cookie authCookie = new Cookie(AUTH_TOKEN_COOKIE, newAccessToken);
+        authCookie.setHttpOnly(true);
+        authCookie.setSecure(secureCookie);
+        authCookie.setPath("/");
+        authCookie.setMaxAge(cookieMaxAge);
+        authCookie.setAttribute(SAME_SITE_ATTR, SAME_SITE_STRICT);
+        httpResponse.addCookie(authCookie);
+
+        log.info("Token refreshed for user '{}' from IP '{}'", user.getUsername(), clientIp);
+        auditService.logRefreshTokenUsed(user.getUsername(), clientIp);
+
+        TokenResponse response = TokenResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken.getToken())
+                .expiresIn(accessTokenExpirationMs / 1000)
+                .refreshExpiresIn(newRefreshToken.getRemainingSeconds())
+                .username(user.getUsername())
+                .role(user.getRole())
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Revoke refresh token",
+            description = "Revokes a specific refresh token, preventing it from being used to obtain new access tokens.")
+    @ApiResponse(responseCode = "200", description = "Token revoked successfully")
+    @ApiResponse(responseCode = "401", description = "Invalid token")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/revoke")
+    public ResponseEntity<Object> revokeRefreshToken(
+            @Parameter(description = "Refresh token to revoke") @Valid @RequestBody RefreshTokenRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest httpRequest) {
+        String clientIp = getClientIp(httpRequest);
+
+        // Get username from auth header for audit logging
+        String username = "unknown";
+        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
+            try {
+                username = jwtUtil.extractUsername(authHeader.substring(7));
+            } catch (Exception ignored) {
+                // Continue with unknown username
+            }
+        }
+
+        boolean revoked = refreshTokenService.revokeToken(request.getRefreshToken(), "User requested revocation");
+
+        if (revoked) {
+            log.info("Refresh token revoked by user '{}' from IP '{}'", username, clientIp);
+            auditService.logRefreshTokenRevoked(username, clientIp, "User requested");
+            return ResponseEntity.ok(Map.of("message", "Token revoked successfully"));
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(ERROR_KEY, "Token not found or already revoked"));
+        }
     }
 }

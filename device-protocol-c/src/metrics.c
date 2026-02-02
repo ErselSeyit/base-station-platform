@@ -141,6 +141,69 @@ const char *devproto_metric_name(devproto_metric_type_t type)
     case DEVPROTO_METRIC_CA_DL_THROUGHPUT:     return "CA_DL_THROUGHPUT";
     case DEVPROTO_METRIC_CA_UL_THROUGHPUT:     return "CA_UL_THROUGHPUT";
 
+    /* Power & Energy metrics (0x80-0x8F) */
+    case DEVPROTO_METRIC_UTILITY_VOLTAGE_L1:   return "UTILITY_VOLTAGE_L1";
+    case DEVPROTO_METRIC_UTILITY_VOLTAGE_L2:   return "UTILITY_VOLTAGE_L2";
+    case DEVPROTO_METRIC_UTILITY_VOLTAGE_L3:   return "UTILITY_VOLTAGE_L3";
+    case DEVPROTO_METRIC_POWER_FACTOR:         return "POWER_FACTOR";
+    case DEVPROTO_METRIC_GENERATOR_FUEL_LEVEL: return "GENERATOR_FUEL_LEVEL";
+    case DEVPROTO_METRIC_GENERATOR_RUNTIME:    return "GENERATOR_RUNTIME";
+    case DEVPROTO_METRIC_BATTERY_SOC:          return "BATTERY_SOC";
+    case DEVPROTO_METRIC_BATTERY_DOD:          return "BATTERY_DOD";
+    case DEVPROTO_METRIC_BATTERY_CELL_TEMP_MIN:return "BATTERY_CELL_TEMP_MIN";
+    case DEVPROTO_METRIC_BATTERY_CELL_TEMP_MAX:return "BATTERY_CELL_TEMP_MAX";
+    case DEVPROTO_METRIC_SOLAR_PANEL_VOLTAGE:  return "SOLAR_PANEL_VOLTAGE";
+    case DEVPROTO_METRIC_SOLAR_CHARGE_CURRENT: return "SOLAR_CHARGE_CURRENT";
+    case DEVPROTO_METRIC_SITE_POWER_KWH:       return "SITE_POWER_KWH";
+
+    /* Environmental & Safety metrics (0x90-0x9F) */
+    case DEVPROTO_METRIC_WIND_SPEED:           return "WIND_SPEED";
+    case DEVPROTO_METRIC_WIND_DIRECTION:       return "WIND_DIRECTION";
+    case DEVPROTO_METRIC_PRECIPITATION:        return "PRECIPITATION";
+    case DEVPROTO_METRIC_LIGHTNING_DISTANCE:   return "LIGHTNING_DISTANCE";
+    case DEVPROTO_METRIC_TILT_ANGLE:           return "TILT_ANGLE";
+    case DEVPROTO_METRIC_VIBRATION_LEVEL:      return "VIBRATION_LEVEL";
+    case DEVPROTO_METRIC_WATER_LEVEL:          return "WATER_LEVEL";
+    case DEVPROTO_METRIC_PM25_LEVEL:           return "PM25_LEVEL";
+    case DEVPROTO_METRIC_SMOKE_DETECTED:       return "SMOKE_DETECTED";
+    case DEVPROTO_METRIC_CO_LEVEL:             return "CO_LEVEL";
+    case DEVPROTO_METRIC_DOOR_STATUS:          return "DOOR_STATUS";
+    case DEVPROTO_METRIC_MOTION_DETECTED:      return "MOTION_DETECTED";
+
+    /* Transport/Backhaul metrics (0xA0-0xAF) */
+    case DEVPROTO_METRIC_FIBER_RX_POWER:       return "FIBER_RX_POWER";
+    case DEVPROTO_METRIC_FIBER_TX_POWER:       return "FIBER_TX_POWER";
+    case DEVPROTO_METRIC_FIBER_BER:            return "FIBER_BER";
+    case DEVPROTO_METRIC_FIBER_OSNR:           return "FIBER_OSNR";
+    case DEVPROTO_METRIC_MW_RSL:               return "MW_RSL";
+    case DEVPROTO_METRIC_MW_SNR:               return "MW_SNR";
+    case DEVPROTO_METRIC_MW_MODULATION:        return "MW_MODULATION";
+    case DEVPROTO_METRIC_ETH_UTILIZATION:      return "ETH_UTILIZATION";
+    case DEVPROTO_METRIC_ETH_ERRORS:           return "ETH_ERRORS";
+    case DEVPROTO_METRIC_ETH_LATENCY:          return "ETH_LATENCY";
+    case DEVPROTO_METRIC_PTP_OFFSET:           return "PTP_OFFSET";
+    case DEVPROTO_METRIC_GPS_SATELLITES:       return "GPS_SATELLITES";
+
+    /* Advanced Radio metrics (0xB0-0xBF) */
+    case DEVPROTO_METRIC_BEAM_WEIGHT_MAG:      return "BEAM_WEIGHT_MAG";
+    case DEVPROTO_METRIC_BEAM_WEIGHT_PHASE:    return "BEAM_WEIGHT_PHASE";
+    case DEVPROTO_METRIC_PRECODING_RANK:       return "PRECODING_RANK";
+    case DEVPROTO_METRIC_PIM_LEVEL:            return "PIM_LEVEL";
+    case DEVPROTO_METRIC_CO_CHANNEL_INTERF:    return "CO_CHANNEL_INTERFERENCE";
+    case DEVPROTO_METRIC_OCCUPIED_BANDWIDTH:   return "OCCUPIED_BANDWIDTH";
+    case DEVPROTO_METRIC_ACLR:                 return "ACLR";
+    case DEVPROTO_METRIC_GTP_THROUGHPUT:       return "GTP_THROUGHPUT";
+    case DEVPROTO_METRIC_PACKET_DELAY:         return "PACKET_DELAY";
+    case DEVPROTO_METRIC_RRC_SETUP_SUCCESS:    return "RRC_SETUP_SUCCESS";
+    case DEVPROTO_METRIC_PAGING_SUCCESS:       return "PAGING_SUCCESS";
+
+    /* Network Slicing metrics (0xC0-0xCF) */
+    case DEVPROTO_METRIC_SLICE_THROUGHPUT:     return "SLICE_THROUGHPUT";
+    case DEVPROTO_METRIC_SLICE_LATENCY:        return "SLICE_LATENCY";
+    case DEVPROTO_METRIC_SLICE_PACKET_LOSS:    return "SLICE_PACKET_LOSS";
+    case DEVPROTO_METRIC_SLICE_PRB_UTIL:       return "SLICE_PRB_UTIL";
+    case DEVPROTO_METRIC_SLICE_SLA_COMPLIANCE: return "SLICE_SLA_COMPLIANCE";
+
     /* Special */
     case DEVPROTO_METRIC_ALL:              return "ALL_METRICS";
     default:                               return "UNKNOWN";

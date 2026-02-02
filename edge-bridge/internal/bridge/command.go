@@ -6,9 +6,9 @@ import (
 	"log"
 	"strings"
 
-	"github.com/huawei/edge-bridge/internal/cloud"
-	"github.com/huawei/edge-bridge/internal/device"
-	"github.com/huawei/edge-bridge/internal/protocol"
+	"edge-bridge/internal/cloud"
+	"edge-bridge/internal/device"
+	"edge-bridge/internal/protocol"
 )
 
 // CommandExecutor handles command execution from the cloud.

@@ -1,8 +1,11 @@
 package com.huawei.basestation.repository;
 
 import com.huawei.basestation.model.BaseStation;
+import com.huawei.basestation.model.Organization;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.model.StationType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -110,5 +113,123 @@ public interface BaseStationRepository extends JpaRepository<BaseStation, Long> 
             @Param("lat") Double lat,
             @Param("lon") Double lon,
             @Param("radiusKm") Double radiusKm);
+
+    // ========================================================================
+    // Multi-tenancy (Organization-scoped) methods
+    // ========================================================================
+
+    /**
+     * Finds all base stations belonging to an organization.
+     *
+     * @param organization the organization (must not be null)
+     * @return a list of base stations (never null, may be empty)
+     */
+    List<BaseStation> findByOrganization(Organization organization);
+
+    /**
+     * Finds all base stations belonging to an organization with pagination.
+     *
+     * @param organization the organization (must not be null)
+     * @param pageable pagination parameters
+     * @return a page of base stations
+     */
+    Page<BaseStation> findByOrganization(Organization organization, Pageable pageable);
+
+    /**
+     * Finds all base stations by organization ID.
+     *
+     * @param organizationId the organization ID (must not be null)
+     * @return a list of base stations (never null, may be empty)
+     */
+    List<BaseStation> findByOrganizationId(Long organizationId);
+
+    /**
+     * Finds all base stations by organization ID with pagination.
+     *
+     * @param organizationId the organization ID (must not be null)
+     * @param pageable pagination parameters
+     * @return a page of base stations
+     */
+    Page<BaseStation> findByOrganizationId(Long organizationId, Pageable pageable);
+
+    /**
+     * Finds base stations by organization and status.
+     *
+     * @param organizationId the organization ID
+     * @param status the station status
+     * @return a list of base stations
+     */
+    List<BaseStation> findByOrganizationIdAndStatus(Long organizationId, StationStatus status);
+
+    /**
+     * Finds base stations by organization and type.
+     *
+     * @param organizationId the organization ID
+     * @param stationType the station type
+     * @return a list of base stations
+     */
+    List<BaseStation> findByOrganizationIdAndStationType(Long organizationId, StationType stationType);
+
+    /**
+     * Counts base stations by organization.
+     *
+     * @param organizationId the organization ID
+     * @return the count
+     */
+    long countByOrganizationId(Long organizationId);
+
+    /**
+     * Counts base stations by organization and status.
+     *
+     * @param organizationId the organization ID
+     * @param status the station status
+     * @return the count
+     */
+    long countByOrganizationIdAndStatus(Long organizationId, StationStatus status);
+
+    /**
+     * Finds a station by name within an organization.
+     *
+     * @param stationName the station name
+     * @param organizationId the organization ID
+     * @return the station if found
+     */
+    Optional<BaseStation> findByStationNameAndOrganizationId(String stationName, Long organizationId);
+
+    /**
+     * Finds stations in area scoped by organization.
+     *
+     * @param organizationId the organization ID
+     * @param minLat minimum latitude
+     * @param maxLat maximum latitude
+     * @param minLon minimum longitude
+     * @param maxLon maximum longitude
+     * @return stations within the area for the organization
+     */
+    @Query("SELECT bs FROM BaseStation bs WHERE bs.organization.id = :orgId " +
+           "AND bs.latitude BETWEEN :minLat AND :maxLat " +
+           "AND bs.longitude BETWEEN :minLon AND :maxLon")
+    List<BaseStation> findStationsInAreaByOrganization(
+            @Param("orgId") Long organizationId,
+            @Param("minLat") Double minLat,
+            @Param("maxLat") Double maxLat,
+            @Param("minLon") Double minLon,
+            @Param("maxLon") Double maxLon);
+
+    /**
+     * Search stations by name or location within an organization.
+     *
+     * @param organizationId the organization ID
+     * @param keyword search keyword
+     * @param pageable pagination parameters
+     * @return matching stations
+     */
+    @Query("SELECT bs FROM BaseStation bs WHERE bs.organization.id = :orgId " +
+           "AND (LOWER(bs.stationName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR LOWER(bs.location) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+    Page<BaseStation> searchByOrganization(
+            @Param("orgId") Long organizationId,
+            @Param("keyword") String keyword,
+            Pageable pageable);
 }
 

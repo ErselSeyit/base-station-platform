@@ -16,38 +16,35 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ConfirmDialog from '../components/ConfirmDialog'
 import LoadingSpinner from '../components/LoadingSpinner'
 import StationFormDialog from '../components/StationFormDialog'
+import { getStationStatusColor } from '../constants/designSystem'
 import { stationApi } from '../services/api'
 import { BaseStation, StationStatus, StationType } from '../types'
+import { ensureArray } from '../utils/arrayUtils'
+import { showToast } from '../utils/toast'
 
-// Helper function to get status color CSS variable
-function getStatusColor(status: string): string {
-  switch (status) {
-    case 'ACTIVE':
-      return 'var(--status-active)'
-    case 'MAINTENANCE':
-      return 'var(--status-maintenance)'
-    case 'OFFLINE':
-      return 'var(--status-offline)'
-    default:
-      return 'var(--status-offline)'
-  }
-}
+// Default form data for new stations
+const DEFAULT_FORM_DATA: Partial<BaseStation> = {
+  stationName: '',
+  location: '',
+  latitude: 0,
+  longitude: 0,
+  stationType: StationType.MACRO_CELL,
+  status: StationStatus.ACTIVE,
+  powerConsumption: 1500,
+} as const
 
 export default function Stations() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [openDialog, setOpenDialog] = useState(false)
   const [editingStation, setEditingStation] = useState<BaseStation | null>(null)
-  const [formData, setFormData] = useState<Partial<BaseStation>>({
-    stationName: '',
-    location: '',
-    latitude: 0,
-    longitude: 0,
-    stationType: StationType.MACRO_CELL,
-    status: StationStatus.ACTIVE,
-    powerConsumption: 1500,
+  const [formData, setFormData] = useState<Partial<BaseStation>>({ ...DEFAULT_FORM_DATA })
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; stationId: number | null }>({
+    open: false,
+    stationId: null,
   })
 
   const { data, isLoading, error } = useQuery({
@@ -58,7 +55,7 @@ export default function Stations() {
     },
   })
 
-  const stations = Array.isArray(data) ? data : []
+  const stations = ensureArray(data as BaseStation[])
 
   const createMutation = useMutation({
     mutationFn: stationApi.create,
@@ -66,6 +63,10 @@ export default function Stations() {
       queryClient.invalidateQueries({ queryKey: ['stations'] })
       setOpenDialog(false)
       resetForm()
+      showToast.success('Station created successfully')
+    },
+    onError: (error: Error) => {
+      showToast.error(`Failed to create station: ${error.message}`)
     },
   })
 
@@ -75,6 +76,10 @@ export default function Stations() {
       queryClient.invalidateQueries({ queryKey: ['stations'] })
       setOpenDialog(false)
       resetForm()
+      showToast.success('Station updated successfully')
+    },
+    onError: (error: Error) => {
+      showToast.error(`Failed to update station: ${error.message}`)
     },
   })
 
@@ -82,19 +87,15 @@ export default function Stations() {
     mutationFn: stationApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stations'] })
+      showToast.success('Station deleted successfully')
+    },
+    onError: (error: Error) => {
+      showToast.error(`Failed to delete station: ${error.message}`)
     },
   })
 
   const resetForm = () => {
-    setFormData({
-      stationName: '',
-      location: '',
-      latitude: 0,
-      longitude: 0,
-      stationType: StationType.MACRO_CELL,
-      status: StationStatus.ACTIVE,
-      powerConsumption: 1500,
-    })
+    setFormData({ ...DEFAULT_FORM_DATA })
     setEditingStation(null)
   }
 
@@ -113,24 +114,25 @@ export default function Stations() {
 
   const handleSubmit = () => {
     if (editingStation?.id) {
-      updateMutation.mutate({ id: editingStation.id, data: formData }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['stations'] })
-        },
-      })
+      updateMutation.mutate({ id: editingStation.id, data: formData })
     } else {
-      createMutation.mutate(formData as BaseStation, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['stations'] })
-        },
-      })
+      createMutation.mutate(formData as BaseStation)
     }
   }
 
   const handleDelete = (stationId: number) => {
-    if (globalThis.confirm('Are you sure you want to delete this station?')) {
-      deleteMutation.mutate(stationId)
+    setDeleteConfirm({ open: true, stationId })
+  }
+
+  const confirmDelete = () => {
+    if (deleteConfirm.stationId !== null) {
+      deleteMutation.mutate(deleteConfirm.stationId)
     }
+    setDeleteConfirm({ open: false, stationId: null })
+  }
+
+  const cancelDelete = () => {
+    setDeleteConfirm({ open: false, stationId: null })
   }
 
   if (isLoading) {
@@ -234,7 +236,9 @@ export default function Stations() {
             </Typography>
           </Box>
         ) : (
-          stations.map((station: BaseStation, idx: number) => (
+          stations.map((station: BaseStation, idx: number) => {
+            const stationId = station.id
+            return (
             <Box
               component={motion.div}
               key={station.id}
@@ -269,7 +273,7 @@ export default function Stations() {
                       width: '8px',
                       height: '8px',
                       borderRadius: '50%',
-                      background: getStatusColor(station.status),
+                      background: getStationStatusColor(station.status),
                     }}
                   />
                   <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--mono-700)' }}>
@@ -311,7 +315,7 @@ export default function Stations() {
                     color: 'var(--mono-700)',
                     '&:hover': {
                       borderColor: 'var(--mono-400)',
-                      background: 'var(--mono-50)',
+                      background: 'var(--surface-hover)',
                     },
                   }}
                 >
@@ -319,37 +323,41 @@ export default function Stations() {
                 </Button>
                 <IconButton
                   size="small"
+                  aria-label={`Edit ${station.stationName}`}
                   onClick={() => handleOpenDialog(station)}
                   sx={{
                     border: '1px solid var(--surface-border)',
                     borderRadius: '8px',
                     color: 'var(--mono-600)',
                     '&:hover': {
-                      background: 'var(--mono-100)',
+                      background: 'var(--surface-hover)',
                     },
                   }}
                 >
                   <EditIcon sx={{ fontSize: '16px' }} />
                 </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => handleDelete(station.id!)}
-                  sx={{
-                    border: '1px solid var(--surface-border)',
-                    borderRadius: '8px',
-                    color: 'var(--mono-600)',
-                    '&:hover': {
-                      background: 'var(--accent-error)',
-                      color: 'white',
-                      borderColor: 'var(--accent-error)',
-                    },
-                  }}
-                >
-                  <DeleteIcon sx={{ fontSize: '16px' }} />
-                </IconButton>
+                {typeof stationId === 'number' && (
+                  <IconButton
+                    size="small"
+                    aria-label={`Delete ${station.stationName}`}
+                    onClick={() => handleDelete(stationId)}
+                    sx={{
+                      border: '1px solid var(--surface-border)',
+                      borderRadius: '8px',
+                      color: 'var(--mono-600)',
+                      '&:hover': {
+                        background: 'var(--accent-error)',
+                        color: 'white',
+                        borderColor: 'var(--accent-error)',
+                      },
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: '16px' }} />
+                  </IconButton>
+                )}
               </Box>
             </Box>
-          ))
+          )})
         )}
       </Box>
 
@@ -369,8 +377,8 @@ export default function Stations() {
       >
         <Box sx={{ overflowX: 'auto' }}>
           <Box component="table" className="data-table" sx={{ width: '100%', minWidth: '800px' }}>
-            <Box component="thead">
-              <Box component="tr">
+            <thead>
+              <tr>
                 <Box component="th" sx={{ width: '60px' }}>ID</Box>
                 <Box component="th">Station Name</Box>
                 <Box component="th">Location</Box>
@@ -378,19 +386,21 @@ export default function Stations() {
                 <Box component="th" sx={{ width: '120px' }}>Status</Box>
                 <Box component="th" sx={{ width: '100px', textAlign: 'right' }}>Power</Box>
                 <Box component="th" sx={{ width: '120px', textAlign: 'right' }}>Actions</Box>
-              </Box>
-            </Box>
-            <Box component="tbody">
+              </tr>
+            </thead>
+            <tbody>
               {stations.length === 0 && !isLoading ? (
-                <Box component="tr">
+                <tr>
                   <Box component="td" colSpan={7} sx={{ textAlign: 'center', padding: '48px 24px' }}>
                     <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
                       {error ? `Error loading stations: ${error.message}` : 'No stations found. Click "Add Station" to create one.'}
                     </Typography>
                   </Box>
-                </Box>
+                </tr>
               ) : (
-                stations.map((station: BaseStation, idx: number) => (
+                stations.map((station: BaseStation, idx: number) => {
+                  const stationId = station.id
+                  return (
                   <Box
                     component={motion.tr}
                     key={station.id}
@@ -428,7 +438,7 @@ export default function Stations() {
                             width: '6px',
                             height: '6px',
                             borderRadius: '50%',
-                            background: getStatusColor(station.status),
+                            background: getStationStatusColor(station.status),
                           }}
                         />
                         <Typography sx={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--mono-700)' }}>
@@ -446,6 +456,7 @@ export default function Stations() {
                         <Tooltip title="View Details">
                           <IconButton
                             size="small"
+                            aria-label={`View details for ${station.stationName}`}
                             onClick={() => navigate(`/stations/${station.id}`)}
                             sx={{
                               width: '28px',
@@ -453,7 +464,7 @@ export default function Stations() {
                               color: 'var(--mono-600)',
                               transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
                               '&:hover': {
-                                background: 'var(--mono-100)',
+                                background: 'var(--surface-hover)',
                                 color: 'var(--mono-950)',
                               },
                             }}
@@ -464,6 +475,7 @@ export default function Stations() {
                         <Tooltip title="Edit">
                           <IconButton
                             size="small"
+                            aria-label={`Edit ${station.stationName}`}
                             onClick={() => handleOpenDialog(station)}
                             sx={{
                               width: '28px',
@@ -471,7 +483,7 @@ export default function Stations() {
                               color: 'var(--mono-600)',
                               transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
                               '&:hover': {
-                                background: 'var(--mono-100)',
+                                background: 'var(--surface-hover)',
                                 color: 'var(--mono-950)',
                               },
                             }}
@@ -479,30 +491,33 @@ export default function Stations() {
                             <EditIcon sx={{ fontSize: '16px' }} />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDelete(station.id!)}
-                            sx={{
-                              width: '28px',
-                              height: '28px',
-                              color: 'var(--mono-600)',
-                              transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-                              '&:hover': {
-                                background: 'var(--accent-error)',
-                                color: 'white',
-                              },
-                            }}
-                          >
-                            <DeleteIcon sx={{ fontSize: '16px' }} />
-                          </IconButton>
-                        </Tooltip>
+                        {typeof stationId === 'number' && (
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              aria-label={`Delete ${station.stationName}`}
+                              onClick={() => handleDelete(stationId)}
+                              sx={{
+                                width: '28px',
+                                height: '28px',
+                                color: 'var(--mono-600)',
+                                transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                                '&:hover': {
+                                  background: 'var(--accent-error)',
+                                  color: 'white',
+                                },
+                              }}
+                            >
+                              <DeleteIcon sx={{ fontSize: '16px' }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Box>
                     </Box>
                   </Box>
-                ))
+                )})
               )}
-            </Box>
+            </tbody>
           </Box>
         </Box>
       </Box>
@@ -515,6 +530,17 @@ export default function Stations() {
         formData={formData}
         setFormData={setFormData}
         isSubmitting={createMutation.isPending || updateMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        title="Delete Station"
+        message="Are you sure you want to delete this station? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        isDestructive
       />
     </Box>
   )

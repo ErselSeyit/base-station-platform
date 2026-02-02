@@ -191,7 +191,7 @@ class VirtualMIPSBaseStation:
             cpu_temp=45.0,
             cpu_usage=25.0,
             memory_usage=40.0,
-            power_consumption=1200.0,
+            power_consumption=1500.0,  # Match configured station power
             signal_strength=-85.0,
             active_connections=50,
             uptime_seconds=0,
@@ -213,8 +213,10 @@ class VirtualMIPSBaseStation:
         if self.state.memory_usage > 95:
             self.state.memory_usage = 40  # Simulated restart
 
-        # Power consumption varies with load
-        self.state.power_consumption = 800 + (self.state.cpu_usage * 15) + random.uniform(-50, 50)
+        # Power consumption varies with load (baseline 1500W, ±300W based on CPU)
+        base_power = 1500.0  # Match configured station power
+        load_factor = (self.state.cpu_usage - 50) / 50  # -1 to +1 normalized
+        self.state.power_consumption = base_power + (load_factor * 300) + random.uniform(-50, 50)
 
         # Signal strength fluctuates
         self.state.signal_strength += random.uniform(-3, 3)

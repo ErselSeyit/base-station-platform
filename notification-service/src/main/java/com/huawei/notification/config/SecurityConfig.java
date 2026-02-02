@@ -11,6 +11,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import com.huawei.notification.filter.HeaderAuthenticationFilter;
 
+import static com.huawei.common.security.Roles.*;
+
 /**
  * Security configuration for notification-service.
  *
@@ -37,9 +39,13 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())  // CSRF disabled - stateless API with JWT
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Permit health and actuator endpoints
-                .requestMatchers("/actuator/**").permitAll()
+                // Permit only health check publicly, secure other actuator endpoints
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers("/actuator/**").hasRole(ADMIN)
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                // Notifications - read for all authenticated, send/manage for operators+
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/notifications/**").hasAnyRole(ADMIN, OPERATOR, USER)
+                .requestMatchers("/api/v1/notifications/**").hasAnyRole(ADMIN, OPERATOR)
                 // All other requests require authentication
                 .anyRequest().authenticated()
             )

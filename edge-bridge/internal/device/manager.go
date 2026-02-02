@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/huawei/edge-bridge/internal/protocol"
-	"github.com/huawei/edge-bridge/internal/transport"
+	"edge-bridge/internal/protocol"
+	"edge-bridge/internal/transport"
 )
 
 // Manager errors

@@ -16,10 +16,11 @@ Features:
 import logging
 from typing import List, Dict, Any, Optional, Set
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import json
 import hashlib
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +178,7 @@ class ConfigDriftDetectionService:
             )
 
         self.baselines[station_id] = baseline
-        self.baseline_timestamps[station_id] = timestamp or datetime.utcnow()
+        self.baseline_timestamps[station_id] = timestamp or datetime.now(timezone.utc)
 
         logger.info(
             "Set baseline for station %s with %d parameters",
@@ -205,7 +206,7 @@ class ConfigDriftDetectionService:
             return DriftReport(
                 station_id=station_id,
                 baseline_timestamp=self.baseline_timestamps[station_id],
-                current_timestamp=datetime.utcnow(),
+                current_timestamp=datetime.now(timezone.utc),
                 total_parameters=len(current_config),
                 drifts=[],
                 compliance_score=100.0,
@@ -248,7 +249,7 @@ class ConfigDriftDetectionService:
             baseline_value = baseline[param].value
             current_value = current_config[param]
 
-            if type(baseline_value) != type(current_value):
+            if not isinstance(current_value, type(baseline_value)):
                 drifts.append(self._create_drift(
                     param,
                     DriftType.TYPE_CHANGED,
@@ -279,7 +280,7 @@ class ConfigDriftDetectionService:
         return DriftReport(
             station_id=station_id,
             baseline_timestamp=self.baseline_timestamps[station_id],
-            current_timestamp=datetime.utcnow(),
+            current_timestamp=datetime.now(timezone.utc),
             total_parameters=total_params,
             drifts=drifts,
             compliance_score=compliance_score,
@@ -474,13 +475,16 @@ class ConfigDriftDetectionService:
         )
 
 
-# Singleton instance
+# Singleton instance with thread-safe initialization
 _config_service: Optional[ConfigDriftDetectionService] = None
+_config_service_lock = threading.Lock()
 
 
 def get_config_drift_service() -> ConfigDriftDetectionService:
-    """Get or create singleton ConfigDriftDetectionService instance."""
+    """Get or create singleton ConfigDriftDetectionService instance (thread-safe)."""
     global _config_service
     if _config_service is None:
-        _config_service = ConfigDriftDetectionService()
+        with _config_service_lock:
+            if _config_service is None:  # Double-check locking
+                _config_service = ConfigDriftDetectionService()
     return _config_service

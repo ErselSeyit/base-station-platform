@@ -45,15 +45,24 @@ public class SecurityConfig {
     private static final String HEADER_USER_NAME = "X-User-Name";
     private static final String HEADER_USER_ROLE = "X-User-Role";
 
+    // Role constants
+    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_OPERATOR = "OPERATOR";
+    private static final String ROLE_USER = "USER";
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())  // CSRF disabled - stateless API with JWT
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Permit health and actuator endpoints
-                .requestMatchers("/actuator/**").permitAll()
+                // Permit only health check publicly, secure other actuator endpoints
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers("/actuator/**").hasRole(ROLE_ADMIN)
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                // Station endpoints - read for all authenticated, modify for operators+
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/stations/**").hasAnyRole(ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER)
+                .requestMatchers("/api/v1/stations/**").hasAnyRole(ROLE_ADMIN, ROLE_OPERATOR)
                 // All other requests require authentication
                 .anyRequest().authenticated()
             )

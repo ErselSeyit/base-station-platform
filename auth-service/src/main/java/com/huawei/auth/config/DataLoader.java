@@ -43,21 +43,27 @@ public class DataLoader {
                 return;
             }
 
-            // Create default admin user if not exists
-            if (!userRepository.existsByUsername(adminUsername)) {
-                userService.createUser(adminUsername, adminPassword, "ROLE_ADMIN");
-                log.info("Created default admin user: {}", adminUsername);
-            } else {
-                log.debug("Admin user already exists: {}", adminUsername);
-            }
+            // Create or update admin user - always sync password from config
+            createOrUpdateUser(userRepository, userService, adminUsername, adminPassword, "ROLE_ADMIN");
 
-            // Create bridge service account if not exists (uses same password as admin for simplicity)
-            if (!userRepository.existsByUsername(bridgeUsername)) {
-                userService.createUser(bridgeUsername, adminPassword, "ROLE_SERVICE");
-                log.info("Created bridge service account: {}", bridgeUsername);
-            } else {
-                log.debug("Bridge user already exists: {}", bridgeUsername);
-            }
+            // Create or update bridge service account
+            createOrUpdateUser(userRepository, userService, bridgeUsername, adminPassword, "ROLE_SERVICE");
         };
+    }
+
+    /**
+     * Creates a user if not exists, or updates the password if it does.
+     * This ensures passwords stay in sync with the configured values.
+     */
+    private void createOrUpdateUser(UserRepository userRepository, UserService userService,
+                                     String username, String password, String role) {
+        if (!userRepository.existsByUsername(username)) {
+            userService.createUser(username, password, role);
+            log.info("Created user: {} with role: {}", username, role);
+        } else {
+            // Update password to ensure it matches the configured value
+            userService.updatePassword(username, password);
+            log.info("Updated password for user: {}", username);
+        }
     }
 }

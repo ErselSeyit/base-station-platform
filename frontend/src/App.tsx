@@ -14,6 +14,9 @@ const Alerts = lazy(() => import('./pages/Alerts'))
 const Metrics = lazy(() => import('./pages/Metrics'))
 const AIDiagnostics = lazy(() => import('./pages/AIDiagnostics'))
 const Reports = lazy(() => import('./pages/Reports'))
+const FiveGDashboard = lazy(() => import('./pages/FiveGDashboard'))
+const PowerDashboard = lazy(() => import('./pages/PowerDashboard'))
+const SONRecommendations = lazy(() => import('./pages/SONRecommendations'))
 const Login = lazy(() => import('./pages/Login'))
 
 // Loading fallback component
@@ -55,6 +58,11 @@ function App() {
                     <Route path="/metrics" element={<Metrics />} />
                     <Route path="/ai-diagnostics" element={<AIDiagnostics />} />
                     <Route path="/reports" element={<Reports />} />
+                    <Route path="/5g" element={<FiveGDashboard />} />
+                    <Route path="/power" element={<PowerDashboard />} />
+                    <Route path="/son" element={<SONRecommendations />} />
+                    {/* 404 catch-all */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

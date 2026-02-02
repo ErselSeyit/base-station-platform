@@ -5,35 +5,32 @@ import { formatDistanceToNow } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import { notificationsApi } from '../services/api'
 import { Notification } from '../types'
+import { ensureArray } from '../utils/arrayUtils'
 import PulsingStatus from './PulsingStatus'
-
-function getSeverityColor(severity?: string): string {
-  if (!severity) return 'var(--status-info)'
-  switch (severity.toUpperCase()) {
-    case 'CRITICAL':
-      return 'var(--status-offline)'
-    case 'WARNING':
-      return 'var(--status-maintenance)'
-    case 'INFO':
-      return 'var(--status-info)'
-    default:
-      return 'var(--status-info)'
-  }
-}
+import { getSeverityColorVar, POLLING_INTERVALS } from '../constants/designSystem'
 
 export default function LiveActivityFeed() {
-  const { data: notifications } = useQuery({
+  const { data: notifications, error } = useQuery({
     queryKey: ['recent-notifications'],
     queryFn: async () => {
       const response = await notificationsApi.getAll()
       return response.data
     },
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: POLLING_INTERVALS.FAST,
   })
 
-  const recentNotifications = Array.isArray(notifications)
-    ? notifications.slice(0, 5)
-    : []
+  const recentNotifications = ensureArray(notifications as Notification[]).slice(0, 5)
+
+  // Show error state if API fails
+  if (error) {
+    return (
+      <Box>
+        <Typography variant="body2" sx={{ textAlign: 'center', py: 4, color: 'var(--status-offline)' }}>
+          Unable to load activity feed
+        </Typography>
+      </Box>
+    )
+  }
 
   return (
     <Box>
@@ -84,20 +81,19 @@ export default function LiveActivityFeed() {
                   p: 2,
                   mb: 1.5,
                   borderRadius: 2,
-                  background: 'var(--mono-50)',
+                  background: 'var(--surface-elevated)',
                   borderLeft: '3px solid',
-                  borderColor: getSeverityColor(notification.severity),
-                  cursor: 'pointer',
+                  borderColor: getSeverityColorVar(notification.severity),
                   transition: 'all 0.2s ease',
                   '&:hover': {
-                    background: 'var(--mono-100)',
+                    background: 'var(--surface-hover)',
                     transform: 'translateX(4px)',
                   },
                 }}
               >
                 <Box sx={{ mt: 0.5 }}>
                   <PulsingStatus
-                    color={getSeverityColor(notification.severity)}
+                    color={getSeverityColorVar(notification.severity)}
                     size={10}
                     animate={notification.status === 'UNREAD'}
                   />
