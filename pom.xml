@@ -20,6 +20,7 @@
         <module>notification-service</module>
         <module>api-gateway</module>
         <module>auth-service</module>
+        <module>tmf-api</module>
     </modules>
 
     <properties>

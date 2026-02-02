@@ -24,6 +24,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Modern RNG (replaces deprecated np.random functions)
+_rng = np.random.default_rng(42)
+
 # Professional color palette
 COLORS = {
     "primary": "#1a73e8",
@@ -83,8 +86,9 @@ class BIReportGenerator:
     def authenticate(self) -> bool:
         """Get JWT token"""
         try:
-            # Use environment variable for password, fallback to default
-            admin_password = os.environ.get("AUTH_ADMIN_PASSWORD", "admin")
+            admin_password = os.environ.get("AUTH_ADMIN_PASSWORD")
+            if not admin_password:
+                raise ValueError("AUTH_ADMIN_PASSWORD environment variable is required")
             response = requests.post(
                 f"{self.api_url}/api/v1/auth/login",
                 json={"username": "admin", "password": admin_password},
@@ -1030,7 +1034,7 @@ class BIReportGenerator:
                         avg = np.mean(values)
                         # Simulate sector variation
                         for j in range(3):
-                            data[i, j] = avg + np.random.uniform(-3, 3)
+                            data[i, j] = avg + _rng.uniform(-3, 3)
 
                 self._create_heatmap(ax, data, station_ids, sectors, title, cmap, vmin, vmax)
             else:

@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
 @Table(name = "base_stations", indexes = {
     @Index(name = "idx_geo_coordinates", columnList = "latitude, longitude"),
     @Index(name = "idx_station_status", columnList = "status"),
-    @Index(name = "idx_station_type", columnList = "stationType")
+    @Index(name = "idx_station_type", columnList = "stationType"),
+    @Index(name = "idx_station_org", columnList = "organization_id")
 })
 @EntityListeners(AuditingEntityListener.class)
 public class BaseStation {
@@ -22,6 +23,10 @@ public class BaseStation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_id")
+    private Organization organization;
 
     @NotBlank(message = "Station name is required")
     @Column(nullable = false, unique = true)
@@ -81,6 +86,14 @@ public class BaseStation {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public Organization getOrganization() {
+        return organization;
+    }
+
+    public void setOrganization(Organization organization) {
+        this.organization = organization;
     }
 
     public String getStationName() {

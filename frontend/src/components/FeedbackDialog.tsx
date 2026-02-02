@@ -19,6 +19,7 @@ import {
 } from '@mui/material'
 import { useState } from 'react'
 import { DiagnosticSession, diagnosticsApi, FeedbackRequest } from '../services/api'
+import { CSS_VARS } from '../constants/designSystem'
 
 interface FeedbackDialogProps {
   open: boolean
@@ -33,6 +34,7 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Rea
   const [operatorNotes, setOperatorNotes] = useState('')
   const [actualOutcome, setActualOutcome] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const handleSubmit = async () => {
     if (!session || wasEffective === null) return
@@ -51,6 +53,7 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Rea
       handleClose()
     } catch (error) {
       console.error('Failed to submit feedback:', error)
+      setSubmitError('Failed to submit feedback. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -61,6 +64,7 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Rea
     setRating(0)
     setOperatorNotes('')
     setActualOutcome('')
+    setSubmitError(null)
     onClose()
   }
 
@@ -136,9 +140,9 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Rea
               py: 2,
               borderRadius: '12px !important',
               borderColor: wasEffective === true ? 'var(--status-active) !important' : 'var(--surface-border)',
-              backgroundColor: wasEffective === true ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
+              backgroundColor: wasEffective === true ? CSS_VARS.statusActiveBg : 'transparent',
               '&:hover': {
-                backgroundColor: 'rgba(34, 197, 94, 0.05)',
+                backgroundColor: CSS_VARS.statusActiveBgSubtle,
               }
             }}
           >
@@ -154,9 +158,9 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Rea
               py: 2,
               borderRadius: '12px !important',
               borderColor: wasEffective === false ? 'var(--status-offline) !important' : 'var(--surface-border)',
-              backgroundColor: wasEffective === false ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+              backgroundColor: wasEffective === false ? CSS_VARS.statusErrorBg : 'transparent',
               '&:hover': {
-                backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                backgroundColor: CSS_VARS.statusErrorBgSubtle,
               }
             }}
           >
@@ -177,11 +181,12 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Rea
               {[1, 2, 3, 4, 5].map((star) => (
                 <IconButton
                   key={star}
+                  aria-label={`Rate ${star} out of 5 stars`}
                   onClick={() => setRating(star)}
                   sx={{
                     p: 0.5,
-                    color: star <= rating ? '#f59e0b' : 'var(--mono-400)',
-                    '&:hover': { color: '#f59e0b' }
+                    color: star <= rating ? CSS_VARS.colorAmber500 : 'var(--mono-400)',
+                    '&:hover': { color: CSS_VARS.colorAmber500 }
                   }}
                 >
                   {star <= rating ? <StarIcon /> : <StarBorderIcon />}
@@ -216,6 +221,23 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Rea
           onChange={(e) => setOperatorNotes(e.target.value)}
           placeholder="Any additional context or observations..."
         />
+
+        {/* Error message */}
+        {submitError && (
+          <Typography
+            role="alert"
+            sx={{
+              mt: 2,
+              p: 1.5,
+              borderRadius: '8px',
+              background: CSS_VARS.statusErrorBg,
+              color: 'var(--status-offline)',
+              fontSize: '0.875rem',
+            }}
+          >
+            {submitError}
+          </Typography>
+        )}
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -223,7 +245,7 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Rea
           onClick={handleClose}
           sx={{
             color: 'var(--mono-600)',
-            '&:hover': { backgroundColor: 'var(--mono-100)' }
+            '&:hover': { backgroundColor: 'var(--surface-hover)' }
           }}
         >
           Cancel

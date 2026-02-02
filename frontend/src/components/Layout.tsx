@@ -1,8 +1,11 @@
 import {
+  AutoFixHigh as SONIcon,
   BarChart as BarChartIcon,
+  Bolt as PowerIcon,
   CellTower as CellTowerIcon,
   Dashboard as DashboardIcon,
   DarkMode as DarkModeIcon,
+  FiveG as FiveGIcon,
   LightMode as LightModeIcon,
   Logout as LogoutIcon,
   Map as MapIcon,
@@ -27,11 +30,13 @@ import {
   Typography,
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { notificationsApi } from '../services/api'
 import { authService } from '../services/authService'
 import { Notification } from '../types'
+import { ensureArray } from '../utils/arrayUtils'
+import { POLLING_INTERVALS } from '../constants/designSystem'
 
 const drawerWidth = 240
 
@@ -41,11 +46,14 @@ interface LayoutProps {
 
 const getMenuItems = (unreadCount: number) => [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
+  { text: '5G Network', icon: <FiveGIcon />, path: '/5g' },
+  { text: 'Power & Env', icon: <PowerIcon />, path: '/power' },
   { text: 'Stations', icon: <CellTowerIcon />, path: '/stations' },
   { text: 'Map View', icon: <MapIcon />, path: '/map' },
   { text: 'Alerts', icon: <NotificationsIcon />, path: '/alerts', badge: unreadCount },
   { text: 'Metrics', icon: <BarChartIcon />, path: '/metrics' },
   { text: 'AI Diagnostics', icon: <AIIcon />, path: '/ai-diagnostics' },
+  { text: 'SON', icon: <SONIcon />, path: '/son' },
   { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
 ]
 
@@ -107,7 +115,7 @@ function DrawerContent({ menuItems, currentPath, onNavigate }: DrawerContentProp
                   },
                 },
                 '&:hover': {
-                  background: 'var(--mono-100)',
+                  background: 'var(--surface-hover)',
                 },
               }}
             >
@@ -169,22 +177,23 @@ export default function Layout({ children }: LayoutProps) {
     localStorage.setItem('theme', isDark ? 'dark' : 'light')
   }, [isDark])
 
-  const { data: notifications } = useQuery({
+  const { data: notifications, error: notificationsError } = useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
       const response = await notificationsApi.getAll()
       return response.data
     },
-    refetchInterval: 30000,
+    refetchInterval: POLLING_INTERVALS.NORMAL,
   })
 
-  const notificationsList = Array.isArray(notifications) ? notifications : []
+  // Gracefully handle error - show 0 unread if query fails
+  const notificationsList = notificationsError ? [] : ensureArray(notifications as Notification[])
   // Count both UNREAD and PENDING as unread (PENDING = not yet processed)
   const unreadCount = notificationsList.filter(
-    (n: Notification) => n.status === 'UNREAD' || n.status === 'PENDING'
+    (n) => n.status === 'UNREAD' || n.status === 'PENDING'
   ).length || 0
 
-  const menuItems = getMenuItems(unreadCount)
+  const menuItems = useMemo(() => getMenuItems(unreadCount), [unreadCount])
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -227,7 +236,7 @@ export default function Layout({ children }: LayoutProps) {
               display: { sm: 'none' },
               color: 'var(--mono-950)',
               '&:hover': {
-                background: 'var(--mono-100)',
+                background: 'var(--surface-hover)',
               },
             }}
           >
@@ -249,6 +258,7 @@ export default function Layout({ children }: LayoutProps) {
           </Typography>
           <Tooltip title={isDark ? 'Light mode' : 'Dark mode'}>
             <IconButton
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               onClick={() => setIsDark(!isDark)}
               sx={{
                 width: '36px',
@@ -257,7 +267,7 @@ export default function Layout({ children }: LayoutProps) {
                 transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
                 mr: 1,
                 '&:hover': {
-                  background: 'var(--mono-100)',
+                  background: 'var(--surface-hover)',
                   color: 'var(--mono-950)',
                 },
               }}
@@ -267,6 +277,7 @@ export default function Layout({ children }: LayoutProps) {
           </Tooltip>
           <Tooltip title="Logout">
             <IconButton
+              aria-label="Logout"
               onClick={() => handleLogout(navigate)}
               sx={{
                 width: '36px',
@@ -274,7 +285,7 @@ export default function Layout({ children }: LayoutProps) {
                 color: 'var(--mono-600)',
                 transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
                 '&:hover': {
-                  background: 'var(--mono-100)',
+                  background: 'var(--surface-hover)',
                   color: 'var(--mono-950)',
                 },
               }}

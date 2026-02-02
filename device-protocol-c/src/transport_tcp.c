@@ -3,6 +3,7 @@
  * @brief TCP socket transport implementation
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -32,33 +33,43 @@ typedef struct {
 static int tcp_open(devproto_transport_t *t)
 {
     tcp_priv_t *priv = (tcp_priv_t *)t->priv;
-    struct sockaddr_in server_addr;
-    struct hostent *server;
+    struct addrinfo hints, *result, *rp;
+    char port_str[16];
+    int ret;
 
-    /* Create socket */
-    t->fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (t->fd < 0) {
-        return -1;
-    }
+    /* Convert port to string for getaddrinfo */
+    snprintf(port_str, sizeof(port_str), "%d", priv->port);
+
+    /* Setup hints for getaddrinfo (replaces deprecated gethostbyname) */
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;      /* IPv4 */
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
 
     /* Resolve hostname */
-    server = gethostbyname(priv->host);
-    if (!server) {
-        close(t->fd);
-        t->fd = -1;
+    ret = getaddrinfo(priv->host, port_str, &hints, &result);
+    if (ret != 0) {
         return -1;
     }
 
-    /* Setup server address */
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr_list[0], server->h_length);
-    server_addr.sin_port = htons(priv->port);
+    /* Try each address until we connect successfully */
+    for (rp = result; rp != NULL; rp = rp->ai_next) {
+        t->fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (t->fd < 0) {
+            continue;
+        }
 
-    /* Connect */
-    if (connect(t->fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        if (connect(t->fd, rp->ai_addr, rp->ai_addrlen) == 0) {
+            break;  /* Success */
+        }
+
         close(t->fd);
         t->fd = -1;
+    }
+
+    freeaddrinfo(result);
+
+    if (t->fd < 0) {
         return -1;
     }
 
@@ -211,6 +222,7 @@ devproto_transport_t *devproto_transport_tcp_create(const char *host, int port)
     }
 
     strncpy(priv->host, host, sizeof(priv->host) - 1);
+    priv->host[sizeof(priv->host) - 1] = '\0';  /* Ensure null termination */
     priv->port = port;
 
     t->type = DEVPROTO_TRANSPORT_TCP;

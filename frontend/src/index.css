@@ -24,23 +24,80 @@
   --accent-error: #dc2626;
   --accent-info: #0891b2;
 
-  /* Status colors for base stations */
+  /* Extended color palette for charts/metrics */
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-red-500: #ef4444;
+  --color-purple-500: #8b5cf6;
+  --color-violet-500: #667eea;
+  --color-violet-600: #764ba2;
+
+  /* Extended color backgrounds with opacity */
+  --color-blue-bg: rgba(59, 130, 246, 0.12);
+  --color-blue-border: rgba(59, 130, 246, 0.30);
+  --color-emerald-bg: rgba(16, 185, 129, 0.12);
+  --color-emerald-border: rgba(16, 185, 129, 0.30);
+  --color-amber-bg: rgba(245, 158, 11, 0.12);
+  --color-amber-border: rgba(245, 158, 11, 0.30);
+  --color-purple-bg: rgba(139, 92, 246, 0.12);
+  --color-purple-border: rgba(139, 92, 246, 0.30);
+  --color-violet-bg: rgba(102, 126, 234, 0.12);
+  --color-violet-border: rgba(102, 126, 234, 0.30);
+
+  /* Gradients */
+  --gradient-ai: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-ai-hover: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+  --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --gradient-blue: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  --gradient-amber: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+
+  /* Status colors for base stations - saturated colors that work in both modes */
   --status-active: #16a34a;
   --status-maintenance: #ea580c;
   --status-offline: #dc2626;
-  --status-info: #737373;
+  --status-info: #6b7280;
+
+  /* Status color backgrounds with opacity - auto-adapt for dark mode */
+  --status-active-bg: rgba(22, 163, 74, 0.12);
+  --status-active-bg-subtle: rgba(22, 163, 74, 0.06);
+  --status-active-border: rgba(22, 163, 74, 0.30);
+  --status-active-shadow: rgba(22, 163, 74, 0.20);
+
+  --status-warning-bg: rgba(234, 136, 8, 0.12);
+  --status-warning-bg-subtle: rgba(234, 136, 8, 0.06);
+  --status-warning-border: rgba(234, 136, 8, 0.30);
+  --status-warning-shadow: rgba(234, 136, 8, 0.20);
+
+  --status-error-bg: rgba(220, 38, 38, 0.12);
+  --status-error-bg-subtle: rgba(220, 38, 38, 0.06);
+  --status-error-border: rgba(220, 38, 38, 0.30);
+  --status-error-shadow: rgba(220, 38, 38, 0.20);
+
+  --status-info-bg: rgba(107, 114, 128, 0.12);
+  --status-info-bg-subtle: rgba(107, 114, 128, 0.06);
+  --status-info-border: rgba(107, 114, 128, 0.30);
+  --status-info-shadow: rgba(107, 114, 128, 0.20);
 
   /* Surfaces with depth */
   --surface-base: #ffffff;
   --surface-elevated: #fafafa;
   --surface-overlay: rgba(255, 255, 255, 0.95);
   --surface-border: #a3a3a3;
+  --surface-hover: rgba(0, 0, 0, 0.04);
+  --surface-subtle: rgba(0, 0, 0, 0.03);
 
   /* Dark mode */
   --dark-surface-base: #0a0a0a;
   --dark-surface-elevated: #171717;
   --dark-surface-overlay: rgba(10, 10, 10, 0.95);
   --dark-surface-border: #262626;
+  --dark-surface-hover: rgba(255, 255, 255, 0.06);
+  --dark-surface-subtle: rgba(255, 255, 255, 0.05);
 
   /* Fixed dark card colors (don't change in dark mode) - for hero cards */
   --hero-card-bg: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
@@ -81,23 +138,58 @@
     --surface-elevated: var(--dark-surface-elevated);
     --surface-overlay: var(--dark-surface-overlay);
     --surface-border: var(--dark-surface-border);
+    --surface-hover: var(--dark-surface-hover);
+    --surface-subtle: var(--dark-surface-subtle);
 
-    /* Invert mono colors for dark mode */
+    /* Invert mono colors for dark mode - brighter for visibility */
     --mono-950: #fafafa;
     --mono-900: #f5f5f5;
     --mono-800: #e5e5e5;
     --mono-700: #d4d4d4;
-    --mono-600: #a3a3a3;
-    --mono-500: #737373;
-    --mono-400: #525252;
-    --mono-300: #404040;
-    --mono-200: #262626;
-    --mono-100: #171717;
-    --mono-50: #0a0a0a;
+    --mono-600: #b8b8b8;
+    --mono-500: #9ca3af;
+    --mono-400: #6b7280;
+    --mono-300: #4b5563;
+    --mono-200: #374151;
+    --mono-100: #1f2937;
+    --mono-50: #111827;
+
+    /* Increase opacity for status colors in dark mode for better visibility */
+    --status-active-bg: rgba(22, 163, 74, 0.18);
+    --status-active-bg-subtle: rgba(22, 163, 74, 0.10);
+    --status-active-border: rgba(22, 163, 74, 0.45);
+    --status-active-shadow: rgba(22, 163, 74, 0.30);
+
+    --status-warning-bg: rgba(234, 136, 8, 0.18);
+    --status-warning-bg-subtle: rgba(234, 136, 8, 0.10);
+    --status-warning-border: rgba(234, 136, 8, 0.45);
+    --status-warning-shadow: rgba(234, 136, 8, 0.30);
+
+    --status-error-bg: rgba(220, 38, 38, 0.18);
+    --status-error-bg-subtle: rgba(220, 38, 38, 0.10);
+    --status-error-border: rgba(220, 38, 38, 0.45);
+    --status-error-shadow: rgba(220, 38, 38, 0.30);
+
+    --status-info-bg: rgba(107, 114, 128, 0.18);
+    --status-info-bg-subtle: rgba(107, 114, 128, 0.10);
+    --status-info-border: rgba(107, 114, 128, 0.45);
+    --status-info-shadow: rgba(107, 114, 128, 0.30);
+
+    /* Extended colors - dark mode */
+    --color-blue-bg: rgba(59, 130, 246, 0.18);
+    --color-blue-border: rgba(59, 130, 246, 0.45);
+    --color-emerald-bg: rgba(16, 185, 129, 0.18);
+    --color-emerald-border: rgba(16, 185, 129, 0.45);
+    --color-amber-bg: rgba(245, 158, 11, 0.18);
+    --color-amber-border: rgba(245, 158, 11, 0.45);
+    --color-purple-bg: rgba(139, 92, 246, 0.18);
+    --color-purple-border: rgba(139, 92, 246, 0.45);
+    --color-violet-bg: rgba(102, 126, 234, 0.18);
+    --color-violet-border: rgba(102, 126, 234, 0.45);
   }
 
   :root:not([data-theme="light"]) body {
-    color: var(--mono-50);
+    color: var(--mono-950);
     background: var(--dark-surface-base);
   }
 
@@ -117,23 +209,46 @@
   --surface-elevated: var(--dark-surface-elevated);
   --surface-overlay: var(--dark-surface-overlay);
   --surface-border: var(--dark-surface-border);
+  --surface-hover: var(--dark-surface-hover);
+  --surface-subtle: var(--dark-surface-subtle);
 
-  /* Invert mono colors for dark mode */
+  /* Invert mono colors for dark mode - brighter for visibility */
   --mono-950: #fafafa;
   --mono-900: #f5f5f5;
   --mono-800: #e5e5e5;
   --mono-700: #d4d4d4;
-  --mono-600: #a3a3a3;
-  --mono-500: #737373;
-  --mono-400: #525252;
-  --mono-300: #404040;
-  --mono-200: #262626;
-  --mono-100: #171717;
-  --mono-50: #0a0a0a;
+  --mono-600: #b8b8b8;
+  --mono-500: #9ca3af;
+  --mono-400: #6b7280;
+  --mono-300: #4b5563;
+  --mono-200: #374151;
+  --mono-100: #1f2937;
+  --mono-50: #111827;
+
+  /* Increase opacity for status colors in dark mode for better visibility */
+  --status-active-bg: rgba(22, 163, 74, 0.18);
+  --status-active-bg-subtle: rgba(22, 163, 74, 0.10);
+  --status-active-border: rgba(22, 163, 74, 0.45);
+  --status-active-shadow: rgba(22, 163, 74, 0.30);
+
+  --status-warning-bg: rgba(234, 136, 8, 0.18);
+  --status-warning-bg-subtle: rgba(234, 136, 8, 0.10);
+  --status-warning-border: rgba(234, 136, 8, 0.45);
+  --status-warning-shadow: rgba(234, 136, 8, 0.30);
+
+  --status-error-bg: rgba(220, 38, 38, 0.18);
+  --status-error-bg-subtle: rgba(220, 38, 38, 0.10);
+  --status-error-border: rgba(220, 38, 38, 0.45);
+  --status-error-shadow: rgba(220, 38, 38, 0.30);
+
+  --status-info-bg: rgba(107, 114, 128, 0.18);
+  --status-info-bg-subtle: rgba(107, 114, 128, 0.10);
+  --status-info-border: rgba(107, 114, 128, 0.45);
+  --status-info-shadow: rgba(107, 114, 128, 0.30);
 }
 
 :root[data-theme="dark"] body {
-  color: var(--mono-50);
+  color: var(--mono-950);
   background: var(--dark-surface-base);
 }
 
@@ -300,6 +415,18 @@ pre,
   }
 }
 
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 6px 24px var(--status-error-shadow);
+  }
+
+  50% {
+    box-shadow: 0 6px 36px var(--status-error-shadow);
+  }
+}
+
 @keyframes shimmer {
   0% {
     background-position: -100% 0;
@@ -463,14 +590,14 @@ pre,
   font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.01em;
-  background: var(--mono-100);
+  background: var(--surface-subtle);
   color: var(--mono-800);
   border: 1px solid var(--mono-400);
   transition: all var(--transition-fast) var(--ease-out);
 }
 
 .badge:hover {
-  background: var(--mono-200);
+  background: var(--surface-hover);
   border-color: var(--mono-500);
 }
 
@@ -500,7 +627,7 @@ pre,
 }
 
 .data-table tr:hover td {
-  background: var(--mono-50);
+  background: var(--surface-hover);
 }
 
 .data-table tr:last-child td {

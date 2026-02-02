@@ -15,10 +15,11 @@ Also includes:
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from enum import Enum
 import statistics
+import threading
 
 import numpy as np
 
@@ -151,6 +152,35 @@ class PredictiveMaintenanceService:
     # Thresholds for power
     VOLTAGE_TOLERANCE = 0.05  # 5% tolerance
 
+    # Thresholds for battery health
+    BATTERY_SOC_HEALTHY_MIN = 80  # %
+    BATTERY_SOC_WARNING_MIN = 50
+    BATTERY_SOC_CRITICAL_MIN = 20
+    BATTERY_DOD_HEALTHY_MAX = 50  # % depth of discharge
+    BATTERY_DOD_WARNING_MAX = 70
+    BATTERY_DOD_CRITICAL_MAX = 85
+    BATTERY_TEMP_HEALTHY_MAX = 35  # Celsius
+    BATTERY_TEMP_WARNING_MAX = 45
+    BATTERY_TEMP_CRITICAL_MAX = 55
+    BATTERY_CYCLE_HEALTHY_MAX = 500  # cycles
+    BATTERY_CYCLE_WARNING_MAX = 800
+    BATTERY_CYCLE_CRITICAL_MAX = 1000
+    BATTERY_CAPACITY_DEGRADATION_THRESHOLD = 0.1  # 10% capacity loss
+
+    # Thresholds for fiber transport
+    FIBER_RX_POWER_HEALTHY_MIN = -20  # dBm
+    FIBER_RX_POWER_WARNING_MIN = -25
+    FIBER_RX_POWER_CRITICAL_MIN = -30
+    FIBER_TX_POWER_HEALTHY_MIN = -5
+    FIBER_TX_POWER_WARNING_MIN = -8
+    FIBER_TX_POWER_CRITICAL_MIN = -10
+    FIBER_BER_HEALTHY_MAX = 1e-12  # Bit Error Rate
+    FIBER_BER_WARNING_MAX = 1e-9
+    FIBER_BER_CRITICAL_MAX = 1e-6
+    FIBER_OSNR_HEALTHY_MIN = 25  # dB
+    FIBER_OSNR_WARNING_MIN = 18
+    FIBER_OSNR_CRITICAL_MIN = 12
+
     # Minimum data points for analysis
     MIN_DATA_POINTS = 10
     PREFERRED_DATA_POINTS = 100
@@ -165,7 +195,7 @@ class PredictiveMaintenanceService:
         self.historical_data[key].append(data_point)
 
         # Keep only last 7 days of data
-        cutoff = datetime.utcnow() - timedelta(days=7)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
         self.historical_data[key] = [
             dp for dp in self.historical_data[key]
             if dp.timestamp > cutoff
@@ -331,6 +361,355 @@ class PredictiveMaintenanceService:
             analysis_window=analysis_window
         )
 
+    def analyze_battery_health(
+        self,
+        station_id: str,
+        analysis_window: timedelta = timedelta(hours=24)
+    ) -> Optional[FailurePrediction]:
+        """
+        Analyze battery health and predict degradation.
+
+        Monitors:
+        - State of Charge (SOC) trends
+        - Depth of Discharge (DOD) patterns
+        - Temperature stress
+        - Cycle count degradation
+        - Capacity fade estimation
+
+        Args:
+            station_id: Base station identifier
+            analysis_window: Time window for analysis
+
+        Returns:
+            FailurePrediction if degradation detected, None otherwise
+        """
+        soc_key = f"{station_id}:BATTERY_SOC"
+        dod_key = f"{station_id}:BATTERY_DOD"
+        temp_key = f"{station_id}:BATTERY_TEMP"
+        cycle_key = f"{station_id}:BATTERY_CYCLES"
+
+        soc_data = self._get_recent_data(soc_key, analysis_window)
+        dod_data = self._get_recent_data(dod_key, analysis_window)
+        temp_data = self._get_recent_data(temp_key, analysis_window)
+        cycle_data = self._get_recent_data(cycle_key, analysis_window)
+
+        # Need at least SOC data
+        if len(soc_data) < self.MIN_DATA_POINTS:
+            return None
+
+        soc_trend = self._analyze_trend(soc_data)
+        dod_trend = self._analyze_trend(dod_data) if dod_data else None
+        temp_trend = self._analyze_trend(temp_data) if temp_data else None
+
+        current_soc = soc_data[-1].value
+        current_dod = dod_data[-1].value if dod_data else 0
+        current_temp = temp_data[-1].value if temp_data else 25
+        current_cycles = cycle_data[-1].value if cycle_data else 0
+
+        # Multi-factor health assessment
+        health_factors = []
+        issues = []
+
+        # Factor 1: State of Charge assessment
+        if current_soc < self.BATTERY_SOC_CRITICAL_MIN:
+            health_factors.append(0.2)
+            issues.append(f"Critical SOC: {current_soc:.1f}%")
+        elif current_soc < self.BATTERY_SOC_WARNING_MIN:
+            health_factors.append(0.5)
+            issues.append(f"Low SOC: {current_soc:.1f}%")
+        elif current_soc < self.BATTERY_SOC_HEALTHY_MIN:
+            health_factors.append(0.8)
+        else:
+            health_factors.append(1.0)
+
+        # Factor 2: Depth of Discharge stress
+        if dod_trend:
+            if current_dod > self.BATTERY_DOD_CRITICAL_MAX:
+                health_factors.append(0.3)
+                issues.append(f"Critical DOD: {current_dod:.1f}%")
+            elif current_dod > self.BATTERY_DOD_WARNING_MAX:
+                health_factors.append(0.6)
+                issues.append(f"High DOD: {current_dod:.1f}%")
+            elif current_dod > self.BATTERY_DOD_HEALTHY_MAX:
+                health_factors.append(0.8)
+            else:
+                health_factors.append(1.0)
+
+        # Factor 3: Temperature stress
+        if temp_trend:
+            if current_temp > self.BATTERY_TEMP_CRITICAL_MAX:
+                health_factors.append(0.2)
+                issues.append(f"Critical temperature: {current_temp:.1f}°C")
+            elif current_temp > self.BATTERY_TEMP_WARNING_MAX:
+                health_factors.append(0.5)
+                issues.append(f"High temperature: {current_temp:.1f}°C")
+            elif current_temp > self.BATTERY_TEMP_HEALTHY_MAX:
+                health_factors.append(0.8)
+            else:
+                health_factors.append(1.0)
+
+        # Factor 4: Cycle count degradation
+        if current_cycles > 0:
+            if current_cycles > self.BATTERY_CYCLE_CRITICAL_MAX:
+                health_factors.append(0.3)
+                issues.append(f"High cycle count: {current_cycles:.0f}")
+            elif current_cycles > self.BATTERY_CYCLE_WARNING_MAX:
+                health_factors.append(0.6)
+                issues.append(f"Elevated cycles: {current_cycles:.0f}")
+            elif current_cycles > self.BATTERY_CYCLE_HEALTHY_MAX:
+                health_factors.append(0.8)
+            else:
+                health_factors.append(1.0)
+
+        # Factor 5: SOC trend degradation (capacity fade indicator)
+        if soc_trend.direction == "decreasing" and soc_trend.slope < -0.5:
+            # SOC declining faster than normal charging/usage
+            health_factors.append(0.6)
+            issues.append(f"Capacity fade detected: {abs(soc_trend.slope):.2f}%/hr decline")
+
+        # Calculate combined health score
+        combined_health = sum(health_factors) / len(health_factors) if health_factors else 1.0
+
+        # Determine health status
+        if combined_health < 0.4:
+            health_status = HealthStatus.CRITICAL
+        elif combined_health < 0.6:
+            health_status = HealthStatus.WARNING
+        elif combined_health < 0.8:
+            health_status = HealthStatus.DEGRADED
+        else:
+            health_status = HealthStatus.HEALTHY
+
+        # Calculate failure probability
+        probability = 1.0 - combined_health
+
+        # Estimate time to failure based on capacity degradation
+        ttf = None
+        if soc_trend.direction == "decreasing" and soc_trend.slope < -0.1:
+            hours_to_critical = (current_soc - self.BATTERY_SOC_CRITICAL_MIN) / abs(soc_trend.slope)
+            if hours_to_critical > 0:
+                ttf = timedelta(hours=hours_to_critical)
+
+        if probability < 0.1 and health_status == HealthStatus.HEALTHY:
+            return None
+
+        # Generate prediction text
+        if issues:
+            prediction_text = f"Battery degradation: {', '.join(issues[:2])}"
+        else:
+            prediction_text = f"Battery health at {combined_health*100:.0f}%"
+
+        # Generate recommendation
+        recommendation = self._get_battery_recommendation(health_status, issues, current_cycles)
+
+        confidence = self._determine_confidence(len(soc_data), soc_trend.r_squared)
+
+        return FailurePrediction(
+            component="battery_system",
+            station_id=station_id,
+            prediction=prediction_text,
+            confidence=confidence,
+            probability=probability,
+            estimated_time_to_failure=ttf,
+            current_health=health_status,
+            trend=soc_trend,
+            recommended_action=recommendation,
+            data_points_analyzed=len(soc_data),
+            analysis_window=analysis_window
+        )
+
+    def analyze_fiber_transport(
+        self,
+        station_id: str,
+        analysis_window: timedelta = timedelta(hours=24)
+    ) -> Optional[FailurePrediction]:
+        """
+        Analyze fiber optic transport health and predict link degradation.
+
+        Monitors:
+        - RX/TX optical power levels
+        - Bit Error Rate (BER)
+        - Optical Signal-to-Noise Ratio (OSNR)
+
+        Args:
+            station_id: Base station identifier
+            analysis_window: Time window for analysis
+
+        Returns:
+            FailurePrediction if degradation detected, None otherwise
+        """
+        rx_power_key = f"{station_id}:FIBER_RX_POWER"
+        tx_power_key = f"{station_id}:FIBER_TX_POWER"
+        ber_key = f"{station_id}:FIBER_BER"
+        osnr_key = f"{station_id}:FIBER_OSNR"
+
+        rx_data = self._get_recent_data(rx_power_key, analysis_window)
+        tx_data = self._get_recent_data(tx_power_key, analysis_window)
+        ber_data = self._get_recent_data(ber_key, analysis_window)
+        osnr_data = self._get_recent_data(osnr_key, analysis_window)
+
+        # Need at least RX power data
+        if len(rx_data) < self.MIN_DATA_POINTS:
+            return None
+
+        rx_trend = self._analyze_trend(rx_data)
+        tx_trend = self._analyze_trend(tx_data) if tx_data else None
+        ber_trend = self._analyze_trend(ber_data) if ber_data else None
+        osnr_trend = self._analyze_trend(osnr_data) if osnr_data else None
+
+        current_rx = rx_data[-1].value
+        current_tx = tx_data[-1].value if tx_data else 0
+        current_ber = ber_data[-1].value if ber_data else 0
+        current_osnr = osnr_data[-1].value if osnr_data else 30
+
+        health_factors = []
+        issues = []
+
+        # Factor 1: RX Power assessment
+        if current_rx < self.FIBER_RX_POWER_CRITICAL_MIN:
+            health_factors.append(0.2)
+            issues.append(f"Critical RX power: {current_rx:.1f} dBm")
+        elif current_rx < self.FIBER_RX_POWER_WARNING_MIN:
+            health_factors.append(0.5)
+            issues.append(f"Low RX power: {current_rx:.1f} dBm")
+        elif current_rx < self.FIBER_RX_POWER_HEALTHY_MIN:
+            health_factors.append(0.8)
+        else:
+            health_factors.append(1.0)
+
+        # Factor 2: TX Power assessment
+        if tx_trend:
+            if current_tx < self.FIBER_TX_POWER_CRITICAL_MIN:
+                health_factors.append(0.3)
+                issues.append(f"Critical TX power: {current_tx:.1f} dBm")
+            elif current_tx < self.FIBER_TX_POWER_WARNING_MIN:
+                health_factors.append(0.6)
+                issues.append(f"Low TX power: {current_tx:.1f} dBm")
+            elif current_tx < self.FIBER_TX_POWER_HEALTHY_MIN:
+                health_factors.append(0.8)
+            else:
+                health_factors.append(1.0)
+
+        # Factor 3: BER assessment (lower is better)
+        if ber_trend and current_ber > 0:
+            if current_ber > self.FIBER_BER_CRITICAL_MAX:
+                health_factors.append(0.2)
+                issues.append(f"Critical BER: {current_ber:.2e}")
+            elif current_ber > self.FIBER_BER_WARNING_MAX:
+                health_factors.append(0.5)
+                issues.append(f"High BER: {current_ber:.2e}")
+            elif current_ber > self.FIBER_BER_HEALTHY_MAX:
+                health_factors.append(0.8)
+            else:
+                health_factors.append(1.0)
+
+        # Factor 4: OSNR assessment (higher is better)
+        if osnr_trend:
+            if current_osnr < self.FIBER_OSNR_CRITICAL_MIN:
+                health_factors.append(0.2)
+                issues.append(f"Critical OSNR: {current_osnr:.1f} dB")
+            elif current_osnr < self.FIBER_OSNR_WARNING_MIN:
+                health_factors.append(0.5)
+                issues.append(f"Low OSNR: {current_osnr:.1f} dB")
+            elif current_osnr < self.FIBER_OSNR_HEALTHY_MIN:
+                health_factors.append(0.8)
+            else:
+                health_factors.append(1.0)
+
+        # Factor 5: Power degradation trend
+        if rx_trend.direction == "decreasing" and rx_trend.slope < -0.1:
+            # RX power declining - potential fiber degradation
+            health_factors.append(0.6)
+            issues.append(f"RX power declining: {abs(rx_trend.slope):.2f} dBm/hr")
+
+        # Calculate combined health
+        combined_health = sum(health_factors) / len(health_factors) if health_factors else 1.0
+
+        # Determine health status
+        if combined_health < 0.4:
+            health_status = HealthStatus.CRITICAL
+        elif combined_health < 0.6:
+            health_status = HealthStatus.WARNING
+        elif combined_health < 0.8:
+            health_status = HealthStatus.DEGRADED
+        else:
+            health_status = HealthStatus.HEALTHY
+
+        probability = 1.0 - combined_health
+
+        # Estimate time to failure
+        ttf = None
+        if rx_trend.direction == "decreasing" and rx_trend.slope < -0.05:
+            hours_to_critical = (current_rx - self.FIBER_RX_POWER_CRITICAL_MIN) / abs(rx_trend.slope)
+            if hours_to_critical > 0:
+                ttf = timedelta(hours=hours_to_critical)
+
+        if probability < 0.1 and health_status == HealthStatus.HEALTHY:
+            return None
+
+        # Generate prediction text
+        if issues:
+            prediction_text = f"Fiber link degradation: {', '.join(issues[:2])}"
+        else:
+            prediction_text = f"Fiber link health at {combined_health*100:.0f}%"
+
+        has_ber_issue = any("BER" in issue for issue in issues)
+        recommendation = self._get_fiber_recommendation(health_status, has_ber_issue, rx_trend)
+
+        confidence = self._determine_confidence(len(rx_data), rx_trend.r_squared)
+
+        return FailurePrediction(
+            component="fiber_transport",
+            station_id=station_id,
+            prediction=prediction_text,
+            confidence=confidence,
+            probability=probability,
+            estimated_time_to_failure=ttf,
+            current_health=health_status,
+            trend=rx_trend,
+            recommended_action=recommendation,
+            data_points_analyzed=len(rx_data),
+            analysis_window=analysis_window
+        )
+
+    def _get_battery_recommendation(
+        self,
+        status: HealthStatus,
+        issues: List[str],
+        cycle_count: float
+    ) -> str:
+        """Get recommended action for battery issues."""
+        if status == HealthStatus.CRITICAL:
+            return "URGENT: Battery replacement required. Risk of power failure"
+        elif status == HealthStatus.WARNING:
+            if cycle_count > self.BATTERY_CYCLE_WARNING_MAX:
+                return "Schedule battery replacement within 30 days due to cycle degradation"
+            return "Monitor battery closely. Schedule inspection within 1 week"
+        elif status == HealthStatus.DEGRADED:
+            return "Battery showing early degradation. Plan for replacement within 3 months"
+        else:
+            return "Battery operating normally. Continue standard maintenance"
+
+    def _get_fiber_recommendation(
+        self,
+        status: HealthStatus,
+        has_ber_issue: bool,
+        rx_trend: TrendAnalysis
+    ) -> str:
+        """Get recommended action for fiber transport issues."""
+        if status == HealthStatus.CRITICAL:
+            return "URGENT: Fiber link at risk of failure. Inspect connectors, check for fiber damage"
+        elif status == HealthStatus.WARNING:
+            if has_ber_issue:
+                return "High error rate detected. Clean connectors, verify SFP modules"
+            return "Signal degradation detected. Schedule OTDR test within 1 week"
+        elif status == HealthStatus.DEGRADED:
+            if rx_trend.direction == "decreasing":
+                return "Gradual signal loss. Check for connector contamination or bend loss"
+            return "Monitor fiber link. Schedule preventive inspection"
+        else:
+            return "Fiber transport operating normally"
+
     def get_station_health_report(
         self,
         station_id: str,
@@ -361,6 +740,14 @@ class PredictiveMaintenanceService:
         if power_pred:
             predictions.append(power_pred)
 
+        battery_pred = self.analyze_battery_health(station_id, analysis_window)
+        if battery_pred:
+            predictions.append(battery_pred)
+
+        fiber_pred = self.analyze_fiber_transport(station_id, analysis_window)
+        if fiber_pred:
+            predictions.append(fiber_pred)
+
         # Calculate overall health score
         if predictions:
             health_score = 100 - sum(p.probability * 50 for p in predictions)
@@ -382,7 +769,7 @@ class PredictiveMaintenanceService:
 
         return {
             "station_id": station_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "overall_health_score": round(health_score, 1),
             "overall_status": overall_status.value,
             "analysis_window_hours": analysis_window.total_seconds() / 3600,
@@ -400,7 +787,7 @@ class PredictiveMaintenanceService:
         window: timedelta
     ) -> List[MetricDataPoint]:
         """Get recent data points within the specified window."""
-        cutoff = datetime.utcnow() - window
+        cutoff = datetime.now(timezone.utc) - window
         data = self.historical_data.get(key, [])
         return [dp for dp in data if dp.timestamp > cutoff]
 
@@ -569,13 +956,16 @@ class PredictiveMaintenanceService:
             return "Temperature within normal range"
 
 
-# Singleton instance
+# Singleton instance with thread-safe initialization
 _maintenance_service: Optional[PredictiveMaintenanceService] = None
+_maintenance_service_lock = threading.Lock()
 
 
 def get_predictive_maintenance_service() -> PredictiveMaintenanceService:
-    """Get or create singleton PredictiveMaintenanceService instance."""
+    """Get or create singleton PredictiveMaintenanceService instance (thread-safe)."""
     global _maintenance_service
     if _maintenance_service is None:
-        _maintenance_service = PredictiveMaintenanceService()
+        with _maintenance_service_lock:
+            if _maintenance_service is None:  # Double-check locking
+                _maintenance_service = PredictiveMaintenanceService()
     return _maintenance_service

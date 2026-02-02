@@ -35,7 +35,13 @@ public class KPIThreshold {
 
     private boolean enabled = true;
 
+    // Constants for frequency bands and modulation schemes
+    private static final String FREQ_NR3500 = "NR3500";
+    private static final String FREQ_NR700 = "NR700";
+    private static final String MOD_256QAM = "256QAM";
+
     // Static factory methods for common thresholds
+    @SuppressWarnings("java:S100") // Method names match domain conventions
     public static KPIThreshold dlThroughputNR3500_100MHz() {
         KPIThreshold kpi = new KPIThreshold();
         kpi.setMetricType(MetricType.DL_THROUGHPUT_NR3500);
@@ -43,13 +49,14 @@ public class KPIThreshold {
         kpi.setMinValue(1000.0);
         kpi.setWarningMin(1100.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand("NR3500");
+        kpi.setFrequencyBand(FREQ_NR3500);
         kpi.setBandwidth(100);
         kpi.setRankIndicator("RANK4");
-        kpi.setModulationScheme("256QAM");
+        kpi.setModulationScheme(MOD_256QAM);
         return kpi;
     }
 
+    @SuppressWarnings("java:S100")
     public static KPIThreshold dlThroughputNR3500_40MHz() {
         KPIThreshold kpi = new KPIThreshold();
         kpi.setMetricType(MetricType.DL_THROUGHPUT_NR3500);
@@ -57,13 +64,14 @@ public class KPIThreshold {
         kpi.setMinValue(400.0);
         kpi.setWarningMin(450.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand("NR3500");
+        kpi.setFrequencyBand(FREQ_NR3500);
         kpi.setBandwidth(40);
         kpi.setRankIndicator("RANK4");
-        kpi.setModulationScheme("256QAM");
+        kpi.setModulationScheme(MOD_256QAM);
         return kpi;
     }
 
+    @SuppressWarnings("java:S100")
     public static KPIThreshold ulThroughputNR3500_100MHz() {
         KPIThreshold kpi = new KPIThreshold();
         kpi.setMetricType(MetricType.UL_THROUGHPUT_NR3500);
@@ -71,10 +79,10 @@ public class KPIThreshold {
         kpi.setMinValue(75.0);
         kpi.setWarningMin(85.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand("NR3500");
+        kpi.setFrequencyBand(FREQ_NR3500);
         kpi.setBandwidth(100);
         kpi.setRankIndicator("RANK1");
-        kpi.setModulationScheme("256QAM");
+        kpi.setModulationScheme(MOD_256QAM);
         return kpi;
     }
 
@@ -85,10 +93,10 @@ public class KPIThreshold {
         kpi.setMinValue(50.0);
         kpi.setWarningMin(60.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand("NR700");
+        kpi.setFrequencyBand(FREQ_NR700);
         kpi.setBandwidth(10);
         kpi.setRankIndicator("RANK2");
-        kpi.setModulationScheme("256QAM");
+        kpi.setModulationScheme(MOD_256QAM);
         return kpi;
     }
 
@@ -99,10 +107,10 @@ public class KPIThreshold {
         kpi.setMinValue(20.0);
         kpi.setWarningMin(25.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand("NR700");
+        kpi.setFrequencyBand(FREQ_NR700);
         kpi.setBandwidth(10);
         kpi.setRankIndicator("RANK1");
-        kpi.setModulationScheme("256QAM");
+        kpi.setModulationScheme(MOD_256QAM);
         return kpi;
     }
 
@@ -138,6 +146,7 @@ public class KPIThreshold {
 
     // Constructors
     public KPIThreshold() {
+        // Default constructor for MongoDB and static factory methods
     }
 
     // Getters and Setters
@@ -251,8 +260,7 @@ public class KPIThreshold {
     public boolean passes(Double value) {
         if (value == null) return false;
         if (minValue != null && value < minValue) return false;
-        if (maxValue != null && value > maxValue) return false;
-        return true;
+        return maxValue == null || value <= maxValue;
     }
 
     /**
@@ -261,7 +269,6 @@ public class KPIThreshold {
     public boolean isWarning(Double value) {
         if (value == null || !passes(value)) return false;
         if (warningMin != null && value < warningMin) return true;
-        if (warningMax != null && value > warningMax) return true;
-        return false;
+        return warningMax != null && value > warningMax;
     }
 }

@@ -248,6 +248,7 @@ devproto_transport_t *devproto_transport_serial_create(const char *device, int b
     }
 
     strncpy(priv->device, device, sizeof(priv->device) - 1);
+    priv->device[sizeof(priv->device) - 1] = '\0';  /* Ensure null termination */
     priv->baudrate = baudrate > 0 ? baudrate : 115200;
     priv->termios_saved = 0;
 

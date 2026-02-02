@@ -28,6 +28,7 @@ import {
 } from '@mui/material'
 import { TransitionProps } from '@mui/material/transitions'
 import React from 'react'
+import { INPUT_LABEL_SX, SELECT_INPUT_SX, SELECT_MENU_PROPS } from '../constants/designSystem'
 import { BaseStation, StationStatus, StationType } from '../types'
 
 const Transition = React.forwardRef(function Transition(
@@ -110,6 +111,7 @@ export default function StationFormDialog({
           </Box>
         </Box>
         <IconButton
+          aria-label="Close dialog"
           onClick={onClose}
           sx={{
             width: 36,
@@ -117,7 +119,7 @@ export default function StationFormDialog({
             borderRadius: '10px',
             color: 'var(--mono-600)',
             '&:hover': {
-              background: 'var(--mono-100)',
+              background: 'var(--surface-hover)',
               color: 'var(--mono-950)',
             },
           }}
@@ -300,13 +302,7 @@ export default function StationFormDialog({
             </Box>
             <Box display="flex" gap={2} mb={2}>
               <FormControl fullWidth>
-                <InputLabel
-                  id="station-type-label"
-                  sx={{
-                    color: 'var(--mono-500)',
-                    '&.Mui-focused': { color: 'var(--mono-700)' },
-                  }}
-                >
+                <InputLabel id="station-type-label" sx={INPUT_LABEL_SX}>
                   Station Type
                 </InputLabel>
                 <Select
@@ -318,42 +314,8 @@ export default function StationFormDialog({
                   onChange={(e: SelectChangeEvent) =>
                     setFormData({ ...formData, stationType: e.target.value as StationType })
                   }
-                  sx={{
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--surface-border)',
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--mono-400)',
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--mono-600)',
-                    },
-                    '& .MuiSelect-select': {
-                      color: 'var(--mono-950)',
-                    },
-                  }}
-                  MenuProps={{
-                    PaperProps: {
-                      sx: {
-                        background: 'var(--surface-base)',
-                        border: '1px solid var(--surface-border)',
-                        borderRadius: '8px',
-                        boxShadow: 'var(--shadow-lg)',
-                        '& .MuiMenuItem-root': {
-                          color: 'var(--mono-950)',
-                          '&:hover': {
-                            background: 'var(--mono-100)',
-                          },
-                          '&.Mui-selected': {
-                            background: 'var(--mono-200)',
-                            '&:hover': {
-                              background: 'var(--mono-200)',
-                            },
-                          },
-                        },
-                      },
-                    },
-                  }}
+                  sx={SELECT_INPUT_SX}
+                  MenuProps={SELECT_MENU_PROPS}
                 >
                   {Object.values(StationType).map((type) => (
                     <MenuItem key={type} value={type}>
@@ -364,13 +326,7 @@ export default function StationFormDialog({
               </FormControl>
 
               <FormControl fullWidth>
-                <InputLabel
-                  id="station-status-label"
-                  sx={{
-                    color: 'var(--mono-500)',
-                    '&.Mui-focused': { color: 'var(--mono-700)' },
-                  }}
-                >
+                <InputLabel id="station-status-label" sx={INPUT_LABEL_SX}>
                   Status
                 </InputLabel>
                 <Select
@@ -382,42 +338,8 @@ export default function StationFormDialog({
                   onChange={(e: SelectChangeEvent) =>
                     setFormData({ ...formData, status: e.target.value as StationStatus })
                   }
-                  sx={{
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--surface-border)',
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--mono-400)',
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--mono-600)',
-                    },
-                    '& .MuiSelect-select': {
-                      color: 'var(--mono-950)',
-                    },
-                  }}
-                  MenuProps={{
-                    PaperProps: {
-                      sx: {
-                        background: 'var(--surface-base)',
-                        border: '1px solid var(--surface-border)',
-                        borderRadius: '8px',
-                        boxShadow: 'var(--shadow-lg)',
-                        '& .MuiMenuItem-root': {
-                          color: 'var(--mono-950)',
-                          '&:hover': {
-                            background: 'var(--mono-100)',
-                          },
-                          '&.Mui-selected': {
-                            background: 'var(--mono-200)',
-                            '&:hover': {
-                              background: 'var(--mono-200)',
-                            },
-                          },
-                        },
-                      },
-                    },
-                  }}
+                  sx={SELECT_INPUT_SX}
+                  MenuProps={SELECT_MENU_PROPS}
                 >
                   {Object.values(StationStatus).map((status) => (
                     <MenuItem key={status} value={status}>
@@ -503,7 +425,7 @@ export default function StationFormDialog({
           sx={{
             color: 'var(--mono-600)',
             '&:hover': {
-              background: 'var(--mono-100)',
+              background: 'var(--surface-hover)',
             },
           }}
         >

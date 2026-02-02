@@ -10,8 +10,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/huawei/edge-bridge/internal/bridge"
-	"github.com/huawei/edge-bridge/internal/config"
+	"edge-bridge/internal/bridge"
+	"edge-bridge/internal/config"
 )
 
 var (

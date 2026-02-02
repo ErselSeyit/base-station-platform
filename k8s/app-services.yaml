@@ -1,4 +1,35 @@
+# ============================================================================
+# Base Station Platform - Application Services
+# ============================================================================
+#
+# SECRETS MANAGEMENT:
+# -------------------
+# Secrets are NOT stored in this file (that would be insecure).
+#
+# To create secrets:
+#   1. Copy .env.example to .env and fill in your values
+#   2. Run: ./create-secrets.sh
+#
+# Or use SealedSecrets for GitOps:
+#   kubeseal --format=yaml < secret.yaml > sealed-secret.yaml
+#
+# Required secrets (create before deploying):
+#   - auth-credentials     (admin-username, admin-password, operator-*)
+#   - edge-bridge-secret   (username, password)
+#   - jwt-secret           (secret)
+#   - security-internal-secret (secret)
+#   - postgres-secrets     (username, password)
+#   - mongodb-secret       (username, password)
+#   - rabbitmq-secret      (username, password)
+#   - grafana-secret       (admin-password)
+#
+# ============================================================================
+
 ---
+# ============================================================================
+# Application Services
+# ============================================================================
+
 # Auth Service
 apiVersion: apps/v1
 kind: Deployment
@@ -45,6 +76,24 @@ spec:
             secretKeyRef:
               name: security-internal-secret
               key: secret
+        # Auth user configuration (DataLoader creates/updates users on startup)
+        - name: AUTH_ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: admin-username
+        - name: AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: admin-password
+        - name: AUTH_BRIDGE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: operator-username
+        - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+          value: "update"
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -409,6 +458,17 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9091
+        env:
+        # Cloud integration for bidirectional AI problem-solving
+        - name: CLOUD_URL
+          value: "http://api-gateway:8080"
+        - name: CLOUD_USER
+          value: "admin"
+        - name: CLOUD_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: admin-password
         livenessProbe:
           httpGet:
             path: /health
@@ -625,7 +685,6 @@ spec:
             secretKeyRef:
               name: edge-bridge-secret
               key: password
-              optional: true
         - name: DEVICE_HOST
           value: device-simulator
         - name: DEVICE_PORT
@@ -663,17 +722,32 @@ spec:
       - name: device-simulator
         image: base-station-platform-device-simulator:1.0.0
         imagePullPolicy: IfNotPresent
+        # Use mips_device.py for binary protocol (0xAA55 frames) expected by edge-bridge
+        command: ["python", "virtual-basestation/mips_device.py", "--port", "9999"]
         ports:
         - containerPort: 9999
+        env:
+        - name: STATION_ID
+          value: "MIPS-BS-001"
         resources:
           limits:
             cpu: "100m"
-            memory: 64Mi
+            memory: 256Mi
             ephemeral-storage: "128Mi"
           requests:
             cpu: "50m"
-            memory: 32Mi
+            memory: 128Mi
             ephemeral-storage: "64Mi"
+        livenessProbe:
+          tcpSocket:
+            port: 9999
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 9999
+          initialDelaySeconds: 3
+          periodSeconds: 5
 ---
 apiVersion: v1
 kind: Service

@@ -9,120 +9,25 @@ import {
   SettingsInputAntenna,
 } from '@mui/icons-material'
 import { ReactNode } from 'react'
+import { METRIC_STATUS_STYLES, GRID_AUTO_FIT_SX, type MetricStatusType } from '../constants/designSystem'
+import {
+  type MetricStatus,
+  METRICS_CONFIG,
+  SSV_METRIC_TYPES,
+  getWorstMetricStatus,
+  countMetricStatuses,
+} from '../constants/metricsConfig'
 
-type MetricStatus = 'pass' | 'warning' | 'fail'
-
-// Helper to evaluate thresholds (higher is better)
-function evalHigher(v: number, passThreshold: number, warnThreshold: number): MetricStatus {
-  if (v >= passThreshold) return 'pass'
-  if (v >= warnThreshold) return 'warning'
-  return 'fail'
-}
-
-// Helper to evaluate thresholds (lower is better)
-function evalLower(v: number, passThreshold: number, warnThreshold: number): MetricStatus {
-  if (v <= passThreshold) return 'pass'
-  if (v <= warnThreshold) return 'warning'
-  return 'fail'
-}
-
-// SSV Threshold Configuration for 5G NR Metrics
-interface SSVThreshold {
-  label: string
-  unit: string
-  icon: ReactNode
-  band?: string
-  getStatus: (value: number) => MetricStatus
-  passThreshold: string
-}
-
-const SSV_THRESHOLDS: Record<string, SSVThreshold> = {
-  DL_THROUGHPUT_NR3500: {
-    label: 'DL Throughput',
-    unit: 'Mbps',
-    band: 'n78 (3.5GHz)',
-    icon: <TrendingDown sx={{ fontSize: 20 }} />,
-    getStatus: (v) => evalHigher(v, 1000, 500),
-    passThreshold: '≥1000 Mbps',
-  },
-  UL_THROUGHPUT_NR3500: {
-    label: 'UL Throughput',
-    unit: 'Mbps',
-    band: 'n78 (3.5GHz)',
-    icon: <TrendingUp sx={{ fontSize: 20 }} />,
-    getStatus: (v) => evalHigher(v, 75, 40),
-    passThreshold: '≥75 Mbps',
-  },
-  RSRP_NR3500: {
-    label: 'RSRP',
-    unit: 'dBm',
-    band: 'n78 (3.5GHz)',
-    icon: <SignalCellularAlt sx={{ fontSize: 20 }} />,
-    getStatus: (v) => evalHigher(v, -85, -100),
-    passThreshold: '≥-85 dBm',
-  },
-  SINR_NR3500: {
-    label: 'SINR',
-    unit: 'dB',
-    band: 'n78 (3.5GHz)',
-    icon: <SettingsInputAntenna sx={{ fontSize: 20 }} />,
-    getStatus: (v) => evalHigher(v, 10, 5),
-    passThreshold: '≥10 dB',
-  },
-  DL_THROUGHPUT_NR700: {
-    label: 'DL Throughput',
-    unit: 'Mbps',
-    band: 'n28 (700MHz)',
-    icon: <TrendingDown sx={{ fontSize: 20 }} />,
-    getStatus: (v) => evalHigher(v, 50, 25),
-    passThreshold: '≥50 Mbps',
-  },
-  UL_THROUGHPUT_NR700: {
-    label: 'UL Throughput',
-    unit: 'Mbps',
-    band: 'n28 (700MHz)',
-    icon: <TrendingUp sx={{ fontSize: 20 }} />,
-    getStatus: (v) => evalHigher(v, 20, 10),
-    passThreshold: '≥20 Mbps',
-  },
-  LATENCY_PING: {
-    label: 'Latency',
-    unit: 'ms',
-    icon: <Timer sx={{ fontSize: 20 }} />,
-    getStatus: (v) => evalLower(v, 15, 30),
-    passThreshold: '≤15 ms',
-  },
-  TX_IMBALANCE: {
-    label: 'TX Imbalance',
-    unit: 'dB',
-    icon: <Speed sx={{ fontSize: 20 }} />,
-    getStatus: (v) => evalLower(Math.abs(v), 4, 6),
-    passThreshold: '≤4 dB',
-  },
-}
-
-const STATUS_COLORS = {
-  pass: {
-    bg: 'rgba(22, 163, 74, 0.08)',
-    border: 'rgba(22, 163, 74, 0.25)',
-    accent: '#16a34a',
-    text: '#15803d',
-    glow: 'rgba(22, 163, 74, 0.15)',
-  },
-  warning: {
-    bg: 'rgba(234, 88, 12, 0.08)',
-    border: 'rgba(234, 88, 12, 0.25)',
-    accent: '#ea580c',
-    text: '#c2410c',
-    glow: 'rgba(234, 88, 12, 0.15)',
-  },
-  fail: {
-    bg: 'rgba(220, 38, 38, 0.08)',
-    border: 'rgba(220, 38, 38, 0.25)',
-    accent: '#dc2626',
-    text: '#b91c1c',
-    glow: 'rgba(220, 38, 38, 0.15)',
-  },
+// Icon mapping for SSV metrics (component-specific, icons can't be in shared config)
+const METRIC_ICONS: Record<string, ReactNode> = {
+  DL_THROUGHPUT_NR3500: <TrendingDown sx={{ fontSize: 20 }} />,
+  UL_THROUGHPUT_NR3500: <TrendingUp sx={{ fontSize: 20 }} />,
+  RSRP_NR3500: <SignalCellularAlt sx={{ fontSize: 20 }} />,
+  SINR_NR3500: <SettingsInputAntenna sx={{ fontSize: 20 }} />,
+  DL_THROUGHPUT_NR700: <TrendingDown sx={{ fontSize: 20 }} />,
+  UL_THROUGHPUT_NR700: <TrendingUp sx={{ fontSize: 20 }} />,
+  LATENCY_PING: <Timer sx={{ fontSize: 20 }} />,
+  TX_IMBALANCE: <Speed sx={{ fontSize: 20 }} />,
 }
 
 interface MetricValue {
@@ -142,12 +47,13 @@ interface SingleMetricProps {
   delay: number
 }
 
-const SingleMetricCard = ({ metricKey, value, delay }: SingleMetricProps) => {
-  const config = SSV_THRESHOLDS[metricKey]
+const SingleMetricCard = ({ metricKey, value, delay }: Readonly<SingleMetricProps>) => {
+  const config = METRICS_CONFIG[metricKey]
   if (!config) return null
 
-  const status = config.getStatus(value)
-  const colors = STATUS_COLORS[status]
+  const status = config.getMetricStatus(value) as MetricStatusType
+  const styles = METRIC_STATUS_STYLES[status]
+  const icon = METRIC_ICONS[metricKey]
 
   return (
     <Box
@@ -158,15 +64,15 @@ const SingleMetricCard = ({ metricKey, value, delay }: SingleMetricProps) => {
       sx={{
         position: 'relative',
         padding: '20px',
-        background: colors.bg,
-        border: `1px solid ${colors.border}`,
+        background: styles.bgSubtle,
+        border: `1px solid ${styles.border}`,
         borderRadius: '16px',
         overflow: 'hidden',
         transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
         '&:hover': {
           transform: 'translateY(-2px)',
-          boxShadow: `0 8px 24px ${colors.glow}`,
-          borderColor: colors.accent,
+          boxShadow: `0 8px 24px ${styles.shadow}`,
+          borderColor: styles.color,
         },
         '&::before': {
           content: '""',
@@ -175,7 +81,7 @@ const SingleMetricCard = ({ metricKey, value, delay }: SingleMetricProps) => {
           left: 0,
           right: 0,
           height: '3px',
-          background: colors.accent,
+          background: styles.color,
           borderRadius: '16px 16px 0 0',
         },
       }}
@@ -190,11 +96,11 @@ const SingleMetricCard = ({ metricKey, value, delay }: SingleMetricProps) => {
             width: 36,
             height: 36,
             borderRadius: '10px',
-            background: `linear-gradient(135deg, ${colors.accent}22, ${colors.accent}11)`,
-            color: colors.accent,
+            background: styles.bgSubtle,
+            color: styles.color,
           }}
         >
-          {config.icon}
+          {icon}
         </Box>
         <Box sx={{ flex: 1 }}>
           <Typography
@@ -229,8 +135,8 @@ const SingleMetricCard = ({ metricKey, value, delay }: SingleMetricProps) => {
             gap: '4px',
             padding: '3px 8px',
             borderRadius: '6px',
-            background: colors.accent,
-            color: '#fff',
+            background: styles.color,
+            color: 'var(--mono-50)',
             fontSize: '0.625rem',
             fontWeight: 600,
             textTransform: 'uppercase',
@@ -251,12 +157,12 @@ const SingleMetricCard = ({ metricKey, value, delay }: SingleMetricProps) => {
             fontWeight: 700,
             fontVariantNumeric: 'tabular-nums',
             fontFamily: "'JetBrains Mono', monospace",
-            color: colors.accent,
+            color: styles.color,
             letterSpacing: '-0.02em',
             lineHeight: 1,
           }}
         >
-          {value.toFixed(2)}
+          {config.format(value)}
         </Typography>
         <Typography
           sx={{
@@ -286,7 +192,7 @@ const SingleMetricCard = ({ metricKey, value, delay }: SingleMetricProps) => {
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: STATUS_COLORS.pass.accent,
+            background: METRIC_STATUS_STYLES.pass.color,
           }}
         />
         Target: {config.passThreshold}
@@ -296,29 +202,25 @@ const SingleMetricCard = ({ metricKey, value, delay }: SingleMetricProps) => {
 }
 
 export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5GMetricsCardProps) {
+  // Filter to only SSV metrics
+  const ssvMetrics = metrics.filter(m => SSV_METRIC_TYPES.has(m.type))
+
   // Group metrics by band
-  const nr3500Metrics = metrics.filter((m) => m.type.includes('NR3500'))
-  const nr700Metrics = metrics.filter((m) => m.type.includes('NR700'))
-  const otherMetrics = metrics.filter(
+  const nr3500Metrics = ssvMetrics.filter((m) => m.type.includes('NR3500'))
+  const nr700Metrics = ssvMetrics.filter((m) => m.type.includes('NR700'))
+  const otherMetrics = ssvMetrics.filter(
     (m) => !m.type.includes('NR3500') && !m.type.includes('NR700')
   )
 
-  // Calculate overall status
-  const allStatuses = metrics.map((m) => {
-    const config = SSV_THRESHOLDS[m.type]
-    return config ? config.getStatus(m.value) : 'pass'
+  // Calculate overall status using centralized config
+  const allStatuses: MetricStatus[] = ssvMetrics.map((m) => {
+    const config = METRICS_CONFIG[m.type]
+    return config ? config.getMetricStatus(m.value) : 'pass'
   })
-  const hasFailure = allStatuses.includes('fail')
-  const hasWarning = allStatuses.includes('warning')
-  const passCount = allStatuses.filter((s) => s === 'pass').length
+  const overallStatus = getWorstMetricStatus(allStatuses)
+  const { pass: passCount } = countMetricStatuses(allStatuses)
 
-  // Determine overall status (avoid nested ternary)
-  let overallStatus: MetricStatus = 'pass'
-  if (hasFailure) {
-    overallStatus = 'fail'
-  } else if (hasWarning) {
-    overallStatus = 'warning'
-  }
+  const overallStyles = METRIC_STATUS_STYLES[overallStatus as MetricStatusType]
 
   return (
     <Box
@@ -359,7 +261,7 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
                   fontWeight: 500,
                   color: 'var(--mono-500)',
                   padding: '2px 8px',
-                  background: 'var(--mono-100)',
+                  background: 'var(--surface-subtle)',
                   borderRadius: '4px',
                 }}
               >
@@ -385,8 +287,8 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
             alignItems: 'center',
             gap: '12px',
             padding: '8px 16px',
-            background: STATUS_COLORS[overallStatus].bg,
-            border: `1px solid ${STATUS_COLORS[overallStatus].border}`,
+            background: overallStyles.bgSubtle,
+            border: `1px solid ${overallStyles.border}`,
             borderRadius: '10px',
           }}
         >
@@ -395,18 +297,18 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
               width: 10,
               height: 10,
               borderRadius: '50%',
-              background: STATUS_COLORS[overallStatus].accent,
-              boxShadow: `0 0 8px ${STATUS_COLORS[overallStatus].glow}`,
+              background: overallStyles.color,
+              boxShadow: `0 0 8px ${overallStyles.shadow}`,
             }}
           />
           <Typography
             sx={{
               fontSize: '0.8125rem',
               fontWeight: 600,
-              color: STATUS_COLORS[overallStatus].accent,
+              color: overallStyles.color,
             }}
           >
-            {passCount}/{metrics.length} Passing
+            {passCount}/{ssvMetrics.length} Passing
           </Typography>
         </Box>
       </Box>
@@ -438,11 +340,7 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
             Band n78 (3.5GHz) - High Capacity
           </Typography>
           <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '16px',
-            }}
+            sx={GRID_AUTO_FIT_SX}
           >
             {nr3500Metrics.map((m, idx) => (
               <SingleMetricCard
@@ -483,11 +381,7 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
             Band n28 (700MHz) - Extended Coverage
           </Typography>
           <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '16px',
-            }}
+            sx={GRID_AUTO_FIT_SX}
           >
             {nr700Metrics.map((m, idx) => (
               <SingleMetricCard
@@ -528,11 +422,7 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
             System Performance
           </Typography>
           <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '16px',
-            }}
+            sx={GRID_AUTO_FIT_SX}
           >
             {otherMetrics.map((m, idx) => (
               <SingleMetricCard

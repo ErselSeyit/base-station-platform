@@ -17,6 +17,7 @@ export { stationApi } from './stations'
 export { metricsApi } from './metrics'
 export { notificationsApi } from './notifications'
 export { diagnosticsApi } from './diagnostics'
+export { sonApi } from './son'
 
 // Re-export types
 export type {
@@ -25,3 +26,13 @@ export type {
   LearningStats,
   FeedbackRequest,
 } from './diagnostics'
+
+export type {
+  SONRecommendation,
+  SONFunction,
+  SONStatus,
+  SONStats,
+  CreateRecommendationRequest,
+} from './son'
+
+export { SON_FUNCTION_NAMES } from './son'

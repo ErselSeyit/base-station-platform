@@ -12,8 +12,10 @@ import {
   YAxis,
 } from 'recharts'
 import { CHART_COLORS } from '../constants/colors'
+import { CHART_CONFIG } from '../constants/designSystem'
 import { metricsApi } from '../services/api'
 import { MetricData } from '../types'
+import { ensureArray } from '../utils/arrayUtils'
 import LoadingSpinner from './LoadingSpinner'
 
 interface ChartDataPoint {
@@ -39,24 +41,41 @@ interface AggregatedValues {
 }
 
 export default function MetricsChart() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['metrics-chart'],
     queryFn: async () => {
       const response = await metricsApi.getAll({
-        startTime: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-        limit: 10000,
+        startTime: new Date(Date.now() - CHART_CONFIG.DEFAULT_TIME_RANGE_MS).toISOString(),
+        limit: CHART_CONFIG.DEFAULT_DATA_LIMIT,
         sort: 'asc', // Oldest first for historical chart
       })
       return response.data
     },
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: CHART_CONFIG.DEFAULT_STALE_TIME_MS,
   })
 
   if (isLoading) {
     return <LoadingSpinner />
   }
 
-  const metrics = Array.isArray(data) ? data : []
+  if (error) {
+    return (
+      <Box
+        sx={{
+          height: CHART_CONFIG.DEFAULT_HEIGHT,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Typography sx={{ color: 'var(--status-offline)', fontSize: '0.875rem' }}>
+          Unable to load chart data
+        </Typography>
+      </Box>
+    )
+  }
+
+  const metrics = ensureArray(data as MetricData[])
 
   // Group metrics by date and calculate averages
   const aggregated: Record<string, AggregatedValues> = {}
@@ -114,7 +133,7 @@ export default function MetricsChart() {
 
   if (!hasData) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: CHART_CONFIG.DEFAULT_HEIGHT }}>
         <Typography color="text.secondary">No metrics data available</Typography>
       </Box>
     )
@@ -146,8 +165,12 @@ export default function MetricsChart() {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <LineChart data={chartData}>
+    <Box
+      role="img"
+      aria-label="7-day metrics trend chart showing CPU usage, memory usage, temperature, and signal strength"
+    >
+      <ResponsiveContainer width="100%" height={CHART_CONFIG.DEFAULT_HEIGHT}>
+        <LineChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--mono-400)" />
         <XAxis
           dataKey="date"
@@ -219,8 +242,9 @@ export default function MetricsChart() {
           dot={false}
           connectNulls
         />
-      </LineChart>
-    </ResponsiveContainer>
+        </LineChart>
+      </ResponsiveContainer>
+    </Box>
   )
 }
 

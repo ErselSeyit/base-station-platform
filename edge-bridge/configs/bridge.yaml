@@ -7,6 +7,7 @@ bridge:
   latitude: 22.5431
   longitude: 114.0579
   station_type: "5G_NR"
+  power_consumption: 1500.0
   description: "MIPS edge device running virtual base station simulator"
   poll_interval: 10s
   metrics_interval: 30s
@@ -20,6 +21,18 @@ device:
   tcp:
     host: "127.0.0.1"
     port: 9999
+    # TLS configuration for secure device connections
+    tls:
+      enabled: false  # Set to true to enable TLS
+      # Client certificate for mutual TLS (optional)
+      cert_file: ""   # e.g., "/etc/edge-bridge/certs/client.crt"
+      key_file: ""    # e.g., "/etc/edge-bridge/certs/client.key"
+      # CA certificate for server verification
+      ca_file: ""     # e.g., "/etc/edge-bridge/certs/ca.crt"
+      # Server name for certificate verification (defaults to host)
+      server_name: ""
+      # WARNING: Only for testing - disable certificate verification
+      insecure_skip_verify: false
 
 cloud:
   base_url: "http://localhost:8080"
@@ -28,3 +41,116 @@ cloud:
     password: "${BRIDGE_PASSWORD}"
   timeout: 30s
   retry_attempts: 3
+
+# Protocol Adapters Configuration
+adapters:
+  collect_interval: 30s
+  retry_on_failure: true
+  retry_interval: 30s
+
+  # SNMP Adapters - for UPS, PDU, environmental sensors
+  snmp:
+    # Example: Vertiv UPS monitoring
+    - enabled: false
+      name: "ups-vertiv-01"
+      target: "192.168.1.100"
+      port: 161
+      version: "v2c"
+      community: "public"
+      timeout: 5s
+      retries: 2
+      oid_profile: "vertiv"
+
+    # Example: Schneider/APC UPS with SNMPv3
+    - enabled: false
+      name: "ups-apc-01"
+      target: "192.168.1.101"
+      port: 161
+      version: "v3"
+      v3:
+        username: "snmpuser"
+        auth_protocol: "SHA256"
+        auth_password: "${SNMP_AUTH_PASS}"
+        priv_protocol: "AES256"
+        priv_password: "${SNMP_PRIV_PASS}"
+        security_level: "authPriv"
+      timeout: 5s
+      retries: 2
+      oid_profile: "schneider"
+
+    # Example: Custom OID mapping for generic device
+    - enabled: false
+      name: "env-sensor-01"
+      target: "192.168.1.102"
+      port: 161
+      version: "v2c"
+      community: "public"
+      timeout: 5s
+      retries: 2
+      oid_profile: "standard"
+      custom_oids:
+        - oid: "1.3.6.1.4.1.99999.1.1.0"
+          metric_type: "TEMPERATURE"
+          scale: 0.1
+          offset: 0.0
+        - oid: "1.3.6.1.4.1.99999.1.2.0"
+          metric_type: "HUMIDITY"
+          scale: 1.0
+          offset: 0.0
+
+  # MQTT Adapters - for IoT sensors and edge devices
+  mqtt:
+    # Example: Local MQTT broker for IoT sensors
+    - enabled: false
+      name: "mqtt-local"
+      broker: "tcp://localhost:1883"
+      client_id: "edge-bridge-01"
+      username: "${MQTT_USERNAME}"
+      password: "${MQTT_PASSWORD}"
+      use_tls: false
+      qos: 1
+      clean_session: true
+      topics:
+        # Environmental sensors
+        - topic: "sensors/+/temperature"
+          metric_type: "TEMPERATURE"
+          value_path: "value"
+          scale: 1.0
+        - topic: "sensors/+/humidity"
+          metric_type: "HUMIDITY"
+          value_path: "value"
+          scale: 1.0
+        # Power monitoring
+        - topic: "power/+/voltage"
+          metric_type: "VOLTAGE"
+          value_path: "data.voltage"
+          scale: 1.0
+        - topic: "power/+/battery_soc"
+          metric_type: "BATTERY_SOC"
+          value_path: "soc_percent"
+          scale: 1.0
+        # Security sensors
+        - topic: "security/+/door"
+          metric_type: "DOOR_STATUS"
+          value_path: "status"
+          scale: 1.0
+        - topic: "security/+/motion"
+          metric_type: "MOTION_DETECTED"
+          value_path: "detected"
+          scale: 1.0
+
+    # Example: Cloud MQTT broker with TLS
+    - enabled: false
+      name: "mqtt-cloud"
+      broker: "ssl://mqtt.example.com:8883"
+      client_id: "edge-bridge-cloud-01"
+      username: "${MQTT_CLOUD_USERNAME}"
+      password: "${MQTT_CLOUD_PASSWORD}"
+      use_tls: true
+      qos: 1
+      clean_session: true
+      topics:
+        - topic: "basestation/${BRIDGE_STATION_ID}/weather/#"
+          metric_type: "WIND_SPEED"
+          value_path: "wind.speed"
+          scale: 1.0

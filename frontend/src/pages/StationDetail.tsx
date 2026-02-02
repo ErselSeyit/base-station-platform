@@ -16,29 +16,28 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
+import ErrorDisplay from '../components/ErrorDisplay'
 import LoadingSpinner from '../components/LoadingSpinner'
 import MetricsChart from '../components/MetricsChart'
+import {
+  STATION_STATUS_STYLES,
+  ALERT_SEVERITY_STYLES,
+  GRID_CONTENT_SIDEBAR_SX,
+  GRID_1_2_COL_SX,
+  type StationStatusType,
+  type AlertSeverity,
+} from '../constants/designSystem'
 import { metricsApi, notificationsApi, stationApi } from '../services/api'
+import { formatTimestamp } from '../utils/statusHelpers'
 import { MetricData, Notification, NotificationType, StationStatus } from '../types'
-
-const STATUS_COLORS = {
-  ACTIVE: 'var(--status-active)',
-  MAINTENANCE: 'var(--status-maintenance)',
-  OFFLINE: 'var(--status-offline)',
-}
-
-const SEVERITY_COLORS = {
-  ALERT: 'var(--status-offline)',
-  WARNING: 'var(--status-maintenance)',
-  INFO: 'var(--status-info)',
-}
+import { ensureArray } from '../utils/arrayUtils'
 
 interface MetricRowProps {
   metric: MetricData
   delay: number
 }
 
-const MetricRow = ({ metric, delay }: MetricRowProps) => {
+const MetricRow = ({ metric, delay }: Readonly<MetricRowProps>) => {
   const getIcon = (type: string) => {
     switch (type) {
       case 'POWER_CONSUMPTION':
@@ -81,7 +80,7 @@ const MetricRow = ({ metric, delay }: MetricRowProps) => {
         borderBottom: '1px solid var(--surface-border)',
         transition: 'background 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
         '&:hover': {
-          background: 'var(--mono-50)',
+          background: 'var(--surface-hover)',
         },
         '&:last-child': {
           borderBottom: 'none',
@@ -109,7 +108,7 @@ const MetricRow = ({ metric, delay }: MetricRowProps) => {
               color: 'var(--mono-500)',
             }}
           >
-            {metric.timestamp ? new Date(metric.timestamp).toLocaleString() : 'No date'}
+            {formatTimestamp(metric.timestamp)}
           </Typography>
         </Box>
       </Box>
@@ -133,8 +132,9 @@ interface AlertRowProps {
   delay: number
 }
 
-const AlertRow = ({ alert, delay }: AlertRowProps) => {
-  const severityColor = SEVERITY_COLORS[alert.type as keyof typeof SEVERITY_COLORS] || SEVERITY_COLORS.INFO
+const AlertRow = ({ alert, delay }: Readonly<AlertRowProps>) => {
+  const severityStyle = ALERT_SEVERITY_STYLES[alert.type as AlertSeverity] || ALERT_SEVERITY_STYLES.INFO
+  const severityColor = severityStyle.colorVar
 
   const getIcon = (type: NotificationType) => {
     switch (type) {
@@ -161,7 +161,7 @@ const AlertRow = ({ alert, delay }: AlertRowProps) => {
         borderBottom: '1px solid var(--surface-border)',
         transition: 'background 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
         '&:hover': {
-          background: 'var(--mono-50)',
+          background: 'var(--surface-hover)',
         },
         '&:last-child': {
           borderBottom: 'none',
@@ -212,7 +212,7 @@ const AlertRow = ({ alert, delay }: AlertRowProps) => {
               color: 'var(--mono-500)',
             }}
           >
-            {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : 'No date'}
+            {formatTimestamp(alert.createdAt)}
           </Typography>
         </Box>
       </Box>
@@ -224,7 +224,7 @@ export default function StationDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
-  const { data: station, isLoading } = useQuery({
+  const { data: station, isLoading, error: stationError } = useQuery({
     queryKey: ['station', id],
     queryFn: async () => {
       const response = await stationApi.getById(Number(id))
@@ -233,7 +233,7 @@ export default function StationDetail() {
     enabled: !!id,
   })
 
-  const { data: metrics } = useQuery({
+  const { data: metrics, error: metricsError } = useQuery({
     queryKey: ['station-metrics', id],
     queryFn: async () => {
       const response = await metricsApi.getByStation(Number(id))
@@ -242,7 +242,7 @@ export default function StationDetail() {
     enabled: !!id,
   })
 
-  const { data: notifications } = useQuery({
+  const { data: notifications, error: notificationsError } = useQuery({
     queryKey: ['station-notifications', id],
     queryFn: async () => {
       const response = await notificationsApi.getByStation(Number(id))
@@ -255,6 +255,11 @@ export default function StationDetail() {
     return <LoadingSpinner />
   }
 
+  const error = stationError || metricsError || notificationsError
+  if (error) {
+    return <ErrorDisplay title="Failed to load station data" message={error.message} />
+  }
+
   if (!station) {
     return (
       <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
@@ -265,13 +270,13 @@ export default function StationDetail() {
     )
   }
 
-  const stationData = station
-  const stationMetrics = Array.isArray(metrics) ? metrics : []
-  const stationNotifications = Array.isArray(notifications) ? notifications : []
+  const stationMetrics = ensureArray(metrics as MetricData[])
+  const stationNotifications = ensureArray(notifications as Notification[])
 
   const latestMetrics = stationMetrics.slice(-5).reverse()
 
-  const statusColor = STATUS_COLORS[stationData.status as keyof typeof STATUS_COLORS] || STATUS_COLORS.OFFLINE
+  const statusStyle = STATION_STATUS_STYLES[station.status as StationStatusType] || STATION_STATUS_STYLES.OFFLINE
+  const statusColor = statusStyle.colorVar
 
   return (
     <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
@@ -296,7 +301,7 @@ export default function StationDetail() {
               borderRadius: '8px',
               transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
               '&:hover': {
-                background: 'var(--mono-100)',
+                background: 'var(--surface-hover)',
                 color: 'var(--mono-950)',
               },
             }}
@@ -315,7 +320,7 @@ export default function StationDetail() {
               color: 'var(--mono-950)',
             }}
           >
-            {stationData.stationName}
+            {station.stationName}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Box
@@ -327,7 +332,7 @@ export default function StationDetail() {
                 position: 'relative',
               }}
             >
-              {stationData.status === StationStatus.ACTIVE && (
+              {station.status === StationStatus.ACTIVE && (
                 <Box
                   sx={{
                     position: 'absolute',
@@ -347,7 +352,7 @@ export default function StationDetail() {
                 color: 'var(--mono-700)',
               }}
             >
-              {stationData.status}
+              {station.status}
             </Typography>
           </Box>
         </Box>
@@ -360,12 +365,12 @@ export default function StationDetail() {
             marginTop: '8px',
           }}
         >
-          Station ID: #{stationData.id} · {stationData.stationType}
+          Station ID: #{station.id} · {station.stationType}
         </Typography>
       </Box>
 
       {/* Main Content Grid */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: '16px' }}>
+      <Box sx={GRID_CONTENT_SIDEBAR_SX}>
         {/* Left Column */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Station Information */}
@@ -398,7 +403,7 @@ export default function StationDetail() {
               Station Information
             </Typography>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: '20px' }}>
+            <Box sx={GRID_1_2_COL_SX}>
               <Box>
                 <Typography
                   sx={{
@@ -420,7 +425,7 @@ export default function StationDetail() {
                     color: 'var(--mono-950)',
                   }}
                 >
-                  #{stationData.id}
+                  #{station.id}
                 </Typography>
               </Box>
 
@@ -444,7 +449,7 @@ export default function StationDetail() {
                     color: 'var(--mono-950)',
                   }}
                 >
-                  {stationData.stationType}
+                  {station.stationType}
                 </Typography>
               </Box>
 
@@ -471,7 +476,7 @@ export default function StationDetail() {
                     marginBottom: '4px',
                   }}
                 >
-                  {stationData.location}
+                  {station.location}
                 </Typography>
                 <Typography
                   sx={{
@@ -480,11 +485,11 @@ export default function StationDetail() {
                     color: 'var(--mono-600)',
                   }}
                 >
-                  {stationData.latitude}, {stationData.longitude}
+                  {station.latitude}, {station.longitude}
                 </Typography>
               </Box>
 
-              {stationData.description && (
+              {station.description && (
                 <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
                   <Typography
                     sx={{
@@ -505,7 +510,7 @@ export default function StationDetail() {
                       lineHeight: 1.6,
                     }}
                   >
-                    {stationData.description}
+                    {station.description}
                   </Typography>
                 </Box>
               )}

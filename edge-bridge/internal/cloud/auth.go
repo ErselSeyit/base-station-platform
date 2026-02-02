@@ -115,24 +115,35 @@ func (a *Authenticator) Login() error {
 }
 
 // GetToken returns the current token, refreshing if necessary.
+// Uses write lock when refresh is needed to prevent TOCTOU race.
 func (a *Authenticator) GetToken() (string, error) {
 	a.mu.RLock()
 	token := a.token
 	expiresAt := a.expiresAt
+	needsRefresh := time.Now().Add(a.config.RefreshAhead).After(expiresAt)
 	a.mu.RUnlock()
 
 	if token == "" {
 		return "", ErrNoToken
 	}
 
-	// Check if token needs refresh
-	if time.Now().Add(a.config.RefreshAhead).After(expiresAt) {
-		if err := a.Login(); err != nil {
-			return "", fmt.Errorf("%w: %v", ErrRefreshFailed, err)
+	// If refresh needed, acquire write lock to prevent concurrent refreshes
+	if needsRefresh {
+		a.mu.Lock()
+		// Double-check after acquiring write lock (another goroutine may have refreshed)
+		if time.Now().Add(a.config.RefreshAhead).After(a.expiresAt) {
+			a.mu.Unlock() // Release before Login() which acquires its own lock
+			if err := a.Login(); err != nil {
+				return "", fmt.Errorf("%w: %v", ErrRefreshFailed, err)
+			}
+			a.mu.RLock()
+			token = a.token
+			a.mu.RUnlock()
+		} else {
+			// Another goroutine already refreshed
+			token = a.token
+			a.mu.Unlock()
 		}
-		a.mu.RLock()
-		token = a.token
-		a.mu.RUnlock()
 	}
 
 	return token, nil

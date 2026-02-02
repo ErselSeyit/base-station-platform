@@ -4,6 +4,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.time.LocalDateTime;
 
@@ -274,31 +276,18 @@ class MetricDataDomainTest {
     @DisplayName("getHealthStatus()")
     class GetHealthStatusTests {
 
-        @Test
-        @DisplayName("should return CRITICAL for critical metrics")
-        void getHealthStatus_CriticalMetric_ReturnsCritical() {
+        @ParameterizedTest(name = "value {0} should return {1}")
+        @CsvSource({
+            "99.5, CRITICAL",   // Critical threshold
+            "92.0, WARNING",    // Anomaly but not critical
+            "50.0, NORMAL"      // Normal value
+        })
+        @DisplayName("should return correct health status based on metric value")
+        void getHealthStatus_ReturnsCorrectStatus(double value, String expectedStatus) {
             metric.setMetricType(MetricType.CPU_USAGE);
-            metric.setValue(99.5);  // Critical
+            metric.setValue(value);
 
-            assertThat(metric.getHealthStatus()).isEqualTo("CRITICAL");
-        }
-
-        @Test
-        @DisplayName("should return WARNING for anomalous metrics")
-        void getHealthStatus_AnomalousMetric_ReturnsWarning() {
-            metric.setMetricType(MetricType.CPU_USAGE);
-            metric.setValue(92.0);  // Anomaly but not critical
-
-            assertThat(metric.getHealthStatus()).isEqualTo("WARNING");
-        }
-
-        @Test
-        @DisplayName("should return NORMAL for normal metrics")
-        void getHealthStatus_NormalMetric_ReturnsNormal() {
-            metric.setMetricType(MetricType.CPU_USAGE);
-            metric.setValue(50.0);  // Normal
-
-            assertThat(metric.getHealthStatus()).isEqualTo("NORMAL");
+            assertThat(metric.getHealthStatus()).isEqualTo(expectedStatus);
         }
     }
 }

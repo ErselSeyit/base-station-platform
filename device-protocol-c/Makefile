@@ -27,6 +27,13 @@ else
     CFLAGS += -DNDEBUG
 endif
 
+# TLS support (requires mbedTLS)
+TLS ?= 0
+ifeq ($(TLS),1)
+    CFLAGS += -DDEVPROTO_TLS_ENABLE
+    LDFLAGS += -lmbedtls -lmbedcrypto -lmbedx509
+endif
+
 # Directories
 SRC_DIR = src
 INC_DIR = include
@@ -41,6 +48,7 @@ SRCS = $(SRC_DIR)/crc16.c \
        $(SRC_DIR)/transport.c \
        $(SRC_DIR)/transport_serial.c \
        $(SRC_DIR)/transport_tcp.c \
+       $(SRC_DIR)/transport_tls.c \
        $(SRC_DIR)/metrics.c
 
 OBJS = $(SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
@@ -75,7 +83,7 @@ $(LIB_STATIC): $(OBJS)
 
 # Shared library
 $(LIB_SHARED): $(OBJS)
-	$(CC) -shared -o $@ $^ -lpthread
+	$(CC) -shared -o $@ $^ -lpthread $(LDFLAGS)
 
 # Object files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)

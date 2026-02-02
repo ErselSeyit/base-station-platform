@@ -20,7 +20,26 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { CSS_VARS } from '../constants/designSystem'
+import { formatTimestamp } from '../utils/statusHelpers'
+import { showToast } from '../utils/toast'
+
+// Delay before revoking blob URL to ensure download starts
+const URL_REVOKE_DELAY_MS = 1000
+
+// Report type styling - extracted to avoid recreation on each render
+const TYPE_COLORS = {
+  pdf: { bg: CSS_VARS.statusErrorBgSubtle, color: CSS_VARS.statusOffline },
+  excel: { bg: CSS_VARS.statusActiveBgSubtle, color: CSS_VARS.statusActive },
+  json: { bg: CSS_VARS.colorBlueBg, color: CSS_VARS.colorBlue500 },
+} as const
+
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  pdf: <PdfIcon sx={{ fontSize: 20 }} />,
+  excel: <DocIcon sx={{ fontSize: 20 }} />,
+  json: <DataIcon sx={{ fontSize: 20 }} />,
+}
 
 interface ReportItem {
   id: string
@@ -32,14 +51,16 @@ interface ReportItem {
   status: 'ready' | 'generating' | 'scheduled'
 }
 
-const reports: ReportItem[] = [
+// Static report metadata - timestamps are placeholders until API integration
+// TODO: Replace with API fetch from /api/reports/metadata
+const STATIC_REPORTS: ReportItem[] = [
   {
     id: 'bi-report',
     name: 'BI Report',
     description: 'Comprehensive business intelligence report with charts, KPIs, and station analytics',
     type: 'pdf',
     size: '2.4 MB',
-    lastGenerated: new Date().toISOString(),
+    lastGenerated: '2026-02-02T00:00:00.000Z',
     status: 'ready',
   },
   {
@@ -48,7 +69,7 @@ const reports: ReportItem[] = [
     description: 'Complete log of AI-powered diagnostics, problems detected, and resolutions applied',
     type: 'json',
     size: '156 KB',
-    lastGenerated: new Date().toISOString(),
+    lastGenerated: '2026-02-02T00:00:00.000Z',
     status: 'ready',
   },
   {
@@ -57,7 +78,7 @@ const reports: ReportItem[] = [
     description: 'Raw metrics data export for all stations including CPU, memory, temperature, and signal',
     type: 'json',
     size: '4.2 MB',
-    lastGenerated: new Date(Date.now() - 3600000).toISOString(),
+    lastGenerated: '2026-02-01T23:00:00.000Z',
     status: 'ready',
   },
   {
@@ -66,7 +87,7 @@ const reports: ReportItem[] = [
     description: 'Summary of all alerts and notifications with resolution status',
     type: 'pdf',
     size: '890 KB',
-    lastGenerated: new Date(Date.now() - 7200000).toISOString(),
+    lastGenerated: '2026-02-01T22:00:00.000Z',
     status: 'ready',
   },
 ]
@@ -91,17 +112,7 @@ function ReportCard({ report, onDownload, onGenerate }: Readonly<{
     setIsGenerating(false)
   }
 
-  const typeColors: Record<string, { bg: string; color: string }> = {
-    pdf: { bg: 'rgba(220, 38, 38, 0.1)', color: 'var(--status-offline)' },
-    excel: { bg: 'rgba(22, 163, 74, 0.1)', color: 'var(--status-active)' },
-    json: { bg: 'rgba(59, 130, 246, 0.1)', color: 'var(--status-info)' },
-  }
-
-  const typeIcons: Record<string, React.ReactNode> = {
-    pdf: <PdfIcon sx={{ fontSize: 20 }} />,
-    excel: <DocIcon sx={{ fontSize: 20 }} />,
-    json: <DataIcon sx={{ fontSize: 20 }} />,
-  }
+  const typeStyle = TYPE_COLORS[report.type]
 
   return (
     <Card
@@ -116,8 +127,8 @@ function ReportCard({ report, onDownload, onGenerate }: Readonly<{
         transition: 'all 0.2s ease',
         '&:hover': {
           transform: 'translateY(-2px)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-          borderColor: 'var(--mono-400)',
+          boxShadow: 'var(--shadow-lg)',
+          borderColor: CSS_VARS.mono400,
         },
       }}
     >
@@ -127,21 +138,21 @@ function ReportCard({ report, onDownload, onGenerate }: Readonly<{
           sx={{
             p: 1.5,
             borderRadius: '12px',
-            background: typeColors[report.type].bg,
-            color: typeColors[report.type].color,
+            background: typeStyle.bg,
+            color: typeStyle.color,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          {typeIcons[report.type]}
+          {TYPE_ICONS[report.type]}
         </Box>
         <Chip
           label={report.type.toUpperCase()}
           size="small"
           sx={{
-            backgroundColor: typeColors[report.type].bg,
-            color: typeColors[report.type].color,
+            backgroundColor: typeStyle.bg,
+            color: typeStyle.color,
             fontWeight: 600,
             fontSize: '0.7rem',
           }}
@@ -177,7 +188,7 @@ function ReportCard({ report, onDownload, onGenerate }: Readonly<{
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           <ScheduleIcon sx={{ fontSize: 16, color: 'var(--mono-400)' }} />
           <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
-            Last generated: {new Date(report.lastGenerated).toLocaleString()}
+            Last generated: {formatTimestamp(report.lastGenerated)}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -225,7 +236,7 @@ function ReportCard({ report, onDownload, onGenerate }: Readonly<{
               height: 40,
               color: 'var(--mono-700)',
               '&:hover': {
-                background: 'var(--mono-100)',
+                background: 'var(--surface-hover)',
                 borderColor: 'var(--mono-400)',
                 color: 'var(--mono-900)',
               },
@@ -243,97 +254,68 @@ function ReportCard({ report, onDownload, onGenerate }: Readonly<{
   )
 }
 
-export default function Reports() {
-  const handleDownload = async (reportId: string) => {
-    // Trigger actual download based on report type
-    if (reportId === 'bi-report') {
-      // Generate and download BI report PDF on-demand from AI diagnostic service
-      try {
-        const response = await fetch('/api/reports/bi')
-        if (response.ok) {
-          const arrayBuffer = await response.arrayBuffer()
-          const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = `bi-report-${new Date().toISOString().slice(0, 10)}.pdf`
-          document.body.appendChild(link)
-          link.click()
-          link.remove()
-          // Delay cleanup to ensure download starts
-          setTimeout(() => URL.revokeObjectURL(url), 1000)
-        } else {
-          console.error('Failed to generate BI report:', response.statusText)
-        }
-      } catch (error) {
-        console.error('BI Report generation failed:', error)
-      }
-    } else if (reportId === 'ai-diagnostics') {
-      // Download AI diagnostics JSON from backend
-      try {
-        const response = await fetch('/api/reports/diagnostics')
-        if (response.ok) {
-          const data = await response.json()
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = `ai-diagnostics-${new Date().toISOString().slice(0, 10)}.json`
-          document.body.appendChild(link)
-          link.click()
-          link.remove()
-          setTimeout(() => URL.revokeObjectURL(url), 1000)
-        } else {
-          console.error('Failed to fetch AI diagnostics:', response.statusText)
-        }
-      } catch (error) {
-        console.error('AI Diagnostics download failed:', error)
-      }
-    }
-  }
+// Report download configuration
+const REPORT_CONFIG = {
+  'bi-report': {
+    endpoint: '/api/reports/bi',
+    filename: 'bi-report',
+    extension: 'pdf',
+    mimeType: 'application/pdf',
+    isJson: false,
+  },
+  'ai-diagnostics': {
+    endpoint: '/api/reports/diagnostics',
+    filename: 'ai-diagnostics',
+    extension: 'json',
+    mimeType: 'application/json',
+    isJson: true,
+  },
+} as const
 
-  const handleGenerate = async (reportId: string) => {
-    // Actually regenerate the report by calling the backend
-    if (reportId === 'bi-report') {
-      // Trigger BI report regeneration (same as download - it generates fresh each time)
-      try {
-        const response = await fetch('/api/reports/bi')
-        if (response.ok) {
-          const arrayBuffer = await response.arrayBuffer()
-          const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = `bi-report-${new Date().toISOString().slice(0, 10)}.pdf`
-          document.body.appendChild(link)
-          link.click()
-          link.remove()
-          setTimeout(() => URL.revokeObjectURL(url), 1000)
-        }
-      } catch (error) {
-        console.error('BI Report regeneration failed:', error)
-      }
-    } else if (reportId === 'ai-diagnostics') {
-      // Fetch fresh AI diagnostics log
-      try {
-        const response = await fetch('/api/reports/diagnostics')
-        if (response.ok) {
-          const data = await response.json()
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = `ai-diagnostics-${new Date().toISOString().slice(0, 10)}.json`
-          document.body.appendChild(link)
-          link.click()
-          link.remove()
-          setTimeout(() => URL.revokeObjectURL(url), 1000)
-        }
-      } catch (error) {
-        console.error('AI Diagnostics fetch failed:', error)
-      }
+type ReportId = keyof typeof REPORT_CONFIG
+
+/**
+ * Downloads a report file by fetching from the backend and triggering browser download.
+ * Shared by both handleDownload and handleGenerate since they perform the same action.
+ */
+async function downloadReport(reportId: ReportId): Promise<void> {
+  const config = REPORT_CONFIG[reportId]
+  if (!config) return
+
+  try {
+    const response = await fetch(config.endpoint)
+    if (!response.ok) {
+      showToast.error(`Failed to download ${config.filename}`)
+      return
     }
+
+    let blob: Blob
+    if (config.isJson) {
+      const data = await response.json()
+      blob = new Blob([JSON.stringify(data, null, 2)], { type: config.mimeType })
+    } else {
+      const arrayBuffer = await response.arrayBuffer()
+      blob = new Blob([arrayBuffer], { type: config.mimeType })
+    }
+
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${config.filename}-${new Date().toISOString().slice(0, 10)}.${config.extension}`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    // Delay cleanup to ensure download starts
+    setTimeout(() => URL.revokeObjectURL(url), URL_REVOKE_DELAY_MS)
+  } catch {
+    showToast.error(`Failed to download report`)
   }
+}
+
+export default function Reports() {
+  // Both download and generate perform the same action - fetch fresh report from backend
+  const handleDownload = useCallback((reportId: string) => downloadReport(reportId as ReportId), [])
+  const handleGenerate = useCallback((reportId: string) => downloadReport(reportId as ReportId), [])
 
   return (
     <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, maxWidth: '1400px', margin: '0 auto' }}>
@@ -343,7 +325,7 @@ export default function Reports() {
           sx={{
             p: 1.5,
             borderRadius: '12px',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+            background: CSS_VARS.gradientBlue,
             color: 'white',
           }}
         >
@@ -389,7 +371,7 @@ export default function Reports() {
                 sx={{
                   p: 1,
                   borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                  background: CSS_VARS.gradientBlue,
                   color: 'white',
                   display: 'flex',
                   alignItems: 'center',
@@ -426,12 +408,12 @@ export default function Reports() {
                 label="Executive Summary"
                 size="small"
                 sx={{
-                  backgroundColor: 'rgba(22, 163, 74, 0.1)',
-                  color: 'var(--status-active)',
+                  backgroundColor: CSS_VARS.statusActiveBgSubtle,
+                  color: CSS_VARS.statusActive,
                   fontWeight: 500,
                   fontSize: '0.75rem',
-                  border: '1px solid rgba(22, 163, 74, 0.2)',
-                  '& .MuiChip-icon': { color: 'var(--status-active) !important' }
+                  border: `1px solid ${CSS_VARS.statusActiveBorder}`,
+                  '& .MuiChip-icon': { color: `${CSS_VARS.statusActive} !important` }
                 }}
               />
               <Chip
@@ -439,12 +421,12 @@ export default function Reports() {
                 label="Performance Charts"
                 size="small"
                 sx={{
-                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                  color: '#3b82f6',
+                  backgroundColor: CSS_VARS.colorBlueBg,
+                  color: CSS_VARS.colorBlue500,
                   fontWeight: 500,
                   fontSize: '0.75rem',
-                  border: '1px solid rgba(59, 130, 246, 0.2)',
-                  '& .MuiChip-icon': { color: '#3b82f6 !important' }
+                  border: `1px solid ${CSS_VARS.colorBlueBorder}`,
+                  '& .MuiChip-icon': { color: `${CSS_VARS.colorBlue500} !important` }
                 }}
               />
               <Chip
@@ -452,12 +434,12 @@ export default function Reports() {
                 label="Network Analysis"
                 size="small"
                 sx={{
-                  backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                  color: '#8b5cf6',
+                  backgroundColor: CSS_VARS.colorPurpleBg,
+                  color: CSS_VARS.colorPurple500,
                   fontWeight: 500,
                   fontSize: '0.75rem',
-                  border: '1px solid rgba(139, 92, 246, 0.2)',
-                  '& .MuiChip-icon': { color: '#8b5cf6 !important' }
+                  border: `1px solid ${CSS_VARS.colorPurpleBorder}`,
+                  '& .MuiChip-icon': { color: `${CSS_VARS.colorPurple500} !important` }
                 }}
               />
             </Box>
@@ -503,7 +485,7 @@ export default function Reports() {
       </Typography>
 
       <Grid container spacing={3}>
-        {reports.map(report => (
+        {STATIC_REPORTS.map(report => (
           <Grid item xs={12} sm={6} lg={3} key={report.id}>
             <ReportCard
               report={report}
@@ -514,13 +496,6 @@ export default function Reports() {
         ))}
       </Grid>
 
-      {/* CSS for spin animation */}
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </Box>
   )
 }

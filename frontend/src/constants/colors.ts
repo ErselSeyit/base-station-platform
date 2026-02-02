@@ -12,28 +12,28 @@ export const CHART_COLORS = {
   memoryUsage: 'var(--status-maintenance)', // Yellow - warning level
 
   // Environmental metrics
-  temperature: '#f97316',    // Orange - heat/warning
-  fanSpeed: '#f97316',       // Orange - related to temperature
+  temperature: 'var(--color-amber-600)',    // Orange - heat/warning
+  fanSpeed: 'var(--color-amber-600)',       // Orange - related to temperature
 
   // Signal/network metrics
-  signalStrength: '#8b5cf6', // Purple - radio/signal
-  rsrp: '#8b5cf6',           // Purple - signal quality
-  sinr: '#f59e0b',           // Amber - signal ratio
+  signalStrength: 'var(--color-purple-500)', // Purple - radio/signal
+  rsrp: 'var(--color-purple-500)',           // Purple - signal quality
+  sinr: 'var(--color-amber-500)',            // Amber - signal ratio
 
   // Throughput metrics
-  downloadThroughput: '#16a34a',  // Green - download
-  uploadThroughput: '#0891b2',    // Cyan - upload
+  downloadThroughput: 'var(--status-active)',  // Green - download
+  uploadThroughput: 'var(--accent-info)',      // Cyan - upload
   dataThroughput: 'var(--status-active)',
 
   // 5G specific
-  nr3500Download: '#16a34a',  // Green
-  nr3500Upload: '#0891b2',    // Cyan
-  nr700Download: '#10b981',   // Emerald
-  nr700Upload: '#06b6d4',     // Cyan light
+  nr3500Download: 'var(--status-active)',   // Green
+  nr3500Upload: 'var(--accent-info)',       // Cyan
+  nr700Download: 'var(--color-emerald-500)', // Emerald
+  nr700Upload: 'var(--accent-info)',         // Cyan light
 
   // Quality metrics
-  latency: '#ec4899',         // Pink - timing
-  txImbalance: '#f97316',     // Orange - imbalance/warning
+  latency: 'var(--color-violet-500)',        // Pink/violet - timing
+  txImbalance: 'var(--color-amber-600)',     // Orange - imbalance/warning
 
   // General purpose
   primary: 'var(--status-active)',
@@ -42,25 +42,16 @@ export const CHART_COLORS = {
   error: 'var(--status-offline)',
 } as const
 
-// Semantic status colors (reference CSS variables)
-export const STATUS_COLORS = {
-  active: 'var(--status-active)',
-  maintenance: 'var(--status-maintenance)',
-  offline: 'var(--status-offline)',
-  info: 'var(--status-info)',
-} as const
-
 // Color palette for multi-line charts (when you need distinct colors)
 export const CHART_PALETTE = [
-  'var(--status-active)',      // Green
-  'var(--status-maintenance)', // Yellow
-  '#8b5cf6',                   // Purple
-  '#f97316',                   // Orange
-  '#0891b2',                   // Cyan
-  '#ec4899',                   // Pink
-  '#10b981',                   // Emerald
-  '#f59e0b',                   // Amber
+  'var(--status-active)',       // Green
+  'var(--status-maintenance)',  // Yellow
+  'var(--color-purple-500)',    // Purple
+  'var(--color-amber-600)',     // Orange
+  'var(--accent-info)',         // Cyan
+  'var(--color-violet-500)',    // Pink/violet
+  'var(--color-emerald-500)',   // Emerald
+  'var(--color-amber-500)',     // Amber
 ] as const
 
 export type ChartColorKey = keyof typeof CHART_COLORS
-export type StatusColorKey = keyof typeof STATUS_COLORS

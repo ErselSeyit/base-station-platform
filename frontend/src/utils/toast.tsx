@@ -6,6 +6,7 @@ export const showToast = {
     toast.success(message, {
       ...options,
       icon: <CheckCircle sx={{ color: 'var(--status-active)' }} />,
+      style: { borderLeft: '4px solid var(--status-active)' },
     })
   },
 
@@ -13,6 +14,7 @@ export const showToast = {
     toast.error(message, {
       ...options,
       icon: <Error sx={{ color: 'var(--status-offline)' }} />,
+      style: { borderLeft: '4px solid var(--status-offline)' },
     })
   },
 
@@ -20,6 +22,7 @@ export const showToast = {
     toast(message, {
       ...options,
       icon: <Info sx={{ color: 'var(--status-info)' }} />,
+      style: { borderLeft: '4px solid var(--status-info)' },
     })
   },
 
@@ -27,9 +30,7 @@ export const showToast = {
     toast(message, {
       ...options,
       icon: <Warning sx={{ color: 'var(--status-maintenance)' }} />,
-      style: {
-        borderLeft: '4px solid var(--status-maintenance)',
-      },
+      style: { borderLeft: '4px solid var(--status-maintenance)' },
     })
   },
 

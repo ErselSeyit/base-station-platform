@@ -181,6 +181,44 @@ public class DiagnosticController {
     }
 
     /**
+     * Receive command execution result from base-station-service.
+     * This automatically updates the learning engine based on whether the command succeeded.
+     */
+    @PostMapping("/{sessionId}/command-result")
+    public ResponseEntity<Map<String, Object>> receiveCommandResult(
+            @PathVariable String sessionId,
+            @Valid @RequestBody CommandResultNotification notification) {
+
+        log.info("Received command result for session {}: success={}",
+                sessionId, notification.success());
+
+        // Auto-submit feedback based on command success
+        return Objects.requireNonNull(
+                sessionService.submitFeedback(
+                                sessionId,
+                                notification.success(),
+                                notification.success() ? 5 : 1,  // Auto-rate based on success
+                                "Auto-feedback from command execution",
+                                notification.success() ? "Command executed successfully" : "Command failed",
+                                "system-auto")
+                        .map(session -> {
+                            log.info("Auto-feedback recorded for session {} based on command result", sessionId);
+                            Map<String, Object> response = new java.util.HashMap<>();
+                            response.put("status", "recorded");
+                            response.put("sessionId", sessionId);
+                            response.put("wasEffective", notification.success());
+                            return ResponseEntity.ok(response);
+                        })
+                        .orElseGet(() -> {
+                            Map<String, Object> response = new java.util.HashMap<>();
+                            response.put("status", "session_not_found");
+                            response.put("sessionId", sessionId);
+                            return ResponseEntity.ok(response);
+                        }),
+                RESPONSE_NULL_MESSAGE);
+    }
+
+    /**
      * Request object for feedback submission.
      */
     public record FeedbackRequest(
@@ -194,5 +232,16 @@ public class DiagnosticController {
             @Nullable String operatorNotes,
 
             @Nullable String actualOutcome
+    ) {}
+
+    /**
+     * Notification from base-station-service about command execution result.
+     */
+    public record CommandResultNotification(
+            @NotNull String commandId,
+            @NotNull String diagnosticSessionId,
+            String problemCode,
+            @NotNull Boolean success,
+            Integer returnCode
     ) {}
 }

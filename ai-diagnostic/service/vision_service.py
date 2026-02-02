@@ -14,7 +14,8 @@ import io
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
+import threading
 
 import numpy as np
 
@@ -157,7 +158,7 @@ class VisionService:
 
         return VisionAnalysisResult(
             station_id=station_id,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             image_type="led_panel",
             led_detections=led_detections,
             overall_status=overall_status,
@@ -242,7 +243,7 @@ class VisionService:
         if not color_scores:
             return LEDStatus.UNKNOWN, 0.0, dominant_color
 
-        best_color = max(color_scores, key=color_scores.get)
+        best_color = max(color_scores, key=lambda k: color_scores[k])
         confidence = color_scores[best_color]
 
         # Map color to status
@@ -383,13 +384,16 @@ class VisionService:
         }
 
 
-# Singleton instance
+# Singleton instance with thread-safe initialization
 _vision_service: Optional[VisionService] = None
+_vision_service_lock = threading.Lock()
 
 
 def get_vision_service() -> VisionService:
-    """Get or create singleton VisionService instance."""
+    """Get or create singleton VisionService instance (thread-safe)."""
     global _vision_service
     if _vision_service is None:
-        _vision_service = VisionService()
+        with _vision_service_lock:
+            if _vision_service is None:  # Double-check locking
+                _vision_service = VisionService()
     return _vision_service

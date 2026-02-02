@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from collections import defaultdict
 from enum import Enum
+import threading
 import json
 
 import numpy as np
@@ -451,15 +452,18 @@ class AlarmCorrelationService:
         }
 
 
-# Singleton instance
+# Singleton instance with thread-safe initialization
 _alarm_service: Optional[AlarmCorrelationService] = None
+_alarm_service_lock = threading.Lock()
 
 
 def get_alarm_correlation_service() -> AlarmCorrelationService:
-    """Get or create singleton AlarmCorrelationService instance."""
+    """Get or create singleton AlarmCorrelationService instance (thread-safe)."""
     global _alarm_service
     if _alarm_service is None:
-        _alarm_service = AlarmCorrelationService()
+        with _alarm_service_lock:
+            if _alarm_service is None:  # Double-check locking
+                _alarm_service = AlarmCorrelationService()
     return _alarm_service
 
 

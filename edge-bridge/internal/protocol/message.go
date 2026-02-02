@@ -106,8 +106,102 @@ const (
 	MetricCADLThroughput      MetricType = 0x78
 	MetricCAULThroughput      MetricType = 0x79
 
+	// ========================================================================
+	// Extended Metrics (Phase 2 Enhancement)
+	// ========================================================================
+
+	// Power & Energy metrics (0x80-0x8F)
+	MetricUtilityVoltageL1   MetricType = 0x80
+	MetricUtilityVoltageL2   MetricType = 0x81
+	MetricUtilityVoltageL3   MetricType = 0x82
+	MetricPowerFactor        MetricType = 0x83
+	MetricGeneratorFuelLevel MetricType = 0x84
+	MetricGeneratorRuntime   MetricType = 0x85
+	MetricBatterySOC         MetricType = 0x86
+	MetricBatteryDOD         MetricType = 0x87
+	MetricBatteryCellTempMin MetricType = 0x88
+	MetricBatteryCellTempMax MetricType = 0x89
+	MetricSolarPanelVoltage  MetricType = 0x8A
+	MetricSolarChargeCurrent MetricType = 0x8B
+	MetricSitePowerKWH       MetricType = 0x8C
+
+	// Environmental & Safety metrics (0x90-0x9F)
+	MetricWindSpeed          MetricType = 0x90
+	MetricWindDirection      MetricType = 0x91
+	MetricPrecipitation      MetricType = 0x92
+	MetricLightningDistance  MetricType = 0x93
+	MetricTiltAngle          MetricType = 0x94
+	MetricVibrationLevel     MetricType = 0x95
+	MetricWaterLevel         MetricType = 0x96
+	MetricPM25Level          MetricType = 0x97
+	MetricSmokeDetected      MetricType = 0x98
+	MetricCOLevel            MetricType = 0x99
+	MetricDoorStatus         MetricType = 0x9A
+	MetricMotionDetected     MetricType = 0x9B
+
+	// Transport/Backhaul metrics (0xA0-0xAF)
+	MetricFiberRxPower       MetricType = 0xA0
+	MetricFiberTxPower       MetricType = 0xA1
+	MetricFiberBER           MetricType = 0xA2
+	MetricFiberOSNR          MetricType = 0xA3
+	MetricMWRSL              MetricType = 0xA4
+	MetricMWSNR              MetricType = 0xA5
+	MetricMWModulation       MetricType = 0xA6
+	MetricEthUtilization     MetricType = 0xA7
+	MetricEthErrors          MetricType = 0xA8
+	MetricEthLatency         MetricType = 0xA9
+	MetricPTPOffset          MetricType = 0xAA
+	MetricGPSSatellites      MetricType = 0xAB
+
+	// Advanced Radio metrics (0xB0-0xBF)
+	MetricBeamWeightMag      MetricType = 0xB0
+	MetricBeamWeightPhase    MetricType = 0xB1
+	MetricPrecodingRank      MetricType = 0xB2
+	MetricPIMLevel           MetricType = 0xB3
+	MetricCoChannelInterf    MetricType = 0xB4
+	MetricOccupiedBandwidth  MetricType = 0xB5
+	MetricACLR               MetricType = 0xB6
+	MetricGTPThroughput      MetricType = 0xB7
+	MetricPacketDelay        MetricType = 0xB8
+	MetricRRCSetupSuccess    MetricType = 0xB9
+	MetricPagingSuccess      MetricType = 0xBA
+
+	// Network Slicing metrics (0xC0-0xCF) - 5G specific
+	MetricSliceThroughput    MetricType = 0xC0
+	MetricSliceLatency       MetricType = 0xC1
+	MetricSlicePacketLoss    MetricType = 0xC2
+	MetricSlicePRBUtil       MetricType = 0xC3
+	MetricSliceSLACompliance MetricType = 0xC4
+
 	// Special values
 	MetricAll              MetricType = 0xFF
+)
+
+// Metric type aliases for adapter compatibility
+const (
+	// Generic aliases
+	MetricPower           = MetricPowerConsumption
+	MetricBatteryTemp     = MetricTemperature      // Used for battery temperature readings
+	MetricTxPower         = MetricSignalStrength   // TX power mapping
+	MetricRxPower         = MetricSignalQuality    // RX power mapping
+	MetricEthUtil         = MetricEthUtilization   // Ethernet utilization alias
+	MetricDiskUsage       = MetricMemoryUsage      // Storage usage (placeholder)
+	MetricActiveUsers     = MetricConnectionCount  // Active user count
+	MetricMaxUsers        = MetricConnectionCount  // Max user count (same underlying type)
+	MetricPRBUsage        = MetricSlicePRBUtil     // PRB utilization
+	MetricSoftwareVersion = MetricUptime           // Version info (placeholder)
+
+	// RF signal aliases (generic, not band-specific)
+	MetricRSSI = MetricSignalStrength
+	MetricRSRP = MetricRSRPNR3500
+	MetricRSRQ = MetricSignalQuality
+	MetricSINR = MetricSINRNR3500
+
+	// Call/Handover metrics
+	MetricHandoverSuccess = MetricHandoverSuccessRate
+	MetricHandoverFail    = MetricHandoverSuccessRate // Inverse metric (same type)
+	MetricCallDrop        = MetricPacketLoss          // Call drop rate
+	MetricRRCSuccess      = MetricRRCSetupSuccess     // RRC setup alias
 )
 
 // metricTypeNames maps metric types to their string names for the monitoring service.
@@ -171,6 +265,69 @@ var metricTypeNames = map[MetricType]string{
 	// Carrier Aggregation metrics
 	MetricCADLThroughput: "CA_DL_THROUGHPUT",
 	MetricCAULThroughput: "CA_UL_THROUGHPUT",
+
+	// Power & Energy metrics (0x80-0x8F)
+	MetricUtilityVoltageL1:   "UTILITY_VOLTAGE_L1",
+	MetricUtilityVoltageL2:   "UTILITY_VOLTAGE_L2",
+	MetricUtilityVoltageL3:   "UTILITY_VOLTAGE_L3",
+	MetricPowerFactor:        "POWER_FACTOR",
+	MetricGeneratorFuelLevel: "GENERATOR_FUEL_LEVEL",
+	MetricGeneratorRuntime:   "GENERATOR_RUNTIME",
+	MetricBatterySOC:         "BATTERY_SOC",
+	MetricBatteryDOD:         "BATTERY_DOD",
+	MetricBatteryCellTempMin: "BATTERY_CELL_TEMP_MIN",
+	MetricBatteryCellTempMax: "BATTERY_CELL_TEMP_MAX",
+	MetricSolarPanelVoltage:  "SOLAR_PANEL_VOLTAGE",
+	MetricSolarChargeCurrent: "SOLAR_CHARGE_CURRENT",
+	MetricSitePowerKWH:       "SITE_POWER_KWH",
+
+	// Environmental & Safety metrics (0x90-0x9F)
+	MetricWindSpeed:         "WIND_SPEED",
+	MetricWindDirection:     "WIND_DIRECTION",
+	MetricPrecipitation:     "PRECIPITATION",
+	MetricLightningDistance: "LIGHTNING_DISTANCE",
+	MetricTiltAngle:         "TILT_ANGLE",
+	MetricVibrationLevel:    "VIBRATION_LEVEL",
+	MetricWaterLevel:        "WATER_LEVEL",
+	MetricPM25Level:         "PM25_LEVEL",
+	MetricSmokeDetected:     "SMOKE_DETECTED",
+	MetricCOLevel:           "CO_LEVEL",
+	MetricDoorStatus:        "DOOR_STATUS",
+	MetricMotionDetected:    "MOTION_DETECTED",
+
+	// Transport/Backhaul metrics (0xA0-0xAF)
+	MetricFiberRxPower:   "FIBER_RX_POWER",
+	MetricFiberTxPower:   "FIBER_TX_POWER",
+	MetricFiberBER:       "FIBER_BER",
+	MetricFiberOSNR:      "FIBER_OSNR",
+	MetricMWRSL:          "MW_RSL",
+	MetricMWSNR:          "MW_SNR",
+	MetricMWModulation:   "MW_MODULATION",
+	MetricEthUtilization: "ETH_UTILIZATION",
+	MetricEthErrors:      "ETH_ERRORS",
+	MetricEthLatency:     "ETH_LATENCY",
+	MetricPTPOffset:      "PTP_OFFSET",
+	MetricGPSSatellites:  "GPS_SATELLITES",
+
+	// Advanced Radio metrics (0xB0-0xBF)
+	MetricBeamWeightMag:     "BEAM_WEIGHT_MAG",
+	MetricBeamWeightPhase:   "BEAM_WEIGHT_PHASE",
+	MetricPrecodingRank:     "PRECODING_RANK",
+	MetricPIMLevel:          "PIM_LEVEL",
+	MetricCoChannelInterf:   "CO_CHANNEL_INTERFERENCE",
+	MetricOccupiedBandwidth: "OCCUPIED_BANDWIDTH",
+	MetricACLR:              "ACLR",
+	MetricGTPThroughput:     "GTP_THROUGHPUT",
+	MetricPacketDelay:       "PACKET_DELAY",
+	MetricRRCSetupSuccess:   "RRC_SETUP_SUCCESS",
+	MetricPagingSuccess:     "PAGING_SUCCESS",
+
+	// Network Slicing metrics (0xC0-0xCF)
+	MetricSliceThroughput:    "SLICE_THROUGHPUT",
+	MetricSliceLatency:       "SLICE_LATENCY",
+	MetricSlicePacketLoss:    "SLICE_PACKET_LOSS",
+	MetricSlicePRBUtil:       "SLICE_PRB_UTIL",
+	MetricSliceSLACompliance: "SLICE_SLA_COMPLIANCE",
 }
 
 // MetricTypeString returns the metric type name for the monitoring service.

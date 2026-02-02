@@ -50,3 +50,16 @@ notification:
     thread-name-prefix: notification-
     await-termination-seconds: 30
     wait-for-tasks-to-complete-on-shutdown: true
+
+# External alert integrations
+alerts:
+  pagerduty:
+    enabled: ${PAGERDUTY_ENABLED:false}
+    routing-key: ${PAGERDUTY_ROUTING_KEY:}
+    source: ${PAGERDUTY_SOURCE:base-station-platform}
+  slack:
+    enabled: ${SLACK_ENABLED:false}
+    webhook-url: ${SLACK_WEBHOOK_URL:}
+    channel: ${SLACK_CHANNEL:}
+    username: ${SLACK_USERNAME:Base Station Alerts}
+    icon-emoji: ${SLACK_ICON_EMOJI::satellite:}

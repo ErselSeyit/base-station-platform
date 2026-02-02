@@ -63,7 +63,8 @@ public class DiagnosticClient {
             @Value("${diagnostic.service.url:http://localhost:9091}") String diagnosticServiceUrl,
             @Value("${diagnostic.service.secret:}") String secret,
             @Value("${diagnostic.service.enabled:true}") boolean enabled,
-            @Value("${diagnostic.service.timeout-ms:5000}") int timeoutMs) {
+            @Value("${diagnostic.service.timeout-ms:5000}") int timeoutMs,
+            @Value("${spring.profiles.active:}") String activeProfiles) {
         this.diagnosticServiceUrl = diagnosticServiceUrl;
         this.objectMapper = objectMapper;
         this.secret = secret;
@@ -79,8 +80,14 @@ public class DiagnosticClient {
                 .requestFactory(requestFactory)
                 .build();
 
+        // Validate secret configuration
         if (secret == null || secret.isBlank()) {
-            log.warn("DiagnosticClient: No secret configured - requests will not be authenticated");
+            boolean isProduction = activeProfiles != null && activeProfiles.contains("prod");
+            if (isProduction) {
+                throw new IllegalStateException(
+                    "DIAGNOSTIC_SECRET is required in production - set via diagnostic.service.secret or DIAGNOSTIC_SERVICE_SECRET env var");
+            }
+            log.warn("DiagnosticClient: No secret configured - requests will not be authenticated (dev mode only)");
         }
         log.info("DiagnosticClient initialized: url={}, enabled={}, authenticated={}, timeout={}ms",
                 diagnosticServiceUrl, enabled, secret != null && !secret.isBlank(), timeoutMs);

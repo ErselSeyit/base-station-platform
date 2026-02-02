@@ -41,7 +41,7 @@ import java.util.HexFormat;
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@ConditionalOnProperty(name = "security.internal.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "security.internal.enabled", havingValue = "true", matchIfMissing = true)
 public class InternalAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(InternalAuthFilter.class);

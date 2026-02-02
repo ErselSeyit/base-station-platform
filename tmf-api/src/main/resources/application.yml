@@ -1,0 +1,74 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: tmf-api
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/tmf_inventory}
+      database: tmf_inventory
+
+# OpenAPI Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  info:
+    title: TM Forum Open APIs
+    description: |
+      Implementation of TM Forum Open APIs for telecom service management:
+      - TMF638 Service Inventory Management v4.0
+      - TMF639 Resource Inventory Management v4.0
+      - TMF642 Alarm Management v4.0
+    version: 4.0.0
+    contact:
+      name: Base Station Platform Team
+      email: support@example.com
+    license:
+      name: Apache 2.0
+      url: https://www.apache.org/licenses/LICENSE-2.0
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging
+logging:
+  level:
+    com.huawei.tmf: INFO
+    org.springframework.data.mongodb: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Security
+security:
+  jwt:
+    secret: ${JWT_SECRET:your-256-bit-secret-key-here-for-development-only}
+    expiration: 86400000  # 24 hours in milliseconds
+
+# TMF API Configuration
+tmf:
+  # Base URL for generating hrefs
+  base-url: ${TMF_BASE_URL:http://localhost:8086}
+  # Event notification settings
+  events:
+    enabled: true
+    max-retries: 3
+    retry-interval: 5000  # 5 seconds
+  # Pagination defaults
+  pagination:
+    default-limit: 20
+    max-limit: 100

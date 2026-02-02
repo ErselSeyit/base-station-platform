@@ -33,6 +33,8 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <Box
+          role="alert"
+          aria-live="assertive"
           sx={{
             display: 'flex',
             flexDirection: 'column',
@@ -73,7 +75,7 @@ export class ErrorBoundary extends Component<Props, State> {
           {this.state.error && (
             <Box
               sx={{
-                background: 'var(--mono-50)',
+                background: 'var(--surface-elevated)',
                 border: '1px solid var(--surface-border)',
                 borderRadius: '8px',
                 padding: '16px',

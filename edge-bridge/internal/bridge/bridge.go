@@ -8,11 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/huawei/edge-bridge/internal/cloud"
-	"github.com/huawei/edge-bridge/internal/config"
-	"github.com/huawei/edge-bridge/internal/device"
-	"github.com/huawei/edge-bridge/internal/protocol"
-	"github.com/huawei/edge-bridge/internal/transport"
+	"edge-bridge/internal/adapter"
+	"edge-bridge/internal/cloud"
+	"edge-bridge/internal/config"
+	"edge-bridge/internal/device"
+	"edge-bridge/internal/protocol"
+	"edge-bridge/internal/transport"
 )
 
 // Bridge orchestrates communication between device and cloud.
@@ -23,6 +24,7 @@ type Bridge struct {
 	cloudAuth   *cloud.Authenticator
 	cloudClient *cloud.Client
 	cmdExecutor *CommandExecutor
+	adapterMgr  *adapter.Manager // Multi-protocol adapter manager
 
 	stationDBID int64 // Database ID of registered station
 	metrics     []protocol.Metric
@@ -37,11 +39,29 @@ type Bridge struct {
 func New(cfg *config.Config) (*Bridge, error) {
 	// Create transport based on config
 	var t transport.Transport
+	var err error
 	switch cfg.Device.Transport {
 	case "serial":
 		t = transport.NewSerialTransport(cfg.Device.Serial.Port, cfg.Device.Serial.Baud)
 	case "tcp":
-		t = transport.NewTCPTransport(cfg.Device.TCP.Host, cfg.Device.TCP.Port)
+		// Check if TLS is enabled
+		if cfg.Device.TCP.TLS.Enabled {
+			tlsCfg := &transport.TLSConfig{
+				Enabled:            true,
+				CertFile:           cfg.Device.TCP.TLS.CertFile,
+				KeyFile:            cfg.Device.TCP.TLS.KeyFile,
+				CAFile:             cfg.Device.TCP.TLS.CAFile,
+				ServerName:         cfg.Device.TCP.TLS.ServerName,
+				InsecureSkipVerify: cfg.Device.TCP.TLS.InsecureSkipVerify,
+			}
+			t, err = transport.NewTLSTransport(cfg.Device.TCP.Host, cfg.Device.TCP.Port, tlsCfg)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create TLS transport: %w", err)
+			}
+			log.Printf("TLS transport enabled for device connection")
+		} else {
+			t = transport.NewTCPTransport(cfg.Device.TCP.Host, cfg.Device.TCP.Port)
+		}
 	default:
 		return nil, fmt.Errorf("unknown transport type: %s", cfg.Device.Transport)
 	}
@@ -67,6 +87,13 @@ func New(cfg *config.Config) (*Bridge, error) {
 	// Create command executor
 	cmdExecutor := NewCommandExecutor(deviceMgr, cloudClient, cfg.Bridge.StationID)
 
+	// Create adapter manager for multi-protocol support
+	adapterMgr, err := adapter.CreateFromConfig(cfg.Adapters)
+	if err != nil {
+		log.Printf("Warning: Failed to create adapter manager: %v", err)
+		// Continue without adapters - they're optional
+	}
+
 	return &Bridge{
 		config:      cfg,
 		transport:   t,
@@ -74,6 +101,7 @@ func New(cfg *config.Config) (*Bridge, error) {
 		cloudAuth:   cloudAuth,
 		cloudClient: cloudClient,
 		cmdExecutor: cmdExecutor,
+		adapterMgr:  adapterMgr,
 	}, nil
 }
 
@@ -108,6 +136,18 @@ func (b *Bridge) Start(ctx context.Context) error {
 		log.Printf("Cloud authentication successful")
 		// Register this station with the cloud
 		b.registerStation()
+	}
+
+	// Start adapter manager for multi-protocol metric collection
+	if b.adapterMgr != nil {
+		if err := b.adapterMgr.Start(b.ctx); err != nil {
+			log.Printf("Warning: Failed to start adapter manager: %v", err)
+		} else {
+			log.Printf("Adapter manager started with %d adapters", len(b.adapterMgr.ListAdapters()))
+			// Start goroutine to collect metrics from adapters
+			b.wg.Add(1)
+			go b.adapterMetricsLoop()
+		}
 	}
 
 	// Start metrics collection loop
@@ -147,6 +187,13 @@ func (b *Bridge) Stop() error {
 		log.Printf("Warning: graceful shutdown timeout exceeded (%v)", shutdownTimeout)
 	}
 
+	// Stop adapter manager
+	if b.adapterMgr != nil {
+		if err := b.adapterMgr.Stop(); err != nil {
+			log.Printf("Error stopping adapter manager: %v", err)
+		}
+	}
+
 	if err := b.deviceMgr.Stop(); err != nil {
 		log.Printf("Error stopping device manager: %v", err)
 	}
@@ -167,6 +214,32 @@ func (b *Bridge) metricsLoop() {
 			return
 		case <-ticker.C:
 			b.collectAndUploadMetrics()
+		}
+	}
+}
+
+// adapterMetricsLoop collects metrics from protocol adapters (SNMP, MQTT, etc.)
+func (b *Bridge) adapterMetricsLoop() {
+	defer b.wg.Done()
+
+	if b.adapterMgr == nil {
+		return
+	}
+
+	metricsChan := b.adapterMgr.Metrics()
+
+	for {
+		select {
+		case <-b.ctx.Done():
+			return
+		case metric, ok := <-metricsChan:
+			if !ok {
+				return
+			}
+			// Add adapter metrics to local store
+			b.metricsLock.Lock()
+			b.metrics = append(b.metrics, metric)
+			b.metricsLock.Unlock()
 		}
 	}
 }
@@ -323,13 +396,14 @@ func (b *Bridge) registerStation() {
 
 	// Register new station
 	req := &cloud.CreateStationRequest{
-		StationName:  cfg.StationName,
-		Location:     cfg.Location,
-		Latitude:     cfg.Latitude,
-		Longitude:    cfg.Longitude,
-		StationType:  cfg.StationType,
-		Status:       "ACTIVE",
-		Description:  cfg.Description,
+		StationName:      cfg.StationName,
+		Location:         cfg.Location,
+		Latitude:         cfg.Latitude,
+		Longitude:        cfg.Longitude,
+		StationType:      cfg.StationType,
+		PowerConsumption: cfg.PowerConsumption,
+		Status:           "ACTIVE",
+		Description:      cfg.Description,
 	}
 
 	station, err := b.cloudClient.RegisterStation(req)
