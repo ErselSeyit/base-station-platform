@@ -61,9 +61,28 @@ import { formatTimestamp } from '../utils/statusHelpers'
 import { showToast } from '../utils/toast'
 import type { SONRecommendation, SONFunction, SONStatus } from '../services/api/son'
 
+// UI Constants
+const ICON_SIZE = {
+  SMALL: 14,
+  MEDIUM: 20,
+  LARGE: 24,
+  XLARGE: 28,
+} as const
+
+const BORDER_RADIUS = {
+  SMALL: '8px',
+  MEDIUM: '10px',
+  LARGE: '12px',
+  XLARGE: '16px',
+} as const
+
+const CONFIDENCE_BAR_WIDTH = 60
+const CONFIDENCE_BAR_HEIGHT = 6
+const ACTION_DESCRIPTION_MAX_WIDTH = 250
+
 // Function type icons
 function getFunctionIcon(functionType: SONFunction) {
-  const iconProps = { sx: { fontSize: 20 } }
+  const iconProps = { sx: { fontSize: ICON_SIZE.MEDIUM } }
   switch (functionType) {
     case 'MLB':
       return <MLBIcon {...iconProps} />
@@ -86,14 +105,14 @@ function getFunctionIcon(functionType: SONFunction) {
 
 // Status icons for each workflow status
 const STATUS_ICONS: Record<SONStatus, React.ReactElement> = {
-  PENDING: <PendingIcon sx={{ fontSize: 14 }} />,
-  APPROVED: <ApproveIcon sx={{ fontSize: 14 }} />,
-  REJECTED: <RejectedIcon sx={{ fontSize: 14 }} />,
-  EXECUTING: <ExecutingIcon sx={{ fontSize: 14 }} />,
-  EXECUTED: <ExecutedIcon sx={{ fontSize: 14 }} />,
-  FAILED: <FailedIcon sx={{ fontSize: 14 }} />,
-  ROLLED_BACK: <RollbackIcon sx={{ fontSize: 14 }} />,
-  EXPIRED: <ExpiredIcon sx={{ fontSize: 14 }} />,
+  PENDING: <PendingIcon sx={{ fontSize: ICON_SIZE.SMALL }} />,
+  APPROVED: <ApproveIcon sx={{ fontSize: ICON_SIZE.SMALL }} />,
+  REJECTED: <RejectedIcon sx={{ fontSize: ICON_SIZE.SMALL }} />,
+  EXECUTING: <ExecutingIcon sx={{ fontSize: ICON_SIZE.SMALL }} />,
+  EXECUTED: <ExecutedIcon sx={{ fontSize: ICON_SIZE.SMALL }} />,
+  FAILED: <FailedIcon sx={{ fontSize: ICON_SIZE.SMALL }} />,
+  ROLLED_BACK: <RollbackIcon sx={{ fontSize: ICON_SIZE.SMALL }} />,
+  EXPIRED: <ExpiredIcon sx={{ fontSize: ICON_SIZE.SMALL }} />,
 }
 
 // Status chip component - uses centralized design system
@@ -127,7 +146,7 @@ function StatCard({ title, value, statusKey, icon }: Readonly<{
         height: '100%',
         background: CSS_VARS.surfaceElevated,
         border: `1px solid ${CSS_VARS.mono400}`,
-        borderRadius: { xs: '10px', sm: '12px' },
+        borderRadius: { xs: BORDER_RADIUS.MEDIUM, sm: BORDER_RADIUS.LARGE },
         transition: 'all 0.2s ease',
         '&:hover': {
           transform: 'translateY(-2px)',
@@ -173,7 +192,7 @@ function CustomStatCard({ title, value, colorVar, bgColor, icon }: Readonly<{
         height: '100%',
         background: CSS_VARS.surfaceElevated,
         border: `1px solid ${CSS_VARS.mono400}`,
-        borderRadius: { xs: '10px', sm: '12px' },
+        borderRadius: { xs: BORDER_RADIUS.MEDIUM, sm: BORDER_RADIUS.LARGE },
         transition: 'all 0.2s ease',
         '&:hover': {
           transform: 'translateY(-2px)',
@@ -196,7 +215,7 @@ function CustomStatCard({ title, value, colorVar, bgColor, icon }: Readonly<{
             {value}
           </Typography>
         </Box>
-        <Box sx={{ p: 1, borderRadius: '8px', background: bgColor, color: colorVar, '& svg': { fontSize: 20 } }}>
+        <Box sx={{ p: 1, borderRadius: BORDER_RADIUS.SMALL, background: bgColor, color: colorVar, '& svg': { fontSize: ICON_SIZE.MEDIUM } }}>
           {icon}
         </Box>
       </Box>
@@ -341,26 +360,26 @@ export default function SONRecommendations() {
           <Box
             sx={{
               p: { xs: 1, sm: 1.5 },
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, var(--accent-primary) 0%, var(--color-blue-700) 100%)',
+              borderRadius: BORDER_RADIUS.LARGE,
+              background: CSS_VARS.gradientBlue,
               color: 'white',
             }}
           >
-            <SONIcon sx={{ fontSize: { xs: 24, sm: 28 } }} />
+            <SONIcon sx={{ fontSize: { xs: ICON_SIZE.LARGE, sm: ICON_SIZE.XLARGE } }} />
           </Box>
           <Box>
             <Typography
               variant="h4"
               sx={{
                 fontWeight: 700,
-                color: 'var(--mono-950)',
+                color: CSS_VARS.mono950,
                 letterSpacing: '-0.02em',
                 fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
               }}
             >
               SON Recommendations
             </Typography>
-            <Typography variant="body2" sx={{ color: 'var(--mono-500)', fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+            <Typography variant="body2" sx={{ color: CSS_VARS.mono500, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
               AI-powered network optimization with operator approval workflow
             </Typography>
           </Box>
@@ -371,16 +390,16 @@ export default function SONRecommendations() {
             sx={{
               width: 40,
               height: 40,
-              background: 'var(--surface-elevated)',
-              border: '1px solid var(--mono-400)',
-              borderRadius: '10px',
-              color: 'var(--mono-700)',
+              background: CSS_VARS.surfaceElevated,
+              border: `1px solid ${CSS_VARS.mono400}`,
+              borderRadius: BORDER_RADIUS.MEDIUM,
+              color: CSS_VARS.mono700,
               '&:hover': {
-                background: 'var(--surface-hover)',
+                background: CSS_VARS.surfaceHover,
               },
             }}
           >
-            <RefreshIcon sx={{ fontSize: 20, animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshIcon sx={{ fontSize: ICON_SIZE.MEDIUM, animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
           </IconButton>
         </Tooltip>
       </Box>
@@ -443,7 +462,7 @@ export default function SONRecommendations() {
         sx={{
           background: CSS_VARS.surfaceElevated,
           border: `1px solid ${CSS_VARS.mono400}`,
-          borderRadius: '16px',
+          borderRadius: BORDER_RADIUS.XLARGE,
           overflow: 'hidden',
         }}
       >
@@ -472,20 +491,20 @@ export default function SONRecommendations() {
         <TableContainer>
           <Table>
             <TableHead>
-              <TableRow sx={{ backgroundColor: 'var(--surface-subtle)' }}>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Function</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Station</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Action</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Confidence</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Actions</TableCell>
+              <TableRow sx={{ backgroundColor: CSS_VARS.surfaceSubtle }}>
+                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Function</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Station</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Action</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Confidence</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {displayedRecommendations.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography sx={{ color: 'var(--mono-500)' }}>
+                    <Typography sx={{ color: CSS_VARS.mono500 }}>
                       No recommendations found
                     </Typography>
                   </TableCell>
@@ -495,8 +514,8 @@ export default function SONRecommendations() {
                   <TableRow
                     key={rec.id}
                     sx={{
-                      '&:hover': { backgroundColor: 'var(--surface-hover)' },
-                      '& td': { borderBottom: '1px solid var(--mono-400)' },
+                      '&:hover': { backgroundColor: CSS_VARS.surfaceHover },
+                      '& td': { borderBottom: `1px solid ${CSS_VARS.mono400}` },
                     }}
                   >
                     <TableCell>
@@ -504,37 +523,37 @@ export default function SONRecommendations() {
                         <Box
                           sx={{
                             p: 0.75,
-                            borderRadius: '8px',
-                            background: 'var(--surface-subtle)',
-                            color: 'var(--mono-700)',
+                            borderRadius: BORDER_RADIUS.SMALL,
+                            background: CSS_VARS.surfaceSubtle,
+                            color: CSS_VARS.mono700,
                           }}
                         >
                           {getFunctionIcon(rec.functionType)}
                         </Box>
                         <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: CSS_VARS.mono950 }}>
                             {rec.functionType}
                           </Typography>
-                          <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
+                          <Typography variant="caption" sx={{ color: CSS_VARS.mono500 }}>
                             {SON_FUNCTION_NAMES[rec.functionType]}
                           </Typography>
                         </Box>
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: CSS_VARS.mono950 }}>
                         Station {rec.stationId}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
+                      <Typography variant="caption" sx={{ color: CSS_VARS.mono500 }}>
                         {formatTimestamp(rec.createdAt)}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ color: 'var(--mono-800)', maxWidth: 250 }}>
+                      <Typography variant="body2" sx={{ color: CSS_VARS.mono800, maxWidth: ACTION_DESCRIPTION_MAX_WIDTH }}>
                         {rec.actionType}
                       </Typography>
                       {rec.description && (
-                        <Typography variant="caption" sx={{ color: 'var(--mono-500)', display: 'block', mt: 0.5 }}>
+                        <Typography variant="caption" sx={{ color: CSS_VARS.mono500, display: 'block', mt: 0.5 }}>
                           {rec.description}
                         </Typography>
                       )}
@@ -558,17 +577,17 @@ export default function SONRecommendations() {
                           variant="determinate"
                           value={(rec.confidence ?? 0) * 100}
                           sx={{
-                            width: 60,
-                            height: 6,
+                            width: CONFIDENCE_BAR_WIDTH,
+                            height: CONFIDENCE_BAR_HEIGHT,
                             borderRadius: 3,
-                            backgroundColor: 'var(--mono-200)',
+                            backgroundColor: CSS_VARS.mono200,
                             '& .MuiLinearProgress-bar': {
                               borderRadius: 3,
                               backgroundColor: getConfidenceColor(rec.confidence ?? 0),
                             },
                           }}
                         />
-                        <Typography variant="caption" sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: CSS_VARS.mono700 }}>
                           {((rec.confidence ?? 0) * 100).toFixed(0)}%
                         </Typography>
                       </Box>
@@ -657,7 +676,7 @@ export default function SONRecommendations() {
       <Dialog open={rollbackDialogOpen} onClose={() => setRollbackDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 600 }}>Rollback Changes</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2, color: 'var(--mono-600)' }}>
+          <Typography variant="body2" sx={{ mb: 2, color: CSS_VARS.mono600 }}>
             This will revert the changes made by this recommendation. Please provide a reason.
           </Typography>
           <TextField
