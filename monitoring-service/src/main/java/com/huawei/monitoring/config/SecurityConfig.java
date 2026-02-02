@@ -71,12 +71,17 @@ public class SecurityConfig {
     @Bean
     public OncePerRequestFilter headerAuthenticationFilter() {
         return new OncePerRequestFilter() {
+            
+            private final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(getClass());
+            
             @Override
             protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
                     @NonNull FilterChain filterChain) throws ServletException, IOException {
                 
                 String username = request.getHeader(HEADER_USER_NAME);
                 String role = request.getHeader(HEADER_USER_ROLE);
+                
+                log.debug("Header auth filter - path: {}, username: {}, role: {}", request.getRequestURI(), username, role);
                 
                 if (username != null && !username.isBlank()) {
                     // Create authorities from role header
@@ -96,6 +101,9 @@ public class SecurityConfig {
                     UsernamePasswordAuthenticationToken authentication = 
                         new UsernamePasswordAuthenticationToken(username, null, authorities);
                     SecurityContextHolder.getContext().setAuthentication(authentication);
+                    log.debug("Authentication set for user: {} with authorities: {}", username, authorities);
+                } else {
+                    log.warn("No username header found for path: {}", request.getRequestURI());
                 }
                 
                 filterChain.doFilter(request, response);
