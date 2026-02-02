@@ -466,16 +466,18 @@ spec:
           valueFrom:
             secretKeyRef:
               name: auth-credentials
-              key: username
+              key: admin-username
         - name: CLOUD_PASSWORD
           valueFrom:
             secretKeyRef:
               name: auth-credentials
-              key: password
+              key: admin-password
         - name: MONITORING_SERVICE_URL
           value: "http://monitoring-service:8082"
         - name: SON_ANALYSIS_INTERVAL
           value: "300"
+        - name: DIAGNOSTIC_REQUIRE_AUTH
+          value: "false"
         livenessProbe:
           httpGet:
             path: /health
