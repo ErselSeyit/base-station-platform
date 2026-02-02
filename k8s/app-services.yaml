@@ -749,14 +749,14 @@ spec:
             ephemeral-storage: "64Mi"
         livenessProbe:
           tcpSocket:
-            port: 9999
-          initialDelaySeconds: 5
-          periodSeconds: 10
+            port: 8090
+          initialDelaySeconds: 10
+          periodSeconds: 30
         readinessProbe:
           tcpSocket:
-            port: 9999
-          initialDelaySeconds: 3
-          periodSeconds: 5
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
