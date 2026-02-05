@@ -86,12 +86,14 @@ class BIReportGenerator:
     def authenticate(self) -> bool:
         """Get JWT token"""
         try:
-            admin_password = os.environ.get("AUTH_ADMIN_PASSWORD")
-            if not admin_password:
-                raise ValueError("AUTH_ADMIN_PASSWORD environment variable is required")
+            # Support both old and new env var names
+            username = os.environ.get("CLOUD_USER") or os.environ.get("AUTH_ADMIN_USERNAME") or "admin"
+            password = os.environ.get("CLOUD_PASSWORD") or os.environ.get("AUTH_ADMIN_PASSWORD")
+            if not password:
+                raise ValueError("CLOUD_PASSWORD or AUTH_ADMIN_PASSWORD environment variable is required")
             response = requests.post(
                 f"{self.api_url}/api/v1/auth/login",
-                json={"username": "admin", "password": admin_password},
+                json={"username": username, "password": password},
                 timeout=10,
             )
             if response.status_code == 200:

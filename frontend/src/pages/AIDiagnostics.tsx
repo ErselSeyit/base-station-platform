@@ -7,6 +7,7 @@ import {
   School as LearnIcon,
   CheckCircle as CheckIcon,
   AutoFixHigh as AutoFixIcon,
+  ClearAll as ClearIcon,
 } from '@mui/icons-material'
 import {
   Box,
@@ -25,7 +26,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ErrorDisplay from '../components/ErrorDisplay'
 import FeedbackDialog from '../components/FeedbackDialog'
@@ -35,7 +36,6 @@ import { formatTimestamp } from '../utils/statusHelpers'
 import {
   DiagnosticLog,
   DiagnosticEvent,
-  defaultDiagnosticLog,
   StatCard,
   StatusChip,
   SeverityChip,
@@ -52,13 +52,81 @@ const PROGRESS_SCALE = {
 // Threshold for pattern success classification
 const SUCCESS_RATE_THRESHOLD_PERCENT = 70
 
+/**
+ * Transform sessions to DiagnosticLog format.
+ * Extracts metric values from metricsSnapshot for display.
+ */
+function transformSessionsToLog(sessions: DiagnosticSession[]): DiagnosticLog {
+  const events: DiagnosticEvent[] = sessions.map((session) => {
+    // Extract metric value and threshold from metricsSnapshot
+    // metricsSnapshot format: { "CPU_USAGE": 95, "threshold": 75 }
+    const snapshot = session.metricsSnapshot || {}
+    const metricKeys = Object.keys(snapshot).filter(k => k !== 'threshold')
+    const metricValue = metricKeys.length > 0 ? (snapshot[metricKeys[0]] ?? 0) : 0
+    const threshold = snapshot.threshold ?? 0
+
+    return {
+      id: session.id,
+      timestamp: session.createdAt,
+      station_id: session.stationId,
+      station_name: session.stationName || `Station ${session.stationId}`,
+      problem_type: session.problemCode.split('_')[0],
+      problem_code: session.problemCode,
+      category: session.category || 'SYSTEM',
+      severity: session.severity,
+      problem_description: session.message,
+      metric_value: metricValue,
+      threshold: threshold,
+      ai_action: session.aiSolution?.action || 'Analyzing...',
+      ai_commands: session.aiSolution?.commands || [],
+      ai_confidence: session.aiSolution?.confidence || 0,
+      remediation_type: session.aiSolution?.riskLevel || 'unknown',
+      status: session.status,
+      resolution_time: session.resolvedAt,
+      notes: '',
+      root_cause: session.aiSolution?.reasoning || '',
+    }
+  })
+
+  return {
+    generated_at: new Date().toISOString(),
+    stats: {
+      total_checks: sessions.length,
+      problems_detected: sessions.length,
+      problems_diagnosed: sessions.filter(s => s.aiSolution).length,
+      problems_resolved: sessions.filter(s => s.status === 'RESOLVED').length,
+      failed_diagnoses: sessions.filter(s => s.status === 'FAILED').length,
+    },
+    events,
+  }
+}
+
 export default function AIDiagnostics() {
-  const [diagnosticData, setDiagnosticData] = useState<DiagnosticLog>(defaultDiagnosticLog)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
   const [selectedSession, setSelectedSession] = useState<DiagnosticSession | null>(null)
+  // Filter to hide old sessions from display (data remains in DB for AI learning)
+  const [clearAfter, setClearAfter] = useState<string | null>(null)
   const queryClient = useQueryClient()
+
+  // Fetch all diagnostic sessions with React Query (auto-refresh every 5s)
+  const { data: sessions = [], isLoading, error: sessionsError, refetch } = useQuery({
+    queryKey: ['diagnostic-sessions'],
+    queryFn: async () => {
+      const response = await diagnosticsApi.getAll()
+      return response.data
+    },
+    refetchInterval: POLLING_INTERVALS.NORMAL,
+    staleTime: 0, // Always consider data stale to force fresh fetch
+  })
+
+  // Filter sessions for display (hide old ones if cleared, data stays in DB for AI)
+  const displayedSessions = clearAfter
+    ? sessions.filter(s => new Date(s.createdAt) > new Date(clearAfter))
+    : sessions
+
+  // Transform sessions to log format
+  const diagnosticData = transformSessionsToLog(displayedSessions)
+  const error = sessionsError ? (sessionsError instanceof Error ? sessionsError.message : 'Failed to fetch') : null
 
   // Fetch pending confirmations from the learning system
   const { data: pendingSessions = [], error: pendingError } = useQuery({
@@ -68,6 +136,7 @@ export default function AIDiagnostics() {
       return response.data
     },
     refetchInterval: POLLING_INTERVALS.NORMAL,
+    staleTime: 0,
   })
 
   // Fetch learning stats
@@ -78,6 +147,7 @@ export default function AIDiagnostics() {
       return response.data
     },
     refetchInterval: POLLING_INTERVALS.SLOW,
+    staleTime: 0,
   })
 
   const handleOpenFeedback = (session: DiagnosticSession) => {
@@ -86,71 +156,19 @@ export default function AIDiagnostics() {
   }
 
   const handleFeedbackSubmit = () => {
+    queryClient.invalidateQueries({ queryKey: ['diagnostic-sessions'] })
     queryClient.invalidateQueries({ queryKey: ['diagnostic-pending'] })
     queryClient.invalidateQueries({ queryKey: ['learning-stats'] })
   }
 
-  // Fetch diagnostic data from the API (diagnostic sessions from monitoring service)
-  const fetchDiagnosticData = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      // Get diagnostic sessions from the monitoring service
-      const response = await diagnosticsApi.getAll()
-      const sessions: DiagnosticSession[] = response.data
-
-      // Transform sessions to DiagnosticLog format
-      const events: DiagnosticEvent[] = sessions.map((session) => ({
-        id: session.id,
-        timestamp: session.createdAt,
-        station_id: session.stationId,
-        station_name: session.stationName || `Station ${session.stationId}`,
-        problem_type: session.problemCode.split('_')[0],
-        problem_code: session.problemCode,
-        category: session.category || 'SYSTEM',
-        severity: session.severity,
-        problem_description: session.message,
-        metric_value: 0, // Not tracked in DiagnosticSession
-        threshold: 0, // Not tracked in DiagnosticSession
-        ai_action: session.aiSolution?.action || 'Analyzing...',
-        ai_commands: session.aiSolution?.commands || [],
-        ai_confidence: session.aiSolution?.confidence || 0,
-        remediation_type: session.aiSolution?.riskLevel || 'unknown',
-        status: session.status,
-        resolution_time: session.resolvedAt,
-        notes: '',
-        root_cause: session.aiSolution?.reasoning || '',
-      }))
-
-      const data: DiagnosticLog = {
-        generated_at: new Date().toISOString(),
-        stats: {
-          total_checks: sessions.length,
-          problems_detected: sessions.length,
-          problems_diagnosed: sessions.filter(s => s.aiSolution).length,
-          problems_resolved: sessions.filter(s => s.status === 'RESOLVED').length,
-          failed_diagnoses: sessions.filter(s => s.status === 'FAILED').length,
-        },
-        events,
-      }
-      setDiagnosticData(data)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch diagnostic data'
-      setError(errorMessage)
-      setDiagnosticData(defaultDiagnosticLog)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  // Initial fetch
-  useEffect(() => {
-    fetchDiagnosticData()
-  }, [fetchDiagnosticData])
-
   // Refresh handler
   const handleRefresh = () => {
-    fetchDiagnosticData()
+    refetch()
+  }
+
+  // Clear view handler - hides old sessions from display (data stays in DB for AI learning)
+  const handleClearView = () => {
+    setClearAfter(new Date().toISOString())
   }
 
   const stats = diagnosticData.stats
@@ -197,26 +215,48 @@ export default function AIDiagnostics() {
             </Typography>
           </Box>
         </Box>
-        <Tooltip title="Refresh diagnostics">
-          <IconButton
-            onClick={handleRefresh}
-            sx={{
-              width: 40,
-              height: 40,
-              background: 'var(--surface-elevated)',
-              border: '1px solid var(--mono-400)',
-              borderRadius: '10px',
-              color: 'var(--mono-700)',
-              '&:hover': {
-                background: 'var(--surface-hover)',
-                borderColor: 'var(--mono-400)',
-                color: 'var(--mono-900)',
-              },
-            }}
-          >
-            <RefreshIcon sx={{ fontSize: 20, animation: isLoading ? 'spin 1s linear infinite' : 'none', color: 'inherit' }} />
-          </IconButton>
-        </Tooltip>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Tooltip title="Clear view (data stays in DB for AI learning)">
+            <IconButton
+              onClick={handleClearView}
+              sx={{
+                width: 40,
+                height: 40,
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--mono-400)',
+                borderRadius: '10px',
+                color: 'var(--mono-700)',
+                '&:hover': {
+                  background: 'var(--surface-hover)',
+                  borderColor: 'var(--mono-400)',
+                  color: 'var(--mono-900)',
+                },
+              }}
+            >
+              <ClearIcon sx={{ fontSize: 20, color: 'inherit' }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Refresh diagnostics">
+            <IconButton
+              onClick={handleRefresh}
+              sx={{
+                width: 40,
+                height: 40,
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--mono-400)',
+                borderRadius: '10px',
+                color: 'var(--mono-700)',
+                '&:hover': {
+                  background: 'var(--surface-hover)',
+                  borderColor: 'var(--mono-400)',
+                  color: 'var(--mono-900)',
+                },
+              }}
+            >
+              <RefreshIcon sx={{ fontSize: 20, animation: isLoading ? 'spin 1s linear infinite' : 'none', color: 'inherit' }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
 
       {/* Error Display */}

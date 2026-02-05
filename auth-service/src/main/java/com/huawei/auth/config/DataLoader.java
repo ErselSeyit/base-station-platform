@@ -2,6 +2,7 @@ package com.huawei.auth.config;
 
 import com.huawei.auth.repository.UserRepository;
 import com.huawei.auth.service.UserService;
+import com.huawei.common.security.Roles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,10 +45,10 @@ public class DataLoader {
             }
 
             // Create or update admin user - always sync password from config
-            createOrUpdateUser(userRepository, userService, adminUsername, adminPassword, "ROLE_ADMIN");
+            createOrUpdateUser(userRepository, userService, adminUsername, adminPassword, Roles.ROLE_ADMIN);
 
             // Create or update bridge service account
-            createOrUpdateUser(userRepository, userService, bridgeUsername, adminPassword, "ROLE_SERVICE");
+            createOrUpdateUser(userRepository, userService, bridgeUsername, adminPassword, Roles.ROLE_SERVICE);
         };
     }
 

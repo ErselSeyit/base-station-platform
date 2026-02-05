@@ -16,6 +16,11 @@ import java.util.concurrent.ThreadPoolExecutor;
 @EnableAsync
 public class AsyncConfig {
 
+    /**
+     * Bean name for the notification executor.
+     */
+    public static final String NOTIFICATION_EXECUTOR = "notificationExecutor";
+
     private final ThreadPoolConfig config;
 
     public AsyncConfig(ThreadPoolConfig config) {
@@ -32,7 +37,7 @@ public class AsyncConfig {
      *   <li>CallerRunsPolicy - executes in caller thread if queue is full</li>
      * </ul>
      */
-    @Bean(name = "notificationExecutor")
+    @Bean(name = NOTIFICATION_EXECUTOR)
     public Executor notificationExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(config.getCoreSize());

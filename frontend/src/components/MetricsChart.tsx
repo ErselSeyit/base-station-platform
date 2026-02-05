@@ -1,6 +1,6 @@
 import { Box, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
+import { format, subDays } from 'date-fns'
 import {
   CartesianGrid,
   Legend,
@@ -14,7 +14,7 @@ import {
 import { CHART_COLORS } from '../constants/colors'
 import { CHART_CONFIG } from '../constants/designSystem'
 import { metricsApi } from '../services/api'
-import { MetricData } from '../types'
+import type { DailyMetricAggregate } from '../services/api/metrics'
 import { ensureArray } from '../utils/arrayUtils'
 import LoadingSpinner from './LoadingSpinner'
 
@@ -27,27 +27,14 @@ interface ChartDataPoint {
   signalStrength?: number
 }
 
-interface AggregatedValues {
-  displayDate: string
-  sortKey: string
-  cpuSum: number
-  cpuCount: number
-  memorySum: number
-  memoryCount: number
-  tempSum: number
-  tempCount: number
-  signalSum: number
-  signalCount: number
-}
-
 export default function MetricsChart() {
+  // Use server-side daily aggregates for efficient chart data
   const { data, isLoading, error } = useQuery({
-    queryKey: ['metrics-chart'],
+    queryKey: ['metrics-chart-daily'],
     queryFn: async () => {
-      const response = await metricsApi.getAll({
-        startTime: new Date(Date.now() - CHART_CONFIG.DEFAULT_TIME_RANGE_MS).toISOString(),
-        limit: CHART_CONFIG.DEFAULT_DATA_LIMIT,
-        sort: 'asc', // Oldest first for historical chart
+      const response = await metricsApi.getDailyAggregates({
+        startTime: subDays(new Date(), 7).toISOString(),
+        endTime: new Date().toISOString(),
       })
       return response.data
     },
@@ -75,55 +62,23 @@ export default function MetricsChart() {
     )
   }
 
-  const metrics = ensureArray(data as MetricData[])
+  const dailyAggregates = ensureArray(data as DailyMetricAggregate[])
 
-  // Group metrics by date and calculate averages
-  const aggregated: Record<string, AggregatedValues> = {}
-
-  metrics.forEach((metric: MetricData) => {
-    if (!metric.timestamp) return
-    const metricDate = new Date(metric.timestamp)
-    const sortKey = format(metricDate, 'yyyy-MM-dd')  // Sortable key
-    const displayDate = format(metricDate, 'MMM dd')  // Display format
-
-    if (!aggregated[sortKey]) {
-      aggregated[sortKey] = {
-        displayDate,
-        sortKey,
-        cpuSum: 0, cpuCount: 0,
-        memorySum: 0, memoryCount: 0,
-        tempSum: 0, tempCount: 0,
-        signalSum: 0, signalCount: 0
+  // Transform server-aggregated data to chart format
+  const chartData: ChartDataPoint[] = dailyAggregates
+    .filter((d): d is DailyMetricAggregate => d !== null && d.date !== null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((daily) => {
+      const dateObj = new Date(daily.date)
+      return {
+        date: format(dateObj, 'MMM dd'),
+        sortKey: daily.date,
+        cpuUsage: daily.averages?.CPU_USAGE,
+        memoryUsage: daily.averages?.MEMORY_USAGE,
+        temperature: daily.averages?.TEMPERATURE,
+        signalStrength: daily.averages?.SIGNAL_STRENGTH,
       }
-    }
-
-    if (metric.metricType === 'CPU_USAGE') {
-      aggregated[sortKey].cpuSum += metric.value
-      aggregated[sortKey].cpuCount += 1
-    } else if (metric.metricType === 'MEMORY_USAGE') {
-      aggregated[sortKey].memorySum += metric.value
-      aggregated[sortKey].memoryCount += 1
-    } else if (metric.metricType === 'TEMPERATURE') {
-      aggregated[sortKey].tempSum += metric.value
-      aggregated[sortKey].tempCount += 1
-    } else if (metric.metricType === 'SIGNAL_STRENGTH') {
-      aggregated[sortKey].signalSum += metric.value
-      aggregated[sortKey].signalCount += 1
-    }
-  })
-
-  // Convert to chart data with averages, sorted by date
-  const aggregatedValues = Object.values(aggregated)
-  aggregatedValues.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-  const chartData: ChartDataPoint[] = aggregatedValues
-    .map((values) => ({
-      date: values.displayDate,
-      sortKey: values.sortKey,
-      cpuUsage: values.cpuCount > 0 ? values.cpuSum / values.cpuCount : undefined,
-      memoryUsage: values.memoryCount > 0 ? values.memorySum / values.memoryCount : undefined,
-      temperature: values.tempCount > 0 ? values.tempSum / values.tempCount : undefined,
-      signalStrength: values.signalCount > 0 ? values.signalSum / values.signalCount : undefined,
-    }))
+    })
 
   // Check if we have any data
   const hasData = chartData.some(d =>

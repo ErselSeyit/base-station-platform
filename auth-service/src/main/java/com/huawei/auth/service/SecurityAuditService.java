@@ -4,6 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.auth.model.AuditLog;
 import com.huawei.auth.repository.AuditLogRepository;
+import static com.huawei.common.constants.JsonResponseKeys.KEY_REASON;
+
+import com.huawei.common.security.Roles;
+import com.huawei.common.util.RequestUtils;
+import com.huawei.common.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -35,7 +40,9 @@ public class SecurityAuditService {
 
     private static final Logger auditLog = LoggerFactory.getLogger("SECURITY_AUDIT");
     private static final Logger log = LoggerFactory.getLogger(SecurityAuditService.class);
-    private static final String REASON_FIELD = "reason";
+
+    /** Maximum length for audit message storage */
+    private static final int MESSAGE_MAX_LENGTH = 500;
 
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
@@ -94,8 +101,8 @@ public class SecurityAuditService {
         try {
             // Set MDC context for structured logging
             MDC.put("event_type", eventType.name());
-            MDC.put("username", username != null ? username : "anonymous");
-            MDC.put("client_ip", clientIp != null ? clientIp : "unknown");
+            MDC.put("username", username != null ? username : Roles.ANONYMOUS_USER);
+            MDC.put("client_ip", clientIp != null ? clientIp : RequestUtils.UNKNOWN_IP);
             MDC.put("severity", severity.name());
             MDC.put("timestamp", Instant.now().toString());
 
@@ -124,10 +131,10 @@ public class SecurityAuditService {
         try {
             AuditLog auditLogEntry = AuditLog.builder()
                     .eventType(mapEventType(eventType))
-                    .username(username != null ? username : "anonymous")
+                    .username(username != null ? username : Roles.ANONYMOUS_USER)
                     .clientIp(clientIp)
                     .severity(mapSeverity(severity))
-                    .message(truncate(message, 500))
+                    .message(StringUtils.truncateWithSuffix(message, MESSAGE_MAX_LENGTH, StringUtils.DEFAULT_TRUNCATION_SUFFIX))
                     .details(serializeDetails(details))
                     .build();
 
@@ -158,13 +165,6 @@ public class SecurityAuditService {
         }
     }
 
-    private String truncate(String value, int maxLength) {
-        if (value == null) {
-            return null;
-        }
-        return value.length() <= maxLength ? value : value.substring(0, maxLength - 3) + "...";
-    }
-
     /**
      * Cleanup old audit logs based on retention policy.
      * Runs daily at 2 AM.
@@ -193,7 +193,7 @@ public class SecurityAuditService {
     public void logLoginFailure(String username, String clientIp, String reason, int remainingAttempts) {
         logEvent(EventType.LOGIN_FAILURE, username, clientIp, Severity.WARNING,
                 "Authentication failed: " + reason,
-                Map.of("remaining_attempts", remainingAttempts, REASON_FIELD, reason));
+                Map.of("remaining_attempts", remainingAttempts, KEY_REASON, reason));
     }
 
     /**
@@ -260,7 +260,7 @@ public class SecurityAuditService {
     public void logRefreshTokenRevoked(String username, String clientIp, String reason) {
         logEvent(EventType.REFRESH_TOKEN_REVOKED, username, clientIp, Severity.WARNING,
                 "Refresh token revoked: " + reason,
-                Map.of(REASON_FIELD, reason));
+                Map.of(KEY_REASON, reason));
     }
 
     /**
@@ -269,7 +269,7 @@ public class SecurityAuditService {
     public void logAllRefreshTokensRevoked(String username, String reason, int count) {
         logEvent(EventType.REFRESH_TOKEN_REVOKED, username, "system", Severity.WARNING,
                 "All refresh tokens revoked: " + reason,
-                Map.of(REASON_FIELD, reason, "tokens_revoked", count));
+                Map.of(KEY_REASON, reason, "tokens_revoked", count));
     }
 
     /**

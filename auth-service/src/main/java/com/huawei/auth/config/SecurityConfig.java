@@ -1,14 +1,19 @@
 package com.huawei.auth.config;
 
 import jakarta.servlet.http.HttpServletResponse;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+
+import static com.huawei.common.constants.PublicEndpoints.*;
+import static com.huawei.common.security.Roles.ADMIN;
 
 @Configuration
 @EnableWebSecurity
@@ -26,7 +31,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) -> {
-                    response.setContentType("application/json");
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.getWriter().write("{\"error\":\"Authentication required\"}");
                 })
@@ -35,12 +40,12 @@ public class SecurityConfig {
                 // Public endpoints - accessible without authentication
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 // Permit only health check publicly, secure other actuator endpoints
-                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-                .requestMatchers("/actuator/**").hasRole("ADMIN")
+                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD).permitAll()
+                .requestMatchers("/actuator/**").hasRole(ADMIN)
                 // OpenAPI / Swagger UI endpoints
-                .requestMatchers("/v3/api-docs/**").permitAll()
-                .requestMatchers("/swagger-ui/**").permitAll()
-                .requestMatchers("/swagger-ui.html").permitAll()
+                .requestMatchers(API_DOCS_WILDCARD).permitAll()
+                .requestMatchers(SWAGGER_UI_WILDCARD).permitAll()
+                .requestMatchers(SWAGGER_UI_HTML).permitAll()
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             );

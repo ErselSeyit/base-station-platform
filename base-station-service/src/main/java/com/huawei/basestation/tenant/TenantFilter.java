@@ -1,5 +1,8 @@
 package com.huawei.basestation.tenant;
 
+import static com.huawei.common.constants.HttpHeaders.*;
+import static com.huawei.common.constants.PublicEndpoints.*;
+
 import com.huawei.basestation.model.Organization;
 import com.huawei.basestation.repository.OrganizationRepository;
 import jakarta.servlet.FilterChain;
@@ -33,11 +36,6 @@ public class TenantFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(TenantFilter.class);
 
-    private static final String HEADER_ORG_ID = "X-Organization-ID";
-    private static final String HEADER_ORG_SLUG = "X-Organization-Slug";
-    private static final String HEADER_USERNAME = "X-User-Name";
-    private static final String HEADER_USER_ROLE = "X-User-Role";
-
     private final OrganizationRepository organizationRepository;
 
     public TenantFilter(OrganizationRepository organizationRepository) {
@@ -65,11 +63,11 @@ public class TenantFilter extends OncePerRequestFilter {
     }
 
     private TenantContext.TenantInfo extractTenantInfo(HttpServletRequest request) {
-        String username = request.getHeader(HEADER_USERNAME);
+        String username = request.getHeader(HEADER_USER_NAME);
         String role = request.getHeader(HEADER_USER_ROLE);
 
         // Try to get organization by ID first
-        String orgIdHeader = request.getHeader(HEADER_ORG_ID);
+        String orgIdHeader = request.getHeader(HEADER_ORGANIZATION_ID);
         if (orgIdHeader != null && !orgIdHeader.isBlank()) {
             try {
                 Long orgId = Long.parseLong(orgIdHeader);
@@ -89,7 +87,7 @@ public class TenantFilter extends OncePerRequestFilter {
         }
 
         // Try to get organization by slug
-        String orgSlugHeader = request.getHeader(HEADER_ORG_SLUG);
+        String orgSlugHeader = request.getHeader(HEADER_ORGANIZATION_SLUG);
         if (orgSlugHeader != null && !orgSlugHeader.isBlank()) {
             Optional<Organization> org = organizationRepository.findBySlug(orgSlugHeader);
             if (org.isPresent() && org.get().isActive()) {
@@ -115,7 +113,7 @@ public class TenantFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getServletPath();
         // Skip filtering for health checks and public endpoints
-        return path.startsWith("/actuator/health")
+        return path.startsWith(ACTUATOR_HEALTH)
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-ui");
     }

@@ -3,6 +3,7 @@ package com.huawei.auth.service;
 import com.huawei.auth.model.RefreshToken;
 import com.huawei.auth.model.User;
 import com.huawei.auth.repository.RefreshTokenRepository;
+import com.huawei.common.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +27,12 @@ import java.util.Optional;
 public class RefreshTokenService {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshTokenService.class);
+
+    /** Maximum length for user agent string storage */
+    private static final int USER_AGENT_MAX_LENGTH = 255;
+
+    /** Days to retain revoked tokens for audit purposes */
+    private static final int REVOKED_TOKEN_RETENTION_DAYS = 30;
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final SecurityAuditService auditService;
@@ -64,7 +71,7 @@ public class RefreshTokenService {
     private RefreshToken doCreateRefreshToken(User user, String clientIp, String userAgent) {
         RefreshToken refreshToken = new RefreshToken(user, refreshTokenExpirationMs);
         refreshToken.setClientIp(clientIp);
-        refreshToken.setUserAgent(truncate(userAgent, 255));
+        refreshToken.setUserAgent(StringUtils.truncate(userAgent, USER_AGENT_MAX_LENGTH));
 
         RefreshToken saved = refreshTokenRepository.save(refreshToken);
         log.info("Created refresh token for user '{}' from IP '{}'", user.getUsername(), clientIp);
@@ -191,8 +198,8 @@ public class RefreshTokenService {
         Instant expiredCutoff = Instant.now();
         int deletedExpired = refreshTokenRepository.deleteExpiredTokens(expiredCutoff);
 
-        // Keep revoked tokens for 30 days for audit purposes
-        Instant revokedCutoff = Instant.now().minus(30, ChronoUnit.DAYS);
+        // Keep revoked tokens for audit purposes
+        Instant revokedCutoff = Instant.now().minus(REVOKED_TOKEN_RETENTION_DAYS, ChronoUnit.DAYS);
         int deletedRevoked = refreshTokenRepository.deleteOldRevokedTokens(revokedCutoff);
 
         log.info("Cleaned up {} expired and {} old revoked refresh tokens",
@@ -206,8 +213,4 @@ public class RefreshTokenService {
         return refreshTokenExpirationMs;
     }
 
-    private String truncate(String value, int maxLength) {
-        if (value == null) return null;
-        return value.length() > maxLength ? value.substring(0, maxLength) : value;
-    }
 }

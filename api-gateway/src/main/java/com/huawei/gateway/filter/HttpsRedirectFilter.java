@@ -11,6 +11,9 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
+
+import com.huawei.common.constants.HttpHeaders;
+
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
@@ -51,7 +54,7 @@ public class HttpsRedirectFilter implements GlobalFilter, Ordered {
         }
 
         // Check X-Forwarded-Proto header (for load balancer/proxy scenarios)
-        String forwardedProto = request.getHeaders().getFirst("X-Forwarded-Proto");
+        String forwardedProto = request.getHeaders().getFirst(HttpHeaders.HEADER_FORWARDED_PROTO);
         if ("https".equalsIgnoreCase(forwardedProto)) {
             return chain.filter(exchange);
         }

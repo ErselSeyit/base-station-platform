@@ -2,6 +2,7 @@ package com.huawei.monitoring.client;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.huawei.common.constants.SecurityConstants;
 import com.huawei.common.dto.AlertEvent;
 import com.huawei.common.dto.DiagnosticRequest;
 import com.huawei.common.dto.DiagnosticResponse;
@@ -44,7 +45,6 @@ public class DiagnosticClient {
     private static final Logger log = LoggerFactory.getLogger(DiagnosticClient.class);
     private static final int MAX_FAILURES = 5;
     private static final Duration CIRCUIT_RESET_TIME = Duration.ofSeconds(30);
-    private static final String HMAC_ALGORITHM = "HmacSHA256";
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
@@ -101,8 +101,8 @@ public class DiagnosticClient {
             return "";
         }
         try {
-            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
-            SecretKeySpec keySpec = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM);
+            Mac mac = Mac.getInstance(SecurityConstants.HMAC_ALGORITHM);
+            SecretKeySpec keySpec = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), SecurityConstants.HMAC_ALGORITHM);
             mac.init(keySpec);
             byte[] hmacBytes = mac.doFinal(body.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hmacBytes);
@@ -120,6 +120,14 @@ public class DiagnosticClient {
     }
 
     /**
+     * Get diagnosis for an alert event asynchronously with explicit problem ID.
+     * This ensures the diagnosis response can be matched to the session.
+     */
+    public CompletableFuture<DiagnosticResponse> diagnoseAsync(AlertEvent alert, String problemId) {
+        return CompletableFuture.supplyAsync(() -> diagnose(alert, problemId));
+    }
+
+    /**
      * Get diagnosis for an alert event.
      */
     public DiagnosticResponse diagnose(AlertEvent alert) {
@@ -134,6 +142,24 @@ public class DiagnosticClient {
         }
 
         DiagnosticRequest request = DiagnosticRequest.fromAlertEvent(alert);
+        return executeRequest(request);
+    }
+
+    /**
+     * Get diagnosis for an alert event with explicit problem ID.
+     */
+    public DiagnosticResponse diagnose(AlertEvent alert, String problemId) {
+        if (!enabled) {
+            log.debug("Diagnostic service disabled, returning fallback");
+            return DiagnosticResponse.fallback(problemId, "Diagnostic service is disabled");
+        }
+
+        if (isCircuitOpen()) {
+            log.debug("Circuit breaker open, returning fallback");
+            return DiagnosticResponse.fallback(problemId, "Service temporarily unavailable (circuit open)");
+        }
+
+        DiagnosticRequest request = DiagnosticRequest.fromAlertEvent(alert, problemId);
         return executeRequest(request);
     }
 

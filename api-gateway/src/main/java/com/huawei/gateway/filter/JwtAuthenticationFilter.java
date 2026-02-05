@@ -12,7 +12,12 @@ import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 
+import com.huawei.common.constants.SecurityConstants;
+import com.huawei.common.security.AuthConstants;
+import com.huawei.common.security.Roles;
 import com.huawei.gateway.util.JwtValidator;
+
+import static com.huawei.common.constants.HttpHeaders.*;
 
 import reactor.core.publisher.Mono;
 
@@ -43,7 +48,10 @@ import java.util.Objects;
 public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAuthenticationFilter.Config> {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
-    private static final String BEARER_PREFIX = "Bearer ";
+
+    // RFC 1918 Class B private address range: 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
+    private static final int CLASS_B_PRIVATE_OCTET_MIN = 16;
+    private static final int CLASS_B_PRIVATE_OCTET_MAX = 31;
 
     private final JwtValidator jwtValidator;
 
@@ -109,8 +117,6 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
         return chain.filter(exchange);
     }
 
-    private static final String AUTH_COOKIE_NAME = "auth_token";
-
     /**
      * Extracts JWT token from Authorization header or HttpOnly cookie.
      * Priority: Authorization header > auth_token cookie
@@ -119,8 +125,8 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private String extractToken(ServerHttpRequest request, String path) {
         // First, try Authorization header
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
-            String token = authHeader.substring(BEARER_PREFIX.length());
+        if (authHeader != null && authHeader.startsWith(AuthConstants.BEARER_PREFIX)) {
+            String token = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
             if (!token.isBlank()) {
                 log.debug("Token extracted from Authorization header for path: {}", path);
                 return token;
@@ -128,7 +134,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
         }
 
         // Fall back to HttpOnly cookie
-        List<HttpCookie> cookies = request.getCookies().get(AUTH_COOKIE_NAME);
+        List<HttpCookie> cookies = request.getCookies().get(AuthConstants.AUTH_COOKIE_NAME);
         if (cookies != null && !cookies.isEmpty()) {
             String token = cookies.getFirst().getValue();
             if (!token.isBlank()) {
@@ -153,14 +159,14 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
 
         String role = validationResult.getRole();
         ServerHttpRequest.Builder requestBuilder = request.mutate()
-                .header("X-User-Name", username);
+                .header(HEADER_USER_NAME, username);
 
         if (role != null) {
-            requestBuilder.header("X-User-Role", role);
+            requestBuilder.header(HEADER_USER_ROLE, role);
         }
 
         String internalAuthToken = generateInternalAuthToken(username, role);
-        requestBuilder.header("X-Internal-Auth", internalAuthToken);
+        requestBuilder.header(HEADER_INTERNAL_AUTH, internalAuthToken);
 
         return exchange.mutate().request(requestBuilder.build()).build();
     }
@@ -207,7 +213,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
             if (ip.startsWith("172.")) {
                 try {
                     int second = Integer.parseInt(ip.split("\\.")[1]);
-                    return second >= 16 && second <= 31;
+                    return second >= CLASS_B_PRIVATE_OCTET_MIN && second <= CLASS_B_PRIVATE_OCTET_MAX;
                 } catch (NumberFormatException e) {
                     return false;
                 }
@@ -222,7 +228,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
      * Extracts client IP from request, considering X-Forwarded-For header.
      */
     private String getClientIp(ServerHttpRequest request) {
-        String xForwardedFor = request.getHeaders().getFirst("X-Forwarded-For");
+        String xForwardedFor = request.getHeaders().getFirst(HEADER_FORWARDED_FOR);
         if (xForwardedFor != null && !xForwardedFor.isBlank()) {
             return xForwardedFor.split(",")[0].trim();
         }
@@ -239,7 +245,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private Mono<Void> unauthorizedResponse(ServerWebExchange exchange, String message) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
-        response.getHeaders().add("X-Error-Message", message);
+        response.getHeaders().add(HEADER_ERROR_MESSAGE, message);
         return response.setComplete();
     }
 
@@ -249,7 +255,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private Mono<Void> forbiddenResponse(ServerWebExchange exchange, String message) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.FORBIDDEN);
-        response.getHeaders().add("X-Error-Message", message);
+        response.getHeaders().add(HEADER_ERROR_MESSAGE, message);
         return response.setComplete();
     }
 
@@ -267,7 +273,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
         }
 
         long timestamp = System.currentTimeMillis();
-        String payload = username + ":" + Objects.requireNonNullElse(role, "USER") + ":" + timestamp;
+        String payload = username + ":" + Objects.requireNonNullElse(role, Roles.USER) + ":" + timestamp;
         String signature = computeHmac(payload, internalSecret);
 
         return signature + "." + payload;
@@ -275,10 +281,10 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
 
     private String computeHmac(String data, String secret) {
         try {
-            Mac hmac = Mac.getInstance("HmacSHA256");
+            Mac hmac = Mac.getInstance(SecurityConstants.HMAC_ALGORITHM);
             SecretKeySpec secretKey = new SecretKeySpec(
                 secret.getBytes(StandardCharsets.UTF_8),
-                "HmacSHA256"
+                SecurityConstants.HMAC_ALGORITHM
             );
             hmac.init(secretKey);
             byte[] hash = hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));

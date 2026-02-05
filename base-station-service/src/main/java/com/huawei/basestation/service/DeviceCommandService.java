@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
+import static com.huawei.common.constants.ServiceNames.AI_DIAGNOSTIC_SERVICE;
+
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -93,7 +95,7 @@ public class DeviceCommandService {
         command.setProblemCode(problemCode);
         command.setConfidence(confidence);
         command.setRiskLevel(riskLevel);
-        command.setCreatedBy("ai-diagnostic");
+        command.setCreatedBy(AI_DIAGNOSTIC_SERVICE);
 
         // Check if auto-apply is allowed
         boolean autoApplyAllowed = isAutoApplyAllowed(confidence, riskLevel);

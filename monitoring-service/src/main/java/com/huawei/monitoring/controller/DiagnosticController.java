@@ -21,6 +21,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import static com.huawei.common.constants.JsonResponseKeys.KEY_STATUS;
+
+import com.huawei.common.constants.ValidationMessages;
+import com.huawei.common.security.Roles;
 import org.springframework.lang.Nullable;
 
 /**
@@ -33,7 +37,6 @@ import org.springframework.lang.Nullable;
 public class DiagnosticController {
 
     private static final Logger log = LoggerFactory.getLogger(DiagnosticController.class);
-    private static final String RESPONSE_NULL_MESSAGE = "Response cannot be null";
 
     private final DiagnosticSessionService sessionService;
 
@@ -77,7 +80,7 @@ public class DiagnosticController {
                 sessionService.getSession(sessionId)
                         .map(ResponseEntity::ok)
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     /**
@@ -102,7 +105,7 @@ public class DiagnosticController {
      * Mark a session as having its solution applied.
      */
     @PostMapping("/{sessionId}/apply")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<DiagnosticSession> markApplied(@PathVariable String sessionId) {
         return Objects.requireNonNull(
                 sessionService.markApplied(sessionId)
@@ -111,17 +114,15 @@ public class DiagnosticController {
                             return ResponseEntity.ok(session);
                         })
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     /**
      * Submit feedback for a diagnostic session.
      * This is the core learning mechanism - operator confirms if solution worked.
      */
-    private static final String ANONYMOUS_USER = "anonymous";
-
     @PostMapping("/{sessionId}/feedback")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<DiagnosticSession> submitFeedback(
             @PathVariable String sessionId,
             @Valid @RequestBody FeedbackRequest request,
@@ -131,7 +132,7 @@ public class DiagnosticController {
         String username = Objects.requireNonNull(
                 Optional.ofNullable(user)
                         .map(UserDetails::getUsername)
-                        .orElse(ANONYMOUS_USER));
+                        .orElse(Roles.ANONYMOUS_USER));
 
         return Objects.requireNonNull(
                 sessionService.submitFeedback(
@@ -147,7 +148,7 @@ public class DiagnosticController {
                             return ResponseEntity.ok(session);
                         })
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     /**
@@ -177,7 +178,7 @@ public class DiagnosticController {
                 sessionService.getLearnedPattern(problemCode)
                         .map(ResponseEntity::ok)
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     /**
@@ -204,18 +205,18 @@ public class DiagnosticController {
                         .map(session -> {
                             log.info("Auto-feedback recorded for session {} based on command result", sessionId);
                             Map<String, Object> response = new java.util.HashMap<>();
-                            response.put("status", "recorded");
+                            response.put(KEY_STATUS, "recorded");
                             response.put("sessionId", sessionId);
                             response.put("wasEffective", notification.success());
                             return ResponseEntity.ok(response);
                         })
                         .orElseGet(() -> {
                             Map<String, Object> response = new java.util.HashMap<>();
-                            response.put("status", "session_not_found");
+                            response.put(KEY_STATUS, "session_not_found");
                             response.put("sessionId", sessionId);
                             return ResponseEntity.ok(response);
                         }),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     /**

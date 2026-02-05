@@ -39,24 +39,28 @@ class SONScheduler:
             interval_seconds: How often to run analysis (default: 300s = 5 minutes)
         """
         self.monitoring_url = monitoring_service_url.rstrip('/')
+        # Derive API gateway URL from monitoring URL for authenticated requests
+        self.api_gateway_url = self.monitoring_url.replace(
+            'monitoring-service:8082', 'api-gateway:8080'
+        )
         self.auth_user = auth_user
         self.auth_password = auth_password
         self.interval = interval_seconds
-        
+
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._session = requests.Session()
         self._token: Optional[str] = None
         self._token_expiry: Optional[datetime] = None
-        
+
         logger.info(f"SON Scheduler initialized (interval: {interval_seconds}s)")
+        logger.info(f"API Gateway URL: {self.api_gateway_url}")
 
     def _authenticate(self) -> bool:
         """Authenticate with the platform and get JWT token."""
         try:
-            # Try to get token from auth service via API gateway
-            auth_url = self.monitoring_url.replace('monitoring-service:8082', 'api-gateway:8080')
-            auth_url = f"{auth_url}/api/v1/auth/login"
+            # Get token from auth service via API gateway
+            auth_url = f"{self.api_gateway_url}/api/v1/auth/login"
             
             response = self._session.post(
                 auth_url,
@@ -109,11 +113,11 @@ class SONScheduler:
                 logger.warning("Cannot fetch metrics - authentication failed")
                 return []
             
-            # Fetch metrics from last 15 minutes
+            # Fetch metrics from last 15 minutes via API gateway
             end_time = datetime.now()
             start_time = end_time - timedelta(minutes=15)
-            
-            url = f"{self.monitoring_url}/api/v1/metrics"
+
+            url = f"{self.api_gateway_url}/api/v1/metrics"
             params = {
                 'startTime': start_time.isoformat(),
                 'endTime': end_time.isoformat(),
@@ -208,8 +212,8 @@ class SONScheduler:
             if not self._ensure_authenticated():
                 logger.warning("Cannot post recommendation - authentication failed")
                 return False
-            
-            url = f"{self.monitoring_url}/api/v1/son"
+
+            url = f"{self.api_gateway_url}/api/v1/son"
             
             # Map AI diagnostic format to monitoring service format
             payload = {

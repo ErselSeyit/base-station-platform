@@ -17,6 +17,8 @@ import org.springframework.retry.backoff.ExponentialBackOffPolicy;
 import org.springframework.retry.policy.SimpleRetryPolicy;
 import org.springframework.retry.support.RetryTemplate;
 
+import com.huawei.common.constants.MessagingConstants;
+
 /**
  * RabbitMQ configuration for alert messaging.
  *
@@ -29,13 +31,14 @@ import org.springframework.retry.support.RetryTemplate;
 @ConditionalOnProperty(name = "spring.rabbitmq.host")
 public class RabbitMQConfig {
 
-    public static final String ALERTS_EXCHANGE = "alerts.exchange";
-    public static final String ALERT_TRIGGERED_ROUTING_KEY = "alert.triggered";
+    // Re-export constants for backward compatibility with existing code
+    public static final String ALERTS_EXCHANGE = MessagingConstants.ALERTS_EXCHANGE;
+    public static final String ALERT_TRIGGERED_ROUTING_KEY = MessagingConstants.ALERT_TRIGGERED_ROUTING_KEY;
 
-    // Dead Letter Queue configuration (clear naming)
-    public static final String ALERTS_DEADLETTER_QUEUE = "alerts.dlq";
-    public static final String ALERTS_DEADLETTER_EXCHANGE = "alerts.dlx";
-    public static final String ALERTS_DEADLETTER_ROUTING_KEY = "alert.failed";
+    // Dead Letter Queue configuration
+    public static final String ALERTS_DEADLETTER_QUEUE = MessagingConstants.ALERTS_DEADLETTER_QUEUE;
+    public static final String ALERTS_DEADLETTER_EXCHANGE = MessagingConstants.ALERTS_DEADLETTER_EXCHANGE;
+    public static final String ALERTS_DEADLETTER_ROUTING_KEY = MessagingConstants.ALERTS_DEADLETTER_ROUTING_KEY;
 
     private final RabbitMQRetryConfig retryConfig;
 

@@ -1,5 +1,6 @@
 package com.huawei.auth.config;
 
+import com.huawei.common.constants.SecurityConstants;
 import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +26,6 @@ import java.nio.charset.StandardCharsets;
 public class JwtConfig {
 
     private static final Logger log = LoggerFactory.getLogger(JwtConfig.class);
-    private static final int MIN_SECRET_LENGTH = 32;
 
     @Value("${jwt.secret:}")
     private String secret;
@@ -38,16 +38,16 @@ public class JwtConfig {
         // Validate that secret is provided
         if (secret == null || secret.isBlank()) {
             String errorMsg = "JWT_SECRET environment variable is required but not set. " +
-                    "Please set JWT_SECRET to a secure random string of at least " + MIN_SECRET_LENGTH + " characters.";
+                    "Please set JWT_SECRET to a secure random string of at least " + SecurityConstants.MIN_SECRET_LENGTH + " characters.";
             log.error(errorMsg);
             throw new IllegalStateException(errorMsg);
         }
 
         // Validate secret length for security
-        if (secret.length() < MIN_SECRET_LENGTH) {
+        if (secret.length() < SecurityConstants.MIN_SECRET_LENGTH) {
             String errorMsg = String.format(
                     "JWT_SECRET is too short (%d characters). Must be at least %d characters for security.",
-                    secret.length(), MIN_SECRET_LENGTH);
+                    secret.length(), SecurityConstants.MIN_SECRET_LENGTH);
             log.error(errorMsg);
             throw new IllegalArgumentException(errorMsg);
         }

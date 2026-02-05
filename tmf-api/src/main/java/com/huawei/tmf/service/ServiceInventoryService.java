@@ -1,5 +1,7 @@
 package com.huawei.tmf.service;
 
+import static com.huawei.tmf.constants.TMFConstants.*;
+
 import com.huawei.tmf.model.Service;
 import com.huawei.tmf.repository.ServiceRepository;
 
@@ -24,14 +26,6 @@ public class ServiceInventoryService {
 
     private static final Logger log = LoggerFactory.getLogger(ServiceInventoryService.class);
 
-    // State constants
-    private static final String STATE_FIELD = "state";
-    private static final String STATE_DESIGNED = "designed";
-    private static final String STATE_ACTIVE = "active";
-    private static final String STATE_INACTIVE = "inactive";
-    private static final String STATE_TERMINATED = "terminated";
-    private static final String SERVICE_STATE_CHANGE_EVENT = "ServiceStateChangeEvent";
-
     private final ServiceRepository serviceRepository;
     private final MongoTemplate mongoTemplate;
 
@@ -52,7 +46,7 @@ public class ServiceInventoryService {
         Query query = new Query();
 
         if (state != null && !state.isEmpty()) {
-            query.addCriteria(Criteria.where(STATE_FIELD).is(state));
+            query.addCriteria(Criteria.where(FIELD_STATE).is(state));
         }
         if (category != null && !category.isEmpty()) {
             query.addCriteria(Criteria.where("category").is(category));
@@ -146,8 +140,8 @@ public class ServiceInventoryService {
         Service saved = serviceRepository.save(service);
 
         // Check if state changed
-        if (updates.containsKey(STATE_FIELD) && !oldState.equals(service.getState())) {
-            notifyListeners(SERVICE_STATE_CHANGE_EVENT, saved);
+        if (updates.containsKey(FIELD_STATE) && !oldState.equals(service.getState())) {
+            notifyListeners(EVENT_SERVICE_STATE_CHANGE, saved);
         } else {
             notifyListeners("ServiceAttributeValueChangeEvent", saved);
         }
@@ -186,7 +180,7 @@ public class ServiceInventoryService {
         service.setModifiedAt(Instant.now());
 
         Service saved = serviceRepository.save(service);
-        notifyListeners(SERVICE_STATE_CHANGE_EVENT, saved);
+        notifyListeners(EVENT_SERVICE_STATE_CHANGE, saved);
         return Optional.of(saved);
     }
 
@@ -205,7 +199,7 @@ public class ServiceInventoryService {
         service.setModifiedAt(Instant.now());
 
         Service saved = serviceRepository.save(service);
-        notifyListeners(SERVICE_STATE_CHANGE_EVENT, saved);
+        notifyListeners(EVENT_SERVICE_STATE_CHANGE, saved);
         return Optional.of(saved);
     }
 
@@ -225,7 +219,7 @@ public class ServiceInventoryService {
         service.setModifiedAt(Instant.now());
 
         Service saved = serviceRepository.save(service);
-        notifyListeners(SERVICE_STATE_CHANGE_EVENT, saved);
+        notifyListeners(EVENT_SERVICE_STATE_CHANGE, saved);
         return Optional.of(saved);
     }
 
@@ -282,7 +276,7 @@ public class ServiceInventoryService {
                 case "name" -> service.setName((String) value);
                 case "description" -> service.setDescription((String) value);
                 case "category" -> service.setCategory((String) value);
-                case STATE_FIELD -> service.setState((String) value);
+                case FIELD_STATE -> service.setState((String) value);
                 case "isServiceEnabled" -> service.setServiceEnabled((Boolean) value);
                 case "startDate" -> service.setStartDate(Instant.parse((String) value));
                 case "endDate" -> service.setEndDate(Instant.parse((String) value));

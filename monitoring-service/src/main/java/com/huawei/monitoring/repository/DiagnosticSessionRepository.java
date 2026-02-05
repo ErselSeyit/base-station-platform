@@ -95,4 +95,11 @@ public interface DiagnosticSessionRepository extends MongoRepository<DiagnosticS
      * Find all sessions ordered by creation date (most recent first).
      */
     List<DiagnosticSession> findAllByOrderByCreatedAtDesc();
+
+    /**
+     * Find active sessions for a station and problem code (for deduplication).
+     * Active means: DETECTED, DIAGNOSED, APPLIED, or PENDING_CONFIRMATION.
+     */
+    @Query("{ 'stationId': ?0, 'problemCode': ?1, 'status': { $in: ['DETECTED', 'DIAGNOSED', 'APPLIED', 'PENDING_CONFIRMATION'] } }")
+    List<DiagnosticSession> findActiveByStationIdAndProblemCode(Long stationId, String problemCode);
 }

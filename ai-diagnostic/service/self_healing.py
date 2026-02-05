@@ -566,20 +566,42 @@ class SelfHealingService:
     def _execute_parameter_change(self, action: HealingAction) -> tuple[bool, str]:
         """Execute a parameter change action."""
         params = action.parameters
-        logger.info(f"Changing parameter on {action.station_id}: {params}")
+        problem_code = params.get('problem_code', 'unknown')
+        commands = params.get('commands', [])
+        expected = params.get('expected_outcome', '')
+
+        logger.info("=== AUTO-HEALING EXECUTION ===")
+        logger.info(f"  Station: {action.station_id}")
+        logger.info(f"  Problem: {problem_code}")
+        logger.info(f"  Description: {action.description}")
+        if commands:
+            logger.info("  Commands to execute:")
+            for cmd in commands:
+                logger.info(f"    > {cmd}")
+        if expected:
+            logger.info(f"  Expected outcome: {expected}")
+        logger.info("==============================")
 
         if self.device_client:
-            # Real implementation would use device_client
+            # Real implementation would use device_client to execute commands
             pass
 
-        return True, f"Parameter changed: {params.get('action_type')} = {params.get('action_value')}"
+        return True, f"Executed healing for {problem_code}: {action.description}"
 
     def _execute_service_restart(self, action: HealingAction) -> tuple[bool, str]:
         """Execute a service restart action."""
-        logger.info(f"Restarting service on {action.station_id}")
+        params = action.parameters
+        problem_code = params.get('problem_code', 'unknown')
+
+        logger.info("=== AUTO-HEALING: SERVICE RESTART ===")
+        logger.info(f"  Station: {action.station_id}")
+        logger.info(f"  Problem: {problem_code}")
+        logger.info(f"  Description: {action.description}")
+        logger.info("======================================")
+
         # Simulate restart with delay
         time.sleep(2)
-        return True, f"Service restarted on {action.station_id}"
+        return True, f"Service restarted on {action.station_id} for {problem_code}"
 
     def _execute_load_balance(self, action: HealingAction) -> tuple[bool, str]:
         """Execute a load balancing action."""

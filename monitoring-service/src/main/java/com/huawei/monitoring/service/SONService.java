@@ -1,5 +1,8 @@
 package com.huawei.monitoring.service;
 
+import static com.huawei.common.constants.TimeConstants.MILLIS_PER_HOUR;
+import static com.huawei.common.constants.TimeConstants.MILLIS_PER_MINUTE;
+
 import com.huawei.monitoring.model.SONRecommendation;
 import com.huawei.monitoring.model.SONRecommendation.SONFunction;
 import com.huawei.monitoring.model.SONRecommendation.SONStatus;
@@ -247,7 +250,7 @@ public class SONService {
      * Expires old pending recommendations.
      * Runs every hour.
      */
-    @Scheduled(fixedRate = 3600000)
+    @Scheduled(fixedRate = MILLIS_PER_HOUR)
     public void expireOldRecommendations() {
         List<SONRecommendation> expired = repository.findByStatusAndExpiresAtBefore(
                 SONStatus.PENDING, LocalDateTime.now());
@@ -267,7 +270,7 @@ public class SONService {
      * Auto-executes approved recommendations that are auto-executable.
      * Runs every minute.
      */
-    @Scheduled(fixedRate = 60000)
+    @Scheduled(fixedRate = MILLIS_PER_MINUTE)
     public void autoExecuteApproved() {
         List<SONRecommendation> autoExec = repository.findByAutoExecutableTrueAndStatus(SONStatus.APPROVED);
 

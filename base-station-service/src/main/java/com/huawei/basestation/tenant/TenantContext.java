@@ -1,5 +1,7 @@
 package com.huawei.basestation.tenant;
 
+import com.huawei.common.security.Roles;
+
 /**
  * Thread-local holder for the current tenant context.
  *
@@ -89,7 +91,7 @@ public final class TenantContext {
          * @return true if this is a system context
          */
         public boolean isSystemContext() {
-            return organizationId == null && "ADMIN".equalsIgnoreCase(role);
+            return organizationId == null && Roles.isAdmin(role);
         }
     }
 }

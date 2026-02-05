@@ -34,17 +34,29 @@ package com.huawei.common.security;
  */
 public final class Roles {
 
+    /**
+     * Spring Security role prefix.
+     */
+    public static final String ROLE_PREFIX = "ROLE_";
+
+    /**
+     * Default username for unauthenticated requests.
+     */
+    public static final String ANONYMOUS_USER = "anonymous";
+
     // Role names (without ROLE_ prefix - Spring Security adds it automatically)
     public static final String ADMIN = "ADMIN";
     public static final String OPERATOR = "OPERATOR";
     public static final String USER = "USER";
     public static final String SERVICE = "SERVICE";  // For edge-bridge and internal services
+    public static final String VIEWER = "VIEWER";    // Read-only access role
 
     // Full role names (with ROLE_ prefix - for explicit checks)
     public static final String ROLE_ADMIN = "ROLE_ADMIN";
     public static final String ROLE_OPERATOR = "ROLE_OPERATOR";
     public static final String ROLE_USER = "ROLE_USER";
     public static final String ROLE_SERVICE = "ROLE_SERVICE";
+    public static final String ROLE_VIEWER = "ROLE_VIEWER";
 
     // SpEL expressions for @PreAuthorize annotations
     public static final String HAS_ADMIN = "hasRole('ADMIN')";

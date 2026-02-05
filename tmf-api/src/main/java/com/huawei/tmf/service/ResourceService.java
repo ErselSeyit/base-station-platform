@@ -1,5 +1,7 @@
 package com.huawei.tmf.service;
 
+import static com.huawei.tmf.constants.TMFConstants.STATE_DISABLED;
+
 import com.huawei.tmf.model.Resource;
 import com.huawei.tmf.repository.ResourceRepository;
 
@@ -24,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ResourceService {
 
     private static final Logger log = LoggerFactory.getLogger(ResourceService.class);
-    private static final String STATE_DISABLED = "disabled";
 
     private final ResourceRepository resourceRepository;
     private final MongoTemplate mongoTemplate;

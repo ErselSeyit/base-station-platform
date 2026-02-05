@@ -25,6 +25,10 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.lang.Nullable;
 import org.springframework.web.server.ResponseStatusException;
 
+import static com.huawei.common.constants.JsonResponseKeys.KEY_MESSAGE;
+
+import com.huawei.common.util.RequestUtils;
+
 import reactor.core.publisher.Mono;
 
 /**
@@ -40,7 +44,6 @@ import reactor.core.publisher.Mono;
 public class GlobalExceptionHandler extends AbstractErrorWebExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-    private static final String MESSAGE_KEY = "message";
 
     public GlobalExceptionHandler(
             ErrorAttributes errorAttributes,
@@ -79,12 +82,12 @@ public class GlobalExceptionHandler extends AbstractErrorWebExceptionHandler {
         response.put("error", status.getReasonPhrase());
 
         if (error instanceof ResponseStatusException rse) {
-            response.put(MESSAGE_KEY, Objects.requireNonNullElse(rse.getReason(), "Gateway error"));
+            response.put(KEY_MESSAGE, Objects.requireNonNullElse(rse.getReason(), "Gateway error"));
         } else if (error instanceof IllegalArgumentException) {
-            response.put(MESSAGE_KEY, error.getMessage());
+            response.put(KEY_MESSAGE, error.getMessage());
         } else {
             // Don't expose internal error details to client
-            response.put(MESSAGE_KEY, "An error occurred while processing your request");
+            response.put(KEY_MESSAGE, "An error occurred while processing your request");
             response.put("details", "Please contact support with error ID: " + errorId);
         }
 
@@ -119,6 +122,6 @@ public class GlobalExceptionHandler extends AbstractErrorWebExceptionHandler {
     }
 
     private String generateErrorId() {
-        return Objects.requireNonNull(UUID.randomUUID().toString().substring(0, 8));
+        return Objects.requireNonNull(UUID.randomUUID().toString().substring(0, RequestUtils.REQUEST_ID_LENGTH));
     }
 }

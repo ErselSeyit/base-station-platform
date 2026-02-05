@@ -1,6 +1,7 @@
 package com.huawei.monitoring.model;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -11,12 +12,22 @@ import java.util.List;
 /**
  * Represents learned patterns from diagnostic feedback.
  * Used by the AI to improve future recommendations.
+ *
+ * Thread-safety: Uses @Version for optimistic locking to prevent
+ * concurrent update race conditions during AI learning.
  */
 @Document(collection = "learned_patterns")
 public class LearnedPattern {
 
     @Id
     private String id;
+
+    /**
+     * Version field for optimistic locking.
+     * Prevents concurrent updates from overwriting each other during learning.
+     */
+    @Version
+    private Long version;
 
     /**
      * Problem code this pattern applies to.
@@ -205,6 +216,14 @@ public class LearnedPattern {
 
     public void setLastUpdated(LocalDateTime lastUpdated) {
         this.lastUpdated = lastUpdated;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
     /**

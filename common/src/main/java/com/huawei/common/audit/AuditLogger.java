@@ -5,6 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
+import static com.huawei.common.constants.ServiceNames.SYSTEM_ACTOR;
+
 import java.time.Instant;
 import java.util.Objects;
 
@@ -67,7 +69,7 @@ public class AuditLogger {
     public void log(AuditAction action, @Nullable String actor, @Nullable String resource, @Nullable String details) {
         try {
             MDC.put(MDC_ACTION, action.name());
-            MDC.put(MDC_ACTOR, Objects.requireNonNullElse(actor, "SYSTEM"));
+            MDC.put(MDC_ACTOR, Objects.requireNonNullElse(actor, SYSTEM_ACTOR));
             MDC.put(MDC_RESOURCE, Objects.requireNonNullElse(resource, "N/A"));
             MDC.put(MDC_TIMESTAMP, Instant.now().toString());
 

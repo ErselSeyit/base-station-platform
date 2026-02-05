@@ -1,5 +1,8 @@
 package com.huawei.auth.controller;
 
+import static com.huawei.common.constants.JsonResponseKeys.KEY_ERROR;
+import static com.huawei.common.constants.JsonResponseKeys.KEY_MESSAGE;
+
 import com.huawei.auth.dto.LoginRequest;
 import com.huawei.auth.dto.LoginResponse;
 import com.huawei.auth.dto.RefreshTokenRequest;
@@ -10,6 +13,10 @@ import com.huawei.auth.service.RefreshTokenService;
 import com.huawei.auth.service.SecurityAuditService;
 import com.huawei.auth.service.UserService;
 import com.huawei.auth.util.JwtUtil;
+import com.huawei.common.constants.TimeConstants;
+import com.huawei.common.security.AuthConstants;
+import com.huawei.common.security.Roles;
+import com.huawei.common.util.RequestUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -37,12 +44,9 @@ public class AuthController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
-    // Constants for response keys and cookie attributes
-    private static final String ERROR_KEY = "error";
-    private static final String AUTH_TOKEN_COOKIE = "auth_token";
+    // Constants for cookie attributes
     private static final String SAME_SITE_ATTR = "SameSite";
     private static final String SAME_SITE_STRICT = "Strict";
-    private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtUtil jwtUtil;
     private final LoginAttemptService loginAttemptService;
@@ -81,7 +85,7 @@ public class AuthController {
             @Parameter(description = "Login credentials") @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
-        String clientIp = getClientIp(httpRequest);
+        String clientIp = RequestUtils.getClientIp(httpRequest);
         String username = request.getUsername();
         String lockKey = username + ":" + clientIp;
 
@@ -93,7 +97,7 @@ public class AuthController {
             auditService.logAccountLocked(username, clientIp, remainingSeconds);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(Map.of(
-                            ERROR_KEY, "Account temporarily locked due to too many failed attempts",
+                            KEY_ERROR, "Account temporarily locked due to too many failed attempts",
                             "retryAfterSeconds", remainingSeconds
                     ));
         }
@@ -108,7 +112,7 @@ public class AuthController {
             String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
 
             // Set HttpOnly cookie for secure token storage
-            Cookie authCookie = new Cookie(AUTH_TOKEN_COOKIE, token);
+            Cookie authCookie = new Cookie(AuthConstants.AUTH_COOKIE_NAME, token);
             authCookie.setHttpOnly(true);
             authCookie.setSecure(secureCookie);
             authCookie.setPath("/");
@@ -127,7 +131,7 @@ public class AuthController {
             auditService.logLoginFailure(username, clientIp, "Invalid credentials", remaining);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of(
-                            ERROR_KEY, "Invalid credentials",
+                            KEY_ERROR, "Invalid credentials",
                             "remainingAttempts", remaining
                     ));
         }
@@ -143,7 +147,7 @@ public class AuthController {
             @Parameter(description = "JWT token (optional)") @RequestHeader(value = "Authorization", required = false) String authHeader,
             HttpServletResponse httpResponse) {
         // Clear the auth cookie
-        Cookie authCookie = new Cookie(AUTH_TOKEN_COOKIE, "");
+        Cookie authCookie = new Cookie(AuthConstants.AUTH_COOKIE_NAME, "");
         authCookie.setHttpOnly(true);
         authCookie.setSecure(secureCookie);
         authCookie.setPath("/");
@@ -153,26 +157,18 @@ public class AuthController {
 
         // Log the logout for audit purposes
         String username = null;
-        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
-            String token = authHeader.substring(7);
+        if (authHeader != null && authHeader.startsWith(AuthConstants.BEARER_PREFIX)) {
+            String token = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
             try {
                 username = jwtUtil.extractUsername(token);
                 log.info("User logged out: {}", username);
-                auditService.logLogout(username, "unknown");
+                auditService.logLogout(username, RequestUtils.UNKNOWN_IP);
             } catch (Exception e) {
-                log.debug("Could not extract username from token during logout");
+                log.debug("Could not extract username from token during logout: {}", e.getMessage());
             }
         }
 
         return ResponseEntity.ok().build();
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     @Operation(
@@ -184,8 +180,8 @@ public class AuthController {
     @GetMapping("/validate")
     public ResponseEntity<Void> validateToken(
             @Parameter(description = "Bearer token", required = true) @RequestHeader("Authorization") String authHeader) {
-        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
-            String token = authHeader.substring(7);
+        if (authHeader != null && authHeader.startsWith(AuthConstants.BEARER_PREFIX)) {
+            String token = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
             try {
                 String username = jwtUtil.extractUsername(token);
                 boolean isValid = jwtUtil.validateToken(token, username);
@@ -193,10 +189,11 @@ public class AuthController {
                     return ResponseEntity.ok().build();
                 }
             } catch (Exception e) {
-                return ResponseEntity.status(401).build();
+                log.debug("Token validation failed: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
         }
-        return ResponseEntity.status(401).build();
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 
     @Operation(
@@ -211,7 +208,7 @@ public class AuthController {
             @Parameter(description = "Refresh token request") @Valid @RequestBody RefreshTokenRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
-        String clientIp = getClientIp(httpRequest);
+        String clientIp = RequestUtils.getClientIp(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
 
         // Verify the refresh token
@@ -219,7 +216,7 @@ public class AuthController {
         if (refreshTokenOpt.isEmpty()) {
             log.warn("Invalid refresh token from IP '{}'", clientIp);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of(ERROR_KEY, "Invalid or expired refresh token"));
+                    .body(Map.of(KEY_ERROR, "Invalid or expired refresh token"));
         }
 
         RefreshToken oldRefreshToken = refreshTokenOpt.get();
@@ -230,7 +227,7 @@ public class AuthController {
             log.warn("Refresh token used for disabled account: {}", user.getUsername());
             refreshTokenService.revokeAllUserTokens(user, "Account disabled");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of(ERROR_KEY, "Account is disabled"));
+                    .body(Map.of(KEY_ERROR, "Account is disabled"));
         }
 
         // Generate new access token
@@ -241,7 +238,7 @@ public class AuthController {
                 oldRefreshToken, clientIp, userAgent);
 
         // Set new access token cookie
-        Cookie authCookie = new Cookie(AUTH_TOKEN_COOKIE, newAccessToken);
+        Cookie authCookie = new Cookie(AuthConstants.AUTH_COOKIE_NAME, newAccessToken);
         authCookie.setHttpOnly(true);
         authCookie.setSecure(secureCookie);
         authCookie.setPath("/");
@@ -255,7 +252,7 @@ public class AuthController {
         TokenResponse response = TokenResponse.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken.getToken())
-                .expiresIn(accessTokenExpirationMs / 1000)
+                .expiresIn(accessTokenExpirationMs / TimeConstants.MILLIS_PER_SECOND)
                 .refreshExpiresIn(newRefreshToken.getRemainingSeconds())
                 .username(user.getUsername())
                 .role(user.getRole())
@@ -275,15 +272,15 @@ public class AuthController {
             @Parameter(description = "Refresh token to revoke") @Valid @RequestBody RefreshTokenRequest request,
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             HttpServletRequest httpRequest) {
-        String clientIp = getClientIp(httpRequest);
+        String clientIp = RequestUtils.getClientIp(httpRequest);
 
         // Get username from auth header for audit logging
-        String username = "unknown";
-        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
+        String username = Roles.ANONYMOUS_USER;
+        if (authHeader != null && authHeader.startsWith(AuthConstants.BEARER_PREFIX)) {
             try {
-                username = jwtUtil.extractUsername(authHeader.substring(7));
-            } catch (Exception ignored) {
-                // Continue with unknown username
+                username = jwtUtil.extractUsername(authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH));
+            } catch (Exception e) {
+                log.debug("Could not extract username from token for audit: {}", e.getMessage());
             }
         }
 
@@ -292,10 +289,10 @@ public class AuthController {
         if (revoked) {
             log.info("Refresh token revoked by user '{}' from IP '{}'", username, clientIp);
             auditService.logRefreshTokenRevoked(username, clientIp, "User requested");
-            return ResponseEntity.ok(Map.of("message", "Token revoked successfully"));
+            return ResponseEntity.ok(Map.of(KEY_MESSAGE, "Token revoked successfully"));
         } else {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of(ERROR_KEY, "Token not found or already revoked"));
+                    .body(Map.of(KEY_ERROR, "Token not found or already revoked"));
         }
     }
 }

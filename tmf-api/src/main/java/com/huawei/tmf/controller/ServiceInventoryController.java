@@ -1,5 +1,8 @@
 package com.huawei.tmf.controller;
 
+import static com.huawei.common.constants.HttpHeaders.HEADER_RESULT_COUNT;
+import static com.huawei.common.constants.HttpHeaders.HEADER_TOTAL_COUNT;
+
 import com.huawei.tmf.model.Service;
 import com.huawei.tmf.service.ServiceInventoryService;
 
@@ -53,8 +56,8 @@ public class ServiceInventoryController {
                 state, category, serviceType, name, externalId, relatedPartyId, pageRequest);
 
         return ResponseEntity.ok()
-                .header("X-Total-Count", String.valueOf(services.getTotalElements()))
-                .header("X-Result-Count", String.valueOf(services.getNumberOfElements()))
+                .header(HEADER_TOTAL_COUNT, String.valueOf(services.getTotalElements()))
+                .header(HEADER_RESULT_COUNT, String.valueOf(services.getNumberOfElements()))
                 .body(services.getContent());
     }
 

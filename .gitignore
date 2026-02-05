@@ -132,3 +132,6 @@ pyrightconfig.json
 # Testing performance artifacts
 testing/performance/
 
+
+# Markdown files
+*.md

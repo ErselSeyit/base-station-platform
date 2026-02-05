@@ -1,5 +1,7 @@
 package com.huawei.tmf.service;
 
+import static com.huawei.tmf.constants.TMFConstants.EVENT_ALARM_STATE_CHANGE;
+
 import com.huawei.tmf.model.Alarm;
 import com.huawei.tmf.model.Alarm.AlarmState;
 import com.huawei.tmf.model.Alarm.PerceivedSeverity;
@@ -26,7 +28,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AlarmService {
 
     private static final Logger log = LoggerFactory.getLogger(AlarmService.class);
-    private static final String ALARM_STATE_CHANGE_EVENT = "AlarmStateChangeEvent";
 
     private final AlarmRepository alarmRepository;
     private final MongoTemplate mongoTemplate;
@@ -169,7 +170,7 @@ public class AlarmService {
         alarm.setState(AlarmState.updated);
 
         Alarm saved = alarmRepository.save(alarm);
-        notifyListeners(ALARM_STATE_CHANGE_EVENT, saved);
+        notifyListeners(EVENT_ALARM_STATE_CHANGE, saved);
         return Optional.of(saved);
     }
 
@@ -189,7 +190,7 @@ public class AlarmService {
         alarm.setState(AlarmState.updated);
 
         Alarm saved = alarmRepository.save(alarm);
-        notifyListeners(ALARM_STATE_CHANGE_EVENT, saved);
+        notifyListeners(EVENT_ALARM_STATE_CHANGE, saved);
         return Optional.of(saved);
     }
 
@@ -209,7 +210,7 @@ public class AlarmService {
         alarm.setAlarmClearedTime(Instant.now());
 
         Alarm saved = alarmRepository.save(alarm);
-        notifyListeners(ALARM_STATE_CHANGE_EVENT, saved);
+        notifyListeners(EVENT_ALARM_STATE_CHANGE, saved);
         return Optional.of(saved);
     }
 

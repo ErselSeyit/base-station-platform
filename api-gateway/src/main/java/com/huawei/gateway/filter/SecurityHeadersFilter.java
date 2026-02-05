@@ -1,5 +1,13 @@
 package com.huawei.gateway.filter;
 
+import static com.huawei.common.constants.HttpHeaders.HEADER_CONTENT_TYPE_OPTIONS;
+import static com.huawei.common.constants.HttpHeaders.HEADER_CSP;
+import static com.huawei.common.constants.HttpHeaders.HEADER_FRAME_OPTIONS;
+import static com.huawei.common.constants.HttpHeaders.HEADER_HSTS;
+import static com.huawei.common.constants.HttpHeaders.HEADER_XSS_PROTECTION;
+import static com.huawei.common.constants.HttpHeaders.VALUE_NOSNIFF;
+import static com.huawei.common.constants.HttpHeaders.VALUE_XSS_BLOCK;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -37,46 +45,55 @@ public class SecurityHeadersFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        return chain.filter(exchange).then(Mono.fromRunnable(() -> {
-            ServerHttpResponse response = exchange.getResponse();
-            HttpHeaders headers = response.getHeaders();
+        ServerHttpResponse response = exchange.getResponse();
+        String path = exchange.getRequest().getPath().value();
 
-            // Prevent MIME type sniffing
-            headers.add("X-Content-Type-Options", "nosniff");
+        // Register beforeCommit callback to add headers before response is committed
+        // This ensures headers are added even when JWT validation fails and commits early
+        response.beforeCommit(() -> {
+            addSecurityHeaders(response.getHeaders(), path);
+            return Mono.empty();
+        });
 
-            // Prevent clickjacking
-            headers.add("X-Frame-Options", frameOptions);
+        return chain.filter(exchange);
+    }
 
-            // XSS protection (legacy, but still useful for older browsers)
-            headers.add("X-XSS-Protection", "1; mode=block");
+    /**
+     * Adds security headers to the response if not already present.
+     */
+    private void addSecurityHeaders(HttpHeaders headers, String path) {
+        addHeaderIfAbsent(headers, HEADER_CONTENT_TYPE_OPTIONS, VALUE_NOSNIFF);
+        addHeaderIfAbsent(headers, HEADER_FRAME_OPTIONS, frameOptions);
+        addHeaderIfAbsent(headers, HEADER_XSS_PROTECTION, VALUE_XSS_BLOCK);
+        addHeaderIfAbsent(headers, "Referrer-Policy", "strict-origin-when-cross-origin");
+        addHeaderIfAbsent(headers, "Permissions-Policy",
+            "accelerometer=(), camera=(), geolocation=(), gyroscope=(), " +
+            "magnetometer=(), microphone=(), payment=(), usb=()");
 
-            // Referrer policy - don't leak URLs to external sites
-            headers.add("Referrer-Policy", "strict-origin-when-cross-origin");
+        if (hstsEnabled) {
+            addHeaderIfAbsent(headers, HEADER_HSTS,
+                "max-age=" + hstsMaxAge + "; includeSubDomains; preload");
+        }
+        if (cspEnabled) {
+            addHeaderIfAbsent(headers, HEADER_CSP, buildCspHeader());
+        }
+        if (isSensitivePath(path)) {
+            addCacheControlHeaders(headers);
+        }
+    }
 
-            // Permissions policy - restrict browser features
-            headers.add("Permissions-Policy",
-                "accelerometer=(), camera=(), geolocation=(), gyroscope=(), " +
-                "magnetometer=(), microphone=(), payment=(), usb=()");
+    private void addHeaderIfAbsent(HttpHeaders headers, String name, String value) {
+        if (!headers.containsKey(name)) {
+            headers.add(name, value);
+        }
+    }
 
-            // HSTS - force HTTPS (only enable in production with HTTPS)
-            if (hstsEnabled) {
-                headers.add("Strict-Transport-Security",
-                    "max-age=" + hstsMaxAge + "; includeSubDomains; preload");
-            }
-
-            // Content Security Policy
-            if (cspEnabled) {
-                headers.add("Content-Security-Policy", buildCspHeader());
-            }
-
-            // Prevent caching of sensitive responses
-            String path = exchange.getRequest().getPath().value();
-            if (isSensitivePath(path)) {
-                headers.add("Cache-Control", "no-store, no-cache, must-revalidate, private");
-                headers.add("Pragma", "no-cache");
-                headers.add("Expires", "0");
-            }
-        }));
+    private void addCacheControlHeaders(HttpHeaders headers) {
+        if (!headers.containsKey("Cache-Control")) {
+            headers.add("Cache-Control", "no-store, no-cache, must-revalidate, private");
+            headers.add("Pragma", "no-cache");
+            headers.add("Expires", "0");
+        }
     }
 
     private String buildCspHeader() {

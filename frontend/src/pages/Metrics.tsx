@@ -42,6 +42,7 @@ import {
 } from '../constants/designSystem'
 import { CATEGORY_CONFIG as BASE_CATEGORY_CONFIG, HealthStatus, MetricConfig, METRICS_CONFIG } from '../constants/metricsConfig'
 import { metricsApi, stationApi } from '../services/api'
+import type { DailyMetricAggregate } from '../services/api/metrics'
 import { BaseStation, MetricData } from '../types'
 import { ensureArray } from '../utils/arrayUtils'
 
@@ -238,9 +239,10 @@ interface CategorySectionProps {
   metrics: ProcessedMetric[]
   chartData: ChartDataPoint[]
   baseDelay: number
+  days: number
 }
 
-const CategorySection = ({ category, metrics, chartData, baseDelay }: CategorySectionProps) => {
+const CategorySection = ({ category, metrics, chartData, baseDelay, days }: CategorySectionProps) => {
   const config = CATEGORY_CONFIG[category]
   const Icon = config.Icon
 
@@ -335,8 +337,8 @@ const CategorySection = ({ category, metrics, chartData, baseDelay }: CategorySe
         <Typography sx={{ fontSize: '0.75rem', color: 'var(--mono-500)', mb: '20px' }}>
           Historical data visualization
         </Typography>
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={chartData}>
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
             <defs>
               {metrics.map(m => (
                 <linearGradient key={m.type} id={`gradient-${m.type}`} x1="0" y1="0" x2="0" y2="1">
@@ -346,7 +348,13 @@ const CategorySection = ({ category, metrics, chartData, baseDelay }: CategorySe
               ))}
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--mono-200)" />
-            <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--mono-600)' }} stroke="var(--mono-300)" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 10, fill: 'var(--mono-600)' }}
+              stroke="var(--mono-300)"
+              interval={days <= 7 ? 0 : days <= 30 ? 'preserveStartEnd' : 'preserveStartEnd'}
+              tickMargin={5}
+            />
             <YAxis tick={{ fontSize: 11, fill: 'var(--mono-600)' }} stroke="var(--mono-300)" />
             <RechartsTooltip
               contentStyle={{
@@ -416,6 +424,20 @@ export default function Metrics() {
       return response.data
     },
     refetchInterval: POLLING_INTERVALS.NORMAL,
+  })
+
+  // Fetch pre-aggregated daily data for charts (efficient - no client-side aggregation needed)
+  const { data: dailyAggregates, error: dailyError } = useQuery({
+    queryKey: ['metrics-daily', days],
+    queryFn: async () => {
+      const response = await metricsApi.getDailyAggregates({
+        startTime: subDays(new Date(), days).toISOString(),
+        endTime: new Date().toISOString(),
+      })
+      return response.data
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 
   // Merge historical + live (immutable)
@@ -498,45 +520,37 @@ export default function Metrics() {
     return groups
   }, [processedMetrics])
 
-  // Chart data grouped by date
+  // Chart data from pre-aggregated daily data (efficient - computed server-side)
+  // Date format adapts based on time range for readability
+  const dateFormat = days <= 7 ? 'MMM dd' : days <= 30 ? 'MM/dd' : 'M/d'
   const chartData = React.useMemo(() => {
-    const accumulator = new Map<string, { displayDate: string; sums: Record<string, number>; counts: Record<string, number> }>()
+    const aggregates = ensureArray(dailyAggregates as DailyMetricAggregate[])
 
-    for (const m of filteredMetrics) {
-      if (!m.timestamp) continue
-      const date = new Date(m.timestamp)
-      const dateKey = format(date, 'yyyy-MM-dd')
-      const displayDate = format(date, 'MMM dd')
+    return aggregates
+      .filter((d): d is DailyMetricAggregate => d !== null && d.date !== null)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((daily) => {
+        const date = new Date(daily.date)
+        const point: ChartDataPoint = { date: format(date, dateFormat) }
 
-      let entry = accumulator.get(dateKey)
-      if (!entry) {
-        entry = { displayDate, sums: {}, counts: {} }
-        accumulator.set(dateKey, entry)
-      }
-      entry.sums[m.metricType] = (entry.sums[m.metricType] || 0) + m.value
-      entry.counts[m.metricType] = (entry.counts[m.metricType] || 0) + 1
-    }
-
-    return Array.from(accumulator.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, data]) => {
-        const point: ChartDataPoint = { date: data.displayDate }
-        for (const type of Object.keys(data.sums)) {
-          let avg = data.sums[type] / data.counts[type]
-          if (type === 'POWER_CONSUMPTION') {
-            avg = avg / UNIT_CONVERSION.WATTS_TO_KILOWATTS
+        if (daily.averages) {
+          for (const [type, avg] of Object.entries(daily.averages)) {
+            let value = avg
+            if (type === 'POWER_CONSUMPTION') {
+              value = avg / UNIT_CONVERSION.WATTS_TO_KILOWATTS
+            }
+            point[type] = value
           }
-          point[type] = avg
         }
         return point
       })
-  }, [filteredMetrics])
+  }, [dailyAggregates, days, dateFormat])
 
   if (isLoadingHistorical) {
     return <LoadingSpinner />
   }
 
-  const error = stationsError || historicalError || liveError
+  const error = stationsError || historicalError || liveError || dailyError
   if (error) {
     return <ErrorDisplay title="Failed to load metrics data" message={error.message} />
   }
@@ -634,6 +648,7 @@ export default function Metrics() {
           metrics={metricsByCategory[category] || []}
           chartData={chartData}
           baseDelay={0.1 + idx * 0.1}
+          days={days}
         />
       ))}
 

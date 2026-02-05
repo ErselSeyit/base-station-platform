@@ -15,6 +15,22 @@ public final class DiagnosticConstants {
     }
 
     // ========================================
+    // ID PREFIXES
+    // ========================================
+
+    /**
+     * Prefix for problem/diagnostic session IDs.
+     * Format: PRB-{timestamp}-{suffix}
+     */
+    public static final String PROBLEM_ID_PREFIX = "PRB-";
+
+    /**
+     * Length of the UUID suffix in problem IDs.
+     * Shorter than request IDs since timestamp provides uniqueness.
+     */
+    public static final int PROBLEM_ID_SUFFIX_LENGTH = 4;
+
+    // ========================================
     // CONFIDENCE THRESHOLDS
     // ========================================
 

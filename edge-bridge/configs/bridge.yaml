@@ -20,7 +20,7 @@ device:
     baud: 115200
   tcp:
     host: "127.0.0.1"
-    port: 9999
+    port: 8888  # MIPS simulator device protocol port
     # TLS configuration for secure device connections
     tls:
       enabled: false  # Set to true to enable TLS

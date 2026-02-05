@@ -1,6 +1,7 @@
 package com.huawei.monitoring.model;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -19,6 +20,12 @@ public class DiagnosticSession {
 
     @Id
     private String id;
+
+    /**
+     * Version field for optimistic locking to prevent concurrent modification.
+     */
+    @Version
+    private Long version;
 
     /**
      * External problem ID from the AI diagnostic service.
@@ -108,6 +115,14 @@ public class DiagnosticSession {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
     public String getProblemId() {

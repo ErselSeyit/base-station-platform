@@ -24,6 +24,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import static com.huawei.common.security.Roles.*;
+import static com.huawei.common.constants.HttpHeaders.*;
+import static com.huawei.common.constants.PublicEndpoints.*;
 
 /**
  * Security configuration for monitoring-service.
@@ -39,9 +41,6 @@ import static com.huawei.common.security.Roles.*;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
-    private static final String HEADER_USER_NAME = "X-User-Name";
-    private static final String HEADER_USER_ROLE = "X-User-Role";
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -49,14 +48,14 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Permit only health check publicly, secure other actuator endpoints
-                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD).permitAll()
                 .requestMatchers("/actuator/**").hasRole(ADMIN)
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers(SWAGGER_UI_WILDCARD, API_DOCS_WILDCARD).permitAll()
                 // Permit WebSocket endpoints (WebSocket has its own auth via origin validation)
                 .requestMatchers("/ws/**").permitAll()
-                // Metrics endpoints - read for all, write for operators+
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/metrics/**").hasAnyRole(ADMIN, OPERATOR, USER)
-                .requestMatchers("/api/v1/metrics/**").hasAnyRole(ADMIN, OPERATOR)
+                // Metrics endpoints - read for all, write for operators+ and services
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/metrics/**").hasAnyRole(ADMIN, OPERATOR, USER, SERVICE)
+                .requestMatchers("/api/v1/metrics/**").hasAnyRole(ADMIN, OPERATOR, SERVICE)
                 // Alerts - read for all, acknowledge for operators+
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/alerts/**").hasAnyRole(ADMIN, OPERATOR, USER)
                 .requestMatchers("/api/v1/alerts/**").hasAnyRole(ADMIN, OPERATOR)
@@ -89,8 +88,8 @@ public class SecurityConfig {
                     if (role != null && !role.isBlank()) {
                         // Normalize role to ROLE_ prefix for Spring Security
                         String normalizedRole = role.toUpperCase();
-                        if (!normalizedRole.startsWith("ROLE_")) {
-                            normalizedRole = "ROLE_" + normalizedRole;
+                        if (!normalizedRole.startsWith(ROLE_PREFIX)) {
+                            normalizedRole = ROLE_PREFIX + normalizedRole;
                         }
                         authorities = List.of(new SimpleGrantedAuthority(normalizedRole));
                     } else {
