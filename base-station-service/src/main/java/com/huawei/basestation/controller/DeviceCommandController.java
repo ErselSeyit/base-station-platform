@@ -2,6 +2,7 @@ package com.huawei.basestation.controller;
 
 import com.huawei.basestation.model.DeviceCommand;
 import com.huawei.basestation.service.DeviceCommandService;
+import com.huawei.common.security.Roles;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -161,7 +162,7 @@ public class DeviceCommandController {
     @Operation(summary = "Create manual command", description = "Creates a command manually")
     @ApiResponse(responseCode = "201", description = "Command created")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<DeviceCommand> createCommand(
             @PathVariable Long stationId,
             @Valid @RequestBody ManualCommandRequest request) {
@@ -188,7 +189,7 @@ public class DeviceCommandController {
     @ApiResponse(responseCode = "200", description = "Command cancelled")
     @ApiResponse(responseCode = "404", description = "Command not found or not pending")
     @PostMapping("/{commandId}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<DeviceCommand> cancelCommand(
             @PathVariable Long stationId,
             @PathVariable String commandId) {

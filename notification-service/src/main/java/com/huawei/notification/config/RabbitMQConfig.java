@@ -13,12 +13,15 @@ import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.huawei.common.constants.MessagingConstants;
+
 @Configuration
 public class RabbitMQConfig {
 
-    public static final String NOTIFICATION_QUEUE = "notification.queue";
-    public static final String ALERTS_EXCHANGE = "alerts.exchange";
-    public static final String ALERT_TRIGGERED_ROUTING_KEY = "alert.triggered";
+    // Re-export constants for backward compatibility with existing code
+    public static final String NOTIFICATION_QUEUE = MessagingConstants.NOTIFICATION_QUEUE;
+    public static final String ALERTS_EXCHANGE = MessagingConstants.ALERTS_EXCHANGE;
+    public static final String ALERT_TRIGGERED_ROUTING_KEY = MessagingConstants.ALERT_TRIGGERED_ROUTING_KEY;
 
     @Bean
     public Exchange alertsExchange() {

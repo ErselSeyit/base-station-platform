@@ -4,6 +4,11 @@ spring:
   threads:
     virtual:
       enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      adjust-dates-to-context-time-zone: false
   data:
     mongodb:
       host: ${SPRING_DATA_MONGODB_HOST:mongodb}

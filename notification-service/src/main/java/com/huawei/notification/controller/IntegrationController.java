@@ -1,5 +1,6 @@
 package com.huawei.notification.controller;
 
+import com.huawei.common.security.Roles;
 import com.huawei.notification.integration.AlertDispatcher;
 import com.huawei.notification.integration.AlertIntegration;
 import com.huawei.notification.repository.NotificationRepository;
@@ -37,7 +38,7 @@ public class IntegrationController {
             description = "Returns status of all configured external integrations.")
     @ApiResponse(responseCode = "200", description = "Status retrieved successfully")
     @GetMapping("/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<AlertDispatcher.IntegrationStatus> getStatus() {
         return ResponseEntity.ok(alertDispatcher.getStatus());
     }
@@ -47,7 +48,7 @@ public class IntegrationController {
             description = "Tests connectivity to all configured integrations.")
     @ApiResponse(responseCode = "200", description = "Connection tests completed")
     @PostMapping("/test")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Roles.HAS_ADMIN)
     public ResponseEntity<Map<String, Boolean>> testConnections() {
         return ResponseEntity.ok(alertDispatcher.testAllConnections());
     }
@@ -58,7 +59,7 @@ public class IntegrationController {
     @ApiResponse(responseCode = "200", description = "Dispatch completed")
     @ApiResponse(responseCode = "404", description = "Notification not found")
     @PostMapping("/dispatch/{notificationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public CompletableFuture<ResponseEntity<AlertDispatcher.DispatchResult>> dispatchNotification(
             @Parameter(description = "ID of the notification to dispatch")
             @PathVariable Long notificationId) {
@@ -75,7 +76,7 @@ public class IntegrationController {
     @ApiResponse(responseCode = "200", description = "Dispatch completed")
     @ApiResponse(responseCode = "404", description = "Notification not found")
     @PostMapping("/dispatch/{notificationId}/{integrationName}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public CompletableFuture<ResponseEntity<AlertIntegration.AlertResult>> dispatchToIntegration(
             @Parameter(description = "ID of the notification to dispatch")
             @PathVariable Long notificationId,
@@ -94,7 +95,7 @@ public class IntegrationController {
     @ApiResponse(responseCode = "200", description = "Resolve dispatched")
     @ApiResponse(responseCode = "404", description = "Notification not found")
     @PostMapping("/resolve/{notificationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public CompletableFuture<ResponseEntity<AlertDispatcher.DispatchResult>> resolveNotification(
             @Parameter(description = "ID of the notification to resolve")
             @PathVariable Long notificationId) {

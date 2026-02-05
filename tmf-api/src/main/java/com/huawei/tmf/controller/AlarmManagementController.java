@@ -1,5 +1,8 @@
 package com.huawei.tmf.controller;
 
+import static com.huawei.common.constants.HttpHeaders.HEADER_RESULT_COUNT;
+import static com.huawei.common.constants.HttpHeaders.HEADER_TOTAL_COUNT;
+
 import com.huawei.tmf.model.Alarm;
 import com.huawei.tmf.service.AlarmService;
 
@@ -25,7 +28,6 @@ import java.util.Optional;
 @CrossOrigin(origins = "*")
 public class AlarmManagementController {
 
-    private static final String X_TOTAL_COUNT_HEADER = "X-Total-Count";
     private static final String ALARM_RAISED_TIME_FIELD = "alarmRaisedTime";
 
     private final AlarmService alarmService;
@@ -55,8 +57,8 @@ public class AlarmManagementController {
                 state, perceivedSeverity, alarmType, sourceSystemId, affectedResourceId, pageRequest);
 
         return ResponseEntity.ok()
-                .header(X_TOTAL_COUNT_HEADER, String.valueOf(alarms.getTotalElements()))
-                .header("X-Result-Count", String.valueOf(alarms.getNumberOfElements()))
+                .header(HEADER_TOTAL_COUNT, String.valueOf(alarms.getTotalElements()))
+                .header(HEADER_RESULT_COUNT, String.valueOf(alarms.getNumberOfElements()))
                 .body(alarms.getContent());
     }
 
@@ -266,7 +268,7 @@ public class AlarmManagementController {
         Page<Alarm> alarms = alarmService.findActiveAlarms(pageRequest);
 
         return ResponseEntity.ok()
-                .header(X_TOTAL_COUNT_HEADER, String.valueOf(alarms.getTotalElements()))
+                .header(HEADER_TOTAL_COUNT, String.valueOf(alarms.getTotalElements()))
                 .body(alarms.getContent());
     }
 
@@ -283,7 +285,7 @@ public class AlarmManagementController {
         Page<Alarm> alarms = alarmService.findAlarmHistory(resourceId, pageRequest);
 
         return ResponseEntity.ok()
-                .header(X_TOTAL_COUNT_HEADER, String.valueOf(alarms.getTotalElements()))
+                .header(HEADER_TOTAL_COUNT, String.valueOf(alarms.getTotalElements()))
                 .body(alarms.getContent());
     }
 }

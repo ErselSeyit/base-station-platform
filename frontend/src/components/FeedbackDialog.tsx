@@ -20,6 +20,7 @@ import {
 import { useState } from 'react'
 import { DiagnosticSession, diagnosticsApi, FeedbackRequest } from '../services/api'
 import { CSS_VARS } from '../constants/designSystem'
+import { logger } from '../services/logger'
 
 interface FeedbackDialogProps {
   open: boolean
@@ -52,7 +53,7 @@ export default function FeedbackDialog({ open, session, onClose, onSubmit }: Rea
       onSubmit(response.data)
       handleClose()
     } catch (error) {
-      console.error('Failed to submit feedback:', error)
+      logger.error('Failed to submit feedback', { error })
       setSubmitError('Failed to submit feedback. Please try again.')
     } finally {
       setIsSubmitting(false)

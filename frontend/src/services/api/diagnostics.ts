@@ -17,6 +17,7 @@ export interface DiagnosticSession {
   message: string
   status: 'DETECTED' | 'DIAGNOSED' | 'APPLIED' | 'PENDING_CONFIRMATION' | 'RESOLVED' | 'FAILED'
   autoApplied?: boolean
+  metricsSnapshot?: Record<string, number>  // Contains metric values like {CPU_USAGE: 95, threshold: 75}
   aiSolution?: {
     action: string
     commands: string[]

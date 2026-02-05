@@ -1,5 +1,7 @@
 package com.huawei.auth.model;
 
+import com.huawei.common.constants.TimeConstants;
+import com.huawei.common.security.Roles;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -128,7 +130,7 @@ public class User {
      * @return true if the user is an administrator
      */
     public boolean isAdmin() {
-        return "ADMIN".equalsIgnoreCase(this.role);
+        return Roles.isAdmin(this.role);
     }
 
     /**
@@ -137,7 +139,7 @@ public class User {
      * @return true if the user is an operator
      */
     public boolean isOperator() {
-        return "OPERATOR".equalsIgnoreCase(this.role);
+        return Roles.OPERATOR.equalsIgnoreCase(this.role);
     }
 
     /**
@@ -172,6 +174,6 @@ public class User {
         if (this.createdAt == null) {
             return false;
         }
-        return this.createdAt.isAfter(Instant.now().minusSeconds(86400));
+        return this.createdAt.isAfter(Instant.now().minusSeconds(TimeConstants.SECONDS_PER_DAY));
     }
 }

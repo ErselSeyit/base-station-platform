@@ -22,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.huawei.common.constants.ValidationMessages;
+import com.huawei.common.security.Roles;
+import com.huawei.monitoring.dto.DailyMetricAggregateDTO;
 import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.MetricType;
 import com.huawei.monitoring.service.MonitoringService;
@@ -42,8 +45,9 @@ import jakarta.validation.constraints.NotEmpty;
 public class MonitoringController {
 
     private static final Logger log = LoggerFactory.getLogger(MonitoringController.class);
-    private static final String STATION_ID_NULL_MESSAGE = "Station ID cannot be null";
-    private static final String START_TIME_NULL_MESSAGE = "Start time cannot be null";
+
+    /** Default station ID used when station ID cannot be parsed from input */
+    private static final long DEFAULT_STATION_ID = 1L;
 
     private final MonitoringService service;
 
@@ -54,7 +58,7 @@ public class MonitoringController {
     @Operation(summary = "Record metric", description = "Records a single metric data point")
     @ApiResponse(responseCode = "201", description = "Metric recorded")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<MetricDataDTO> recordMetric(
             @Parameter(description = "Metric data") @Valid @RequestBody MetricDataDTO dto) {
         log.debug("Recording metric for station {}: type={}, value={}", 
@@ -95,7 +99,7 @@ public class MonitoringController {
             @Parameter(description = "Station ID") @PathVariable Long stationId) {
         log.debug("Getting metrics for station: {}", stationId);
         return ResponseEntity.ok(service.getMetricsByStation(
-                Objects.requireNonNull(stationId, STATION_ID_NULL_MESSAGE)));
+                Objects.requireNonNull(stationId, ValidationMessages.STATION_ID_NULL_MESSAGE)));
     }
 
     @Operation(summary = "Get metrics by station and type", description = "Retrieves metrics of a specific type for a station")
@@ -105,7 +109,7 @@ public class MonitoringController {
             @Parameter(description = "Station ID") @PathVariable Long stationId,
             @Parameter(description = "Metric type") @PathVariable MetricType metricType) {
         return ResponseEntity.ok(service.getMetricsByStationAndType(
-                Objects.requireNonNull(stationId, STATION_ID_NULL_MESSAGE),
+                Objects.requireNonNull(stationId, ValidationMessages.STATION_ID_NULL_MESSAGE),
                 Objects.requireNonNull(metricType, "Metric type cannot be null")));
     }
 
@@ -116,7 +120,19 @@ public class MonitoringController {
             @Parameter(description = "Start time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @Parameter(description = "End time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
         return ResponseEntity.ok(service.getMetricsByTimeRange(
-                Objects.requireNonNull(start, START_TIME_NULL_MESSAGE),
+                Objects.requireNonNull(start, ValidationMessages.START_TIME_NULL_MESSAGE),
+                Objects.requireNonNull(end, "End time cannot be null")));
+    }
+
+    @Operation(summary = "Get daily aggregated metrics", description = "Retrieves daily averaged metrics for chart display. More efficient than fetching raw metrics.")
+    @ApiResponse(responseCode = "200", description = "List of daily aggregates")
+    @GetMapping("/daily")
+    public ResponseEntity<List<DailyMetricAggregateDTO>> getDailyAggregates(
+            @Parameter(description = "Start time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @Parameter(description = "End time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+        log.debug("Getting daily aggregates from {} to {}", start, end);
+        return ResponseEntity.ok(service.getDailyAggregates(
+                Objects.requireNonNull(start, ValidationMessages.START_TIME_NULL_MESSAGE),
                 Objects.requireNonNull(end, "End time cannot be null")));
     }
 
@@ -128,8 +144,8 @@ public class MonitoringController {
             @Parameter(description = "Start time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @Parameter(description = "End time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
         return ResponseEntity.ok(service.getMetricsByStationAndTimeRange(
-                Objects.requireNonNull(stationId, STATION_ID_NULL_MESSAGE),
-                Objects.requireNonNull(start, START_TIME_NULL_MESSAGE),
+                Objects.requireNonNull(stationId, ValidationMessages.STATION_ID_NULL_MESSAGE),
+                Objects.requireNonNull(start, ValidationMessages.START_TIME_NULL_MESSAGE),
                 Objects.requireNonNull(end, "End time cannot be null")));
     }
 
@@ -158,7 +174,7 @@ public class MonitoringController {
             @Parameter(description = "Station ID") @PathVariable Long stationId) {
         log.debug("Getting latest metric for station: {}", stationId);
         Optional<MetricDataDTO> latest = service.getLatestMetricByStation(
-                Objects.requireNonNull(stationId, STATION_ID_NULL_MESSAGE));
+                Objects.requireNonNull(stationId, ValidationMessages.STATION_ID_NULL_MESSAGE));
         if (latest.isPresent()) {
             log.debug("Found latest metric for station {}: type={}", stationId, latest.get().getMetricType());
         } else {
@@ -197,7 +213,7 @@ public class MonitoringController {
             description = "Retrieves latest metrics for multiple stations in a single request")
     @ApiResponse(responseCode = "200", description = "Map of station ID to latest metric")
     @PostMapping("/batch/latest")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'USER')")
+    @PreAuthorize(Roles.HAS_USER)
     public ResponseEntity<Map<Long, MetricDataDTO>> getLatestMetricsBatch(
             @Valid @RequestBody BatchMetricsRequest request) {
         Objects.requireNonNull(request, "Request cannot be null");
@@ -233,7 +249,7 @@ public class MonitoringController {
     @ApiResponse(responseCode = "201", description = "Metrics recorded (may include partial failures)")
     @ApiResponse(responseCode = "400", description = "All metrics failed to record")
     @PostMapping("/batch")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'SERVICE')")
     public ResponseEntity<BatchRecordResponse> recordMetricsBatch(
             @Parameter(description = "Batch of metrics") @Valid @RequestBody BatchRecordRequest request) {
         Objects.requireNonNull(request, "Request cannot be null");
@@ -297,7 +313,7 @@ public class MonitoringController {
             return Long.parseLong(stationId);
         } catch (NumberFormatException e) {
             String numericPart = stationId.replaceAll("\\D", "");
-            return numericPart.isEmpty() ? 1L : Long.parseLong(numericPart);
+            return numericPart.isEmpty() ? DEFAULT_STATION_ID : Long.parseLong(numericPart);
         }
     }
 

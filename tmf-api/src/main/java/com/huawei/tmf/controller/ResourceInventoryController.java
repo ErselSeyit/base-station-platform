@@ -1,5 +1,8 @@
 package com.huawei.tmf.controller;
 
+import static com.huawei.common.constants.HttpHeaders.HEADER_RESULT_COUNT;
+import static com.huawei.common.constants.HttpHeaders.HEADER_TOTAL_COUNT;
+
 import com.huawei.tmf.model.Resource;
 import com.huawei.tmf.service.ResourceService;
 
@@ -61,8 +64,8 @@ public class ResourceInventoryController {
                 category, resourceType, operationalState, administrativeState, name, externalId, pageRequest);
 
         return ResponseEntity.ok()
-                .header("X-Total-Count", String.valueOf(resources.getTotalElements()))
-                .header("X-Result-Count", String.valueOf(resources.getNumberOfElements()))
+                .header(HEADER_TOTAL_COUNT, String.valueOf(resources.getTotalElements()))
+                .header(HEADER_RESULT_COUNT, String.valueOf(resources.getNumberOfElements()))
                 .body(resources.getContent());
     }
 

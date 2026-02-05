@@ -207,7 +207,7 @@ services:
     container_name: ai-diagnostic
     environment:
       DIAGNOSTIC_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
-      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+      # ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans  # Disabled - uncomment when zipkin is running
       API_GATEWAY_URL: http://api-gateway:8080
       AUTH_ADMIN_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
     ports:

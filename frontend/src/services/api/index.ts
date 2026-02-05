@@ -15,6 +15,7 @@ export { default } from './client'
 // Re-export domain APIs
 export { stationApi } from './stations'
 export { metricsApi } from './metrics'
+export type { DailyMetricAggregate } from './metrics'
 export { notificationsApi } from './notifications'
 export { diagnosticsApi } from './diagnostics'
 export { sonApi } from './son'

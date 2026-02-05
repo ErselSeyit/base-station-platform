@@ -27,6 +27,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.huawei.common.constants.ValidationMessages;
+import com.huawei.common.security.Roles;
+
 /**
  * REST controller for SON (Self-Organizing Network) recommendations.
  *
@@ -41,8 +44,6 @@ import java.util.Optional;
 public class SONController {
 
     private static final Logger log = LoggerFactory.getLogger(SONController.class);
-    private static final String ANONYMOUS_USER = "anonymous";
-    private static final String RESPONSE_NULL_MESSAGE = "Response cannot be null";
 
     private final SONService sonService;
 
@@ -85,7 +86,7 @@ public class SONController {
                 sonService.getById(id)
                         .map(ResponseEntity::ok)
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     @Operation(
@@ -143,7 +144,7 @@ public class SONController {
     @ApiResponse(responseCode = "200", description = "Recommendation approved")
     @ApiResponse(responseCode = "404", description = "Recommendation not found or not pending")
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<SONRecommendation> approve(
             @Parameter(description = "Recommendation ID")
             @PathVariable String id,
@@ -158,7 +159,7 @@ public class SONController {
                             return ResponseEntity.ok(rec);
                         })
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     @Operation(
@@ -167,7 +168,7 @@ public class SONController {
     @ApiResponse(responseCode = "200", description = "Recommendation rejected")
     @ApiResponse(responseCode = "404", description = "Recommendation not found or not pending")
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<SONRecommendation> reject(
             @Parameter(description = "Recommendation ID")
             @PathVariable String id,
@@ -184,7 +185,7 @@ public class SONController {
                             return ResponseEntity.ok(rec);
                         })
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     @Operation(
@@ -193,7 +194,7 @@ public class SONController {
     @ApiResponse(responseCode = "200", description = "Recommendation rolled back")
     @ApiResponse(responseCode = "404", description = "Recommendation not found or cannot be rolled back")
     @PostMapping("/{id}/rollback")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<SONRecommendation> rollback(
             @Parameter(description = "Recommendation ID")
             @PathVariable String id,
@@ -210,7 +211,7 @@ public class SONController {
                             return ResponseEntity.ok(rec);
                         })
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     // ========================================================================
@@ -234,7 +235,7 @@ public class SONController {
                             return ResponseEntity.ok(rec);
                         })
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     @Operation(
@@ -256,7 +257,7 @@ public class SONController {
                             return ResponseEntity.ok(rec);
                         })
                         .orElseGet(() -> ResponseEntity.notFound().build()),
-                RESPONSE_NULL_MESSAGE);
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
     }
 
     // ========================================================================
@@ -322,7 +323,7 @@ public class SONController {
         return Objects.requireNonNull(
                 Optional.ofNullable(user)
                         .map(UserDetails::getUsername)
-                        .orElse(ANONYMOUS_USER));
+                        .orElse(Roles.ANONYMOUS_USER));
     }
 
     // ========================================================================

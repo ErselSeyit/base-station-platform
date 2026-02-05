@@ -12,9 +12,13 @@ import com.huawei.monitoring.repository.DiagnosticSessionRepository;
 import com.huawei.monitoring.repository.LearnedPatternRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.annotation.Transactional;
+
+import static com.huawei.common.constants.ServiceNames.SYSTEM_ACTOR;
 
 import java.util.HashMap;
 import java.util.List;
@@ -45,17 +49,34 @@ public class DiagnosticSessionService {
     private static final String UNKNOWN_METRIC_KEY = "unknown_metric";
 
     /**
-     * Creates a new diagnostic session from an alert event.
-     * Uses null-safe patterns: defaults for missing values, never passes null.
+     * Creates a new diagnostic session from an alert event, or returns existing active session.
+     * Uses pre-processing to prevent duplicate sessions for the same station+problemCode.
      *
      * @param alert the alert event (must not be null)
      * @param problemId the problem identifier (must not be null)
-     * @return the created session
+     * @return the created or existing session
      */
     @Transactional
     public DiagnosticSession createSession(AlertEvent alert, String problemId) {
         Objects.requireNonNull(alert, "AlertEvent must not be null");
         Objects.requireNonNull(problemId, "problemId must not be null");
+
+        String problemCode = mapAlertToProblemCode(alert);
+        Long stationId = alert.getStationId();
+
+        // Pre-processing: Check for existing active session to prevent duplicates
+        if (stationId != null) {
+            List<DiagnosticSession> activeSessions = sessionRepository
+                    .findActiveByStationIdAndProblemCode(stationId, problemCode);
+            if (!activeSessions.isEmpty()) {
+                DiagnosticSession existing = activeSessions.get(0);
+                log.debug("Reusing existing active session {} for station {} problem {}",
+                        existing.getId(), stationId, problemCode);
+                // Update the metrics snapshot with latest values
+                updateMetricsSnapshot(existing, alert);
+                return sessionRepository.save(existing);
+            }
+        }
 
         // Use Optional to safely extract and transform nullable values
         String category = Optional.ofNullable(alert.getMetricType())
@@ -68,28 +89,62 @@ public class DiagnosticSessionService {
 
         DiagnosticSession session = new DiagnosticSession(
                 problemId,
-                alert.getStationId(),
+                stationId,
                 alert.getStationName(),
                 category,
                 severity,
-                mapAlertToProblemCode(alert),
+                problemCode,
                 alert.getMessage()
         );
 
         // Capture metrics snapshot - use safe key for null metric type
-        Map<String, Object> metrics = new HashMap<>();
+        updateMetricsSnapshot(session, alert);
+
+        try {
+            DiagnosticSession saved = sessionRepository.save(session);
+            log.info("Created new diagnostic session {} for station {} problem {}",
+                    problemId, stationId, problemCode);
+            return saved;
+        } catch (DuplicateKeyException e) {
+            // Race condition: Another thread created a session for the same station+problemCode
+            // This is caught by the unique partial index on active sessions
+            log.debug("Race condition detected - another thread created session for station {} problem {}",
+                    stationId, problemCode);
+            // Return the existing session created by the other thread
+            if (stationId != null) {
+                List<DiagnosticSession> existing = sessionRepository
+                        .findActiveByStationIdAndProblemCode(stationId, problemCode);
+                if (!existing.isEmpty()) {
+                    return Objects.requireNonNull(existing.get(0));
+                }
+            }
+            // Fallback: try to find by problemId
+            return Objects.requireNonNull(sessionRepository.findByProblemId(problemId).orElse(session));
+        }
+    }
+
+    /**
+     * Updates the metrics snapshot with values from an alert event.
+     */
+    private void updateMetricsSnapshot(DiagnosticSession session, AlertEvent alert) {
+        Map<String, Object> metrics = session.getMetricsSnapshot();
+        if (metrics == null) {
+            metrics = new HashMap<>();
+        }
         String metricKey = Objects.requireNonNullElse(alert.getMetricType(), UNKNOWN_METRIC_KEY);
         metrics.put(metricKey, alert.getMetricValue());
         metrics.put("threshold", alert.getThreshold());
         session.setMetricsSnapshot(metrics);
-
-        return sessionRepository.save(session);
     }
 
     /**
      * Records an AI diagnosis for a session.
      * If confidence is high enough based on risk level, auto-applies the solution.
-     * @return the updated session, or empty if session not found
+     *
+     * Thread-safety: Uses optimistic locking (@Version) to prevent concurrent modifications.
+     * Only processes sessions in DETECTED status to prevent double processing.
+     *
+     * @return the updated session, or empty if session not found or already processed
      */
     @Transactional
     public Optional<DiagnosticSession> recordDiagnosis(String problemId, DiagnosticResponse diagnosis) {
@@ -100,6 +155,14 @@ public class DiagnosticSessionService {
         }
 
         DiagnosticSession session = sessionOpt.get();
+
+        // Guard: Only process sessions in DETECTED status (prevents double processing)
+        if (session.getStatus() != DiagnosticStatus.DETECTED) {
+            log.debug("Skipping diagnosis for session {} - already in {} status (race condition avoided)",
+                    problemId, session.getStatus());
+            return Objects.requireNonNull(Optional.of(session));
+        }
+
         AISolution solution = new AISolution(
                 diagnosis.getAction(),
                 diagnosis.getCommands(),
@@ -126,6 +189,7 @@ public class DiagnosticSessionService {
                 });
 
         session.markDiagnosed(solution);
+        log.info("Marked session {} as DIAGNOSED with confidence={}", problemId, solution.getConfidence());
 
         // Check if solution qualifies for auto-confirmation (no operator approval needed)
         if (shouldAutoApply(solution)) {
@@ -136,7 +200,16 @@ public class DiagnosticSessionService {
                     session.getId(), solution.getConfidence(), solution.getRiskLevel());
         }
 
-        return Objects.requireNonNull(Optional.of(sessionRepository.save(session)));
+        try {
+            DiagnosticSession saved = sessionRepository.save(session);
+            log.info("Saved diagnostic session {} with status={}", saved.getProblemId(), saved.getStatus());
+            return Objects.requireNonNull(Optional.of(saved));
+        } catch (OptimisticLockingFailureException e) {
+            // Another thread modified the session - this is expected in concurrent scenarios
+            log.info("Optimistic locking conflict for session {} - another thread processed it first", problemId);
+            // Return the current state from database
+            return sessionRepository.findByProblemId(problemId);
+        }
     }
 
     /**
@@ -182,7 +255,7 @@ public class DiagnosticSessionService {
                 "Auto-applied due to high confidence (" +
                         String.format("%.1f%%", solution.getConfidence() * 100) + ")",
                 "Solution auto-applied based on confidence threshold",
-                "SYSTEM"
+                SYSTEM_ACTOR
         );
         session.markResolved(feedback);
 
@@ -247,8 +320,11 @@ public class DiagnosticSessionService {
         return Objects.requireNonNull(Optional.of(savedSession));
     }
 
+    private static final int MAX_LEARNING_RETRIES = 3;
+
     /**
      * Updates the learning pattern based on feedback.
+     * Uses optimistic locking with retry to handle concurrent updates.
      */
     private void updateLearningPattern(DiagnosticSession session, boolean wasEffective, @Nullable Integer rating) {
         if (session.getAiSolution() == null) {
@@ -256,24 +332,80 @@ public class DiagnosticSessionService {
         }
 
         String problemCode = Objects.requireNonNull(session.getProblemCode());
-        LearnedPattern pattern = Objects.requireNonNull(patternRepository.findByProblemCode(problemCode)
-                .orElseGet(() -> new LearnedPattern(problemCode, Objects.requireNonNull(session.getCategory()))));
+        String category = Objects.requireNonNull(session.getCategory());
 
+        for (int attempt = 1; attempt <= MAX_LEARNING_RETRIES; attempt++) {
+            if (tryUpdatePattern(session, wasEffective, rating, problemCode, category, attempt)) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * Attempts to update a pattern, returning true on success.
+     */
+    private boolean tryUpdatePattern(DiagnosticSession session, boolean wasEffective,
+                                     @Nullable Integer rating, String problemCode,
+                                     String category, int attempt) {
+        try {
+            LearnedPattern pattern = getOrCreatePattern(problemCode, category);
+            applyFeedbackToPattern(pattern, session.getAiSolution(), wasEffective, rating, problemCode);
+            patternRepository.save(pattern);
+            return true;
+        } catch (OptimisticLockingFailureException e) {
+            logRetryAttempt(problemCode, attempt);
+            return false;
+        }
+    }
+
+    private void applyFeedbackToPattern(LearnedPattern pattern, AISolution solution,
+                                        boolean wasEffective, @Nullable Integer rating,
+                                        String problemCode) {
         if (wasEffective) {
-            pattern.recordSuccess(session.getAiSolution(), rating);
+            pattern.recordSuccess(solution, rating);
             if (log.isInfoEnabled()) {
                 log.info("Recorded SUCCESS for pattern {}: successRate={}%",
                         problemCode, String.format("%.1f", pattern.getSuccessRate()));
             }
         } else {
-            pattern.recordFailure(session.getAiSolution());
+            pattern.recordFailure(solution);
             if (log.isInfoEnabled()) {
                 log.info("Recorded FAILURE for pattern {}: successRate={}%",
                         problemCode, String.format("%.1f", pattern.getSuccessRate()));
             }
         }
+    }
 
-        patternRepository.save(pattern);
+    private void logRetryAttempt(String problemCode, int attempt) {
+        if (attempt < MAX_LEARNING_RETRIES) {
+            log.debug("Optimistic locking conflict for pattern {}, retrying (attempt {}/{})",
+                    problemCode, attempt, MAX_LEARNING_RETRIES);
+        } else {
+            log.warn("Failed to update pattern {} after {} attempts due to concurrent modifications",
+                    problemCode, MAX_LEARNING_RETRIES);
+        }
+    }
+
+    /**
+     * Gets an existing pattern or creates a new one, handling race conditions.
+     * If two threads try to create the same pattern simultaneously, the unique
+     * index on problemCode will cause one to fail with DuplicateKeyException.
+     * We catch this and retry the find to get the pattern created by the other thread.
+     */
+    private LearnedPattern getOrCreatePattern(String problemCode, String category) {
+        return Objects.requireNonNull(patternRepository.findByProblemCode(problemCode)
+                .orElseGet(() -> {
+                    try {
+                        LearnedPattern newPattern = new LearnedPattern(problemCode, category);
+                        return Objects.requireNonNull(patternRepository.save(newPattern));
+                    } catch (DuplicateKeyException e) {
+                        // Another thread created the pattern first - fetch it
+                        log.debug("Pattern {} was created by another thread, fetching existing", problemCode);
+                        return patternRepository.findByProblemCode(problemCode)
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "Pattern " + problemCode + " should exist after DuplicateKeyException"));
+                    }
+                }));
     }
 
     /**

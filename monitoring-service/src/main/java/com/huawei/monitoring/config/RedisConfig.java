@@ -21,6 +21,11 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 @SuppressWarnings("null") // Spring cache builder methods guarantee non-null
 public class RedisConfig {
 
+    /**
+     * Cache name for metrics data.
+     */
+    public static final String METRICS_CACHE = "metrics";
+
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         // Configure ObjectMapper to handle Java 8 date/time types
@@ -45,7 +50,7 @@ public class RedisConfig {
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
-                .withCacheConfiguration("metrics", metricsConfig)
+                .withCacheConfiguration(METRICS_CACHE, metricsConfig)
                 .build();
     }
 }

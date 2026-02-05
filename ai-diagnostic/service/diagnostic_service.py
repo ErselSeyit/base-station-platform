@@ -119,6 +119,20 @@ try:
 except ImportError:
     SELF_HEALING_AVAILABLE = False
 
+# Healing integration (bridges AI solutions to self-healing)
+try:
+    from healing_integration import submit_healing_action
+    HEALING_INTEGRATION_AVAILABLE = True
+except ImportError:
+    HEALING_INTEGRATION_AVAILABLE = False
+
+# Internal authentication
+try:
+    from internal_auth import verify_internal_auth
+    INTERNAL_AUTH_AVAILABLE = True
+except ImportError:
+    INTERNAL_AUTH_AVAILABLE = False
+
 # Digital Twin service (optional)
 try:
     from digital_twin import get_digital_twin_service, SimulationMode
@@ -1054,7 +1068,10 @@ class HTTPAdapter(ProtocolAdapter):
             logger.info("OpenTelemetry not available - tracing disabled")
             return
 
-        zipkin_endpoint = os.environ.get("ZIPKIN_ENDPOINT", "http://zipkin:9411/api/v2/spans")
+        zipkin_endpoint = os.environ.get("ZIPKIN_ENDPOINT", "")
+        if not zipkin_endpoint:
+            logger.info("ZIPKIN_ENDPOINT not set - tracing disabled")
+            return
 
         try:
             resource = Resource.create({"service.name": "ai-diagnostic"})
@@ -1086,32 +1103,51 @@ class HTTPAdapter(ProtocolAdapter):
         return hmac.compare_digest(expected, signature)
 
     def _require_auth(self, f):
-        """Decorator to require HMAC authentication"""
+        """Decorator to require HMAC or internal service authentication"""
         @wraps(f)
         def decorated(*args, **kwargs):
             if not self.secret:
                 return f(*args, **kwargs)
 
+            # Try HMAC signature first
             signature = request.headers.get("X-HMAC-Signature", "")
-            if not signature:
-                logger.warning("Missing X-HMAC-Signature header")
-                return jsonify({"error": "Missing authentication"}), 401
-
-            if not self._verify_hmac(request.get_data(), signature):
+            if signature:
+                if self._verify_hmac(request.get_data(), signature):
+                    return f(*args, **kwargs)
                 logger.warning("Invalid HMAC signature from %s", request.remote_addr)
                 return jsonify({"error": "Invalid authentication"}), 403
 
-            return f(*args, **kwargs)
+            # Try internal service auth (via internal_auth module)
+            internal_auth = request.headers.get("X-Internal-Auth", "")
+            if internal_auth and INTERNAL_AUTH_AVAILABLE:
+                if verify_internal_auth(internal_auth, self.secret):
+                    return f(*args, **kwargs)
+                logger.warning("Invalid internal auth from %s", request.remote_addr)
+                return jsonify({"error": "Invalid authentication"}), 403
+
+            logger.warning("Missing authentication header")
+            return jsonify({"error": "Missing authentication"}), 401
+
         return decorated
 
     def _handle_diagnose(self):
-        """Handle POST /diagnose request."""
+        """Handle POST /diagnose request with optional auto-healing."""
         if not self.on_problem:
             return jsonify({"error": "Diagnostic handler not configured"}), 503
+
         problem_data = request.json
         problem = Problem(**problem_data, source_protocol="http")
         solution = self.on_problem(problem)
-        return jsonify(asdict(solution))
+        response = asdict(solution)
+
+        # Auto-healing integration via healing_integration module
+        auto_heal = request.args.get('auto_heal', 'true').lower() == 'true'
+        if auto_heal and HEALING_INTEGRATION_AVAILABLE:
+            healing_result = submit_healing_action(problem, solution)
+            if healing_result:
+                response['healing'] = healing_result
+
+        return jsonify(response)
 
     def _handle_health(self):
         """Handle GET /health request."""

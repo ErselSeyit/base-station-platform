@@ -12,6 +12,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import com.huawei.notification.filter.HeaderAuthenticationFilter;
 
 import static com.huawei.common.security.Roles.*;
+import static com.huawei.common.constants.PublicEndpoints.*;
 
 /**
  * Security configuration for notification-service.
@@ -40,9 +41,9 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Permit only health check publicly, secure other actuator endpoints
-                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD).permitAll()
                 .requestMatchers("/actuator/**").hasRole(ADMIN)
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers(SWAGGER_UI_WILDCARD, API_DOCS_WILDCARD).permitAll()
                 // Notifications - read for all authenticated, send/manage for operators+
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/notifications/**").hasAnyRole(ADMIN, OPERATOR, USER)
                 .requestMatchers("/api/v1/notifications/**").hasAnyRole(ADMIN, OPERATOR)

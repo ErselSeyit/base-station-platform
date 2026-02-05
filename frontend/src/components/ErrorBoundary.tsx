@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { Box, Button, Typography } from '@mui/material'
 import { Error as ErrorIcon, Refresh as RefreshIcon } from '@mui/icons-material'
+import { logger } from '../services/logger'
 
 interface Props {
   children: ReactNode
@@ -22,7 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('ErrorBoundary caught an error:', error, errorInfo)
+    logger.error('ErrorBoundary caught an error', { error, errorInfo })
   }
 
   handleReload = (): void => {

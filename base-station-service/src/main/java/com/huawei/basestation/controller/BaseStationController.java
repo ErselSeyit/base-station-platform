@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.huawei.basestation.dto.BaseStationDTO;
+import com.huawei.common.constants.ValidationMessages;
+import com.huawei.common.security.Roles;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.service.BaseStationService;
@@ -42,9 +44,6 @@ import org.springframework.validation.annotation.Validated;
 @SecurityRequirement(name = "bearerAuth")
 public class BaseStationController {
 
-    private static final String STATION_ID_NULL_MESSAGE = "Station ID cannot be null";
-    private static final String STATION_DTO_NULL_MESSAGE = "Station DTO cannot be null";
-
     private final BaseStationService service;
 
     public BaseStationController(BaseStationService service) {
@@ -54,11 +53,11 @@ public class BaseStationController {
     @Operation(summary = "Create station", description = "Creates a new base station")
     @ApiResponse(responseCode = "201", description = "Station created")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<BaseStationDTO> createStation(
             @Parameter(description = "Station data") @Valid @RequestBody BaseStationDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(service.createStation(Objects.requireNonNull(dto, STATION_DTO_NULL_MESSAGE)));
+                .body(service.createStation(Objects.requireNonNull(dto, ValidationMessages.DTO_NULL_MESSAGE)));
     }
 
     @Operation(summary = "Get station by ID", description = "Retrieves a base station by its unique identifier")
@@ -68,7 +67,7 @@ public class BaseStationController {
     public ResponseEntity<BaseStationDTO> getStationById(
             @Parameter(description = "Station ID") @PathVariable Long id) {
         return Objects.requireNonNull(
-                service.getStationById(Objects.requireNonNull(id, STATION_ID_NULL_MESSAGE))
+                service.getStationById(Objects.requireNonNull(id, ValidationMessages.STATION_ID_NULL_MESSAGE))
                         .map(ResponseEntity::ok)
                         .orElse(ResponseEntity.notFound().build()));
     }
@@ -92,14 +91,14 @@ public class BaseStationController {
     @ApiResponse(responseCode = "200", description = "Station updated")
     @ApiResponse(responseCode = "404", description = "Station not found")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<BaseStationDTO> updateStation(
             @Parameter(description = "Station ID") @PathVariable Long id,
             @Parameter(description = "Updated station data") @Valid @RequestBody BaseStationDTO dto) {
         try {
             return ResponseEntity.ok(service.updateStation(
-                    Objects.requireNonNull(id, STATION_ID_NULL_MESSAGE),
-                    Objects.requireNonNull(dto, STATION_DTO_NULL_MESSAGE)));
+                    Objects.requireNonNull(id, ValidationMessages.STATION_ID_NULL_MESSAGE),
+                    Objects.requireNonNull(dto, ValidationMessages.DTO_NULL_MESSAGE)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }
@@ -109,11 +108,11 @@ public class BaseStationController {
     @ApiResponse(responseCode = "204", description = "Station deleted")
     @ApiResponse(responseCode = "404", description = "Station not found")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Roles.HAS_ADMIN)
     public ResponseEntity<Void> deleteStation(
             @Parameter(description = "Station ID") @PathVariable Long id) {
         try {
-            service.deleteStation(Objects.requireNonNull(id, STATION_ID_NULL_MESSAGE));
+            service.deleteStation(Objects.requireNonNull(id, ValidationMessages.STATION_ID_NULL_MESSAGE));
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();

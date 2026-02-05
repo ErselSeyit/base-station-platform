@@ -1,6 +1,7 @@
 package com.huawei.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.huawei.common.constants.DiagnosticConstants;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -44,7 +45,7 @@ public class DiagnosticRequest {
     private String rawLogs;
 
     public DiagnosticRequest() {
-        this.id = "PRB-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 4);
+        this.id = DiagnosticConstants.PROBLEM_ID_PREFIX + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, DiagnosticConstants.PROBLEM_ID_SUFFIX_LENGTH);
         this.timestamp = Instant.now().toString();
         this.metrics = new HashMap<>();
         this.rawLogs = "";
@@ -52,7 +53,7 @@ public class DiagnosticRequest {
 
     private DiagnosticRequest(Builder builder) {
         this.id = Objects.requireNonNullElseGet(builder.id,
-                () -> "PRB-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 4));
+                () -> DiagnosticConstants.PROBLEM_ID_PREFIX + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, DiagnosticConstants.PROBLEM_ID_SUFFIX_LENGTH));
         this.timestamp = Objects.requireNonNullElseGet(builder.timestamp, () -> Instant.now().toString());
         this.stationId = builder.stationId;
         this.category = builder.category;
@@ -71,6 +72,14 @@ public class DiagnosticRequest {
      * Create a DiagnosticRequest from an AlertEvent.
      */
     public static DiagnosticRequest fromAlertEvent(AlertEvent alert) {
+        return fromAlertEvent(alert, null);
+    }
+
+    /**
+     * Create a DiagnosticRequest from an AlertEvent with explicit problem ID.
+     * Using explicit ID ensures the request matches the diagnostic session.
+     */
+    public static DiagnosticRequest fromAlertEvent(AlertEvent alert, @Nullable String problemId) {
         String metricType = Objects.requireNonNull(
                 Objects.requireNonNullElse(alert.getMetricType(), "UNKNOWN"));
         String severity = Objects.requireNonNull(
@@ -87,15 +96,20 @@ public class DiagnosticRequest {
         String message = Objects.requireNonNullElse(alert.getMessage(), "Alert triggered");
         String alertRuleName = Objects.requireNonNullElse(alert.getAlertRuleName(), "Unknown rule");
 
-        return DiagnosticRequest.builder()
+        Builder builder = DiagnosticRequest.builder()
                 .stationId(Objects.requireNonNullElseGet(alert.getStationName(), () -> "STATION-" + alert.getStationId()))
                 .category(category)
                 .severity(severity.toLowerCase())
                 .code(code)
                 .message(message)
                 .metrics(metrics)
-                .rawLogs("Alert triggered: " + alertRuleName + " - " + message)
-                .build();
+                .rawLogs("Alert triggered: " + alertRuleName + " - " + message);
+
+        if (problemId != null) {
+            builder.id(problemId);
+        }
+
+        return builder.build();
     }
 
     private static String mapMetricTypeToCategory(String metricType) {

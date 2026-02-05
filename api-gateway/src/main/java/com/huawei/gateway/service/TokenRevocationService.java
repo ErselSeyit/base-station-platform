@@ -1,5 +1,6 @@
 package com.huawei.gateway.service;
 
+import com.huawei.common.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,7 +54,7 @@ public class TokenRevocationService {
 
         return redisTemplate.opsForValue()
                 .set(Objects.requireNonNull(key), "revoked", ttl)
-                .doOnSuccess(result -> log.info("Token revoked: {}", maskToken(tokenId)))
+                .doOnSuccess(result -> log.info("Token revoked: {}", StringUtils.maskToken(tokenId)))
                 .doOnError(e -> log.error("Failed to revoke token: {}", e.getMessage()));
     }
 
@@ -92,7 +93,7 @@ public class TokenRevocationService {
         return redisTemplate.hasKey(key)
                 .doOnNext(revoked -> {
                     if (Boolean.TRUE.equals(revoked)) {
-                        log.debug("Token is revoked: {}", maskToken(tokenId));
+                        log.debug("Token is revoked: {}", StringUtils.maskToken(tokenId));
                     }
                 });
     }
@@ -134,12 +135,5 @@ public class TokenRevocationService {
                     }
                     return isUserTokensRevokedAfter(username, tokenIssuedAt);
                 });
-    }
-
-    private String maskToken(String token) {
-        if (token == null || token.length() < 10) {
-            return "****";
-        }
-        return token.substring(0, 6) + "..." + token.substring(token.length() - 4);
     }
 }

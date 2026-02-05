@@ -3,6 +3,7 @@ package com.huawei.basestation.controller;
 import com.huawei.basestation.dto.BulkImportRequest;
 import com.huawei.basestation.dto.BulkImportResponse;
 import com.huawei.basestation.model.BaseStation;
+import com.huawei.common.security.Roles;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.service.BulkProvisioningService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,7 +40,7 @@ public class BulkProvisioningController {
     @ApiResponse(responseCode = "400", description = "Invalid request format")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @PostMapping("/import")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<BulkImportResponse> importStations(
             @Parameter(description = "Stations to import with options") @Valid @RequestBody BulkImportRequest request) {
 
@@ -50,7 +51,7 @@ public class BulkProvisioningController {
     @Operation(summary = "Export all stations", description = "Export all stations for the current organization as JSON.")
     @ApiResponse(responseCode = "200", description = "Stations exported successfully")
     @GetMapping("/export")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'USER')")
+    @PreAuthorize(Roles.HAS_USER)
     public ResponseEntity<List<BaseStation>> exportStations() {
         List<BaseStation> stations = bulkService.exportStations();
         return ResponseEntity.ok(stations);
@@ -59,7 +60,7 @@ public class BulkProvisioningController {
     @Operation(summary = "Export stations by status", description = "Export stations filtered by status.")
     @ApiResponse(responseCode = "200", description = "Stations exported successfully")
     @GetMapping("/export/status/{status}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'USER')")
+    @PreAuthorize(Roles.HAS_USER)
     public ResponseEntity<List<BaseStation>> exportStationsByStatus(
             @Parameter(description = "Station status to filter by") @PathVariable StationStatus status) {
 
@@ -70,7 +71,7 @@ public class BulkProvisioningController {
     @Operation(summary = "Export stations as CSV", description = "Export all stations as CSV file download.")
     @ApiResponse(responseCode = "200", description = "CSV file generated")
     @GetMapping(value = "/export/csv", produces = "text/csv")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'USER')")
+    @PreAuthorize(Roles.HAS_USER)
     public ResponseEntity<String> exportStationsAsCsv() {
         List<BaseStation> stations = bulkService.exportStations();
         String csv = convertToCsv(stations);

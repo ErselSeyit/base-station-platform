@@ -15,11 +15,11 @@ import com.huawei.basestation.repository.BaseStationRepository;
 import com.huawei.common.audit.AuditLogger;
 import com.huawei.common.audit.AuditLogger.AuditAction;
 
+import static com.huawei.common.constants.ServiceNames.SYSTEM_ACTOR;
+
 @Service
 @Transactional
 public class BaseStationService {
-
-    private static final String AUDIT_ACTOR = "SYSTEM";
     private static final String AUDIT_RESOURCE_PREFIX = "station:";
 
     private final BaseStationRepository repository;
@@ -38,7 +38,7 @@ public class BaseStationService {
         }
         BaseStation station = convertToEntity(dto);
         BaseStationDTO saved = convertToDTO(repository.save(station));
-        auditLogger.log(AuditAction.STATION_CREATED, AUDIT_ACTOR,
+        auditLogger.log(AuditAction.STATION_CREATED, SYSTEM_ACTOR,
                 AUDIT_RESOURCE_PREFIX + saved.getId(), "name=" + saved.getStationName());
         return saved;
     }
@@ -90,7 +90,7 @@ public class BaseStationService {
         station.setDescription(dto.getDescription());
 
         BaseStationDTO updated = convertToDTO(repository.save(station));
-        auditLogger.log(AuditAction.STATION_UPDATED, AUDIT_ACTOR,
+        auditLogger.log(AuditAction.STATION_UPDATED, SYSTEM_ACTOR,
                 AUDIT_RESOURCE_PREFIX + id, "name=" + updated.getStationName());
         return updated;
     }
@@ -100,7 +100,7 @@ public class BaseStationService {
             throw new IllegalArgumentException("Station not found with id: " + id);
         }
         repository.deleteById(id);
-        auditLogger.log(AuditAction.STATION_DELETED, AUDIT_ACTOR, AUDIT_RESOURCE_PREFIX + id, null);
+        auditLogger.log(AuditAction.STATION_DELETED, SYSTEM_ACTOR, AUDIT_RESOURCE_PREFIX + id, null);
     }
 
     @Transactional(readOnly = true)

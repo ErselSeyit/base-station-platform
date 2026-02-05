@@ -20,6 +20,13 @@ import java.time.LocalDateTime;
 @EntityListeners(AuditingEntityListener.class)
 public class BaseStation {
 
+    // Power consumption thresholds by station type (in watts)
+    private static final double MACRO_CELL_POWER_THRESHOLD_WATTS = 5000.0;
+    private static final double MICRO_CELL_POWER_THRESHOLD_WATTS = 500.0;
+    private static final double SMALL_CELL_POWER_THRESHOLD_WATTS = 200.0;
+    private static final double PICO_CELL_POWER_THRESHOLD_WATTS = 100.0;
+    private static final double FEMTO_CELL_POWER_THRESHOLD_WATTS = 20.0;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -289,13 +296,12 @@ public class BaseStation {
         if (this.powerConsumption == null) {
             return false;
         }
-        // Threshold values based on station type (in watts)
         double threshold = switch (this.stationType) {
-            case MACRO_CELL -> 5000.0;  // Macro cells typically use 2-5kW
-            case MICRO_CELL -> 500.0;   // Micro cells use 100-500W
-            case SMALL_CELL -> 200.0;   // Small cells use 50-200W
-            case PICO_CELL -> 100.0;    // Pico cells use 10-100W
-            case FEMTO_CELL -> 20.0;    // Femto cells use 5-20W
+            case MACRO_CELL -> MACRO_CELL_POWER_THRESHOLD_WATTS;
+            case MICRO_CELL -> MICRO_CELL_POWER_THRESHOLD_WATTS;
+            case SMALL_CELL -> SMALL_CELL_POWER_THRESHOLD_WATTS;
+            case PICO_CELL -> PICO_CELL_POWER_THRESHOLD_WATTS;
+            case FEMTO_CELL -> FEMTO_CELL_POWER_THRESHOLD_WATTS;
         };
         return this.powerConsumption > threshold;
     }

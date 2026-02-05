@@ -1,23 +1,36 @@
 package com.huawei.monitoring.service;
 
+import static com.huawei.monitoring.config.RedisConfig.METRICS_CACHE;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.huawei.monitoring.dto.DailyMetricAggregateDTO;
 import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.event.MetricRecordedEvent;
 import com.huawei.monitoring.model.MetricData;
@@ -31,12 +44,15 @@ public class MonitoringService {
     private static final Logger log = LoggerFactory.getLogger(MonitoringService.class);
 
     private final MetricDataRepository repository;
+    private final MongoTemplate mongoTemplate;
     private final ApplicationEventPublisher eventPublisher;
 
     public MonitoringService(
             MetricDataRepository repository,
+            MongoTemplate mongoTemplate,
             ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
+        this.mongoTemplate = mongoTemplate;
         this.eventPublisher = eventPublisher;
     }
 
@@ -51,6 +67,7 @@ public class MonitoringService {
      * @return the saved metric with generated ID and timestamp
      */
     @Transactional
+    @CacheEvict(value = METRICS_CACHE, allEntries = true)
     public MetricDataDTO recordMetric(MetricDataDTO dto) {
         MetricData metric = convertToEntity(dto);
         if (metric.getTimestamp() == null) {
@@ -101,7 +118,7 @@ public class MonitoringService {
      * @param sortAsc true for ascending (oldest first), false for descending (newest first)
      * @return a list of metric DTOs (never null, may be empty)
      */
-    @Cacheable(value = "metrics", key = "#start.toLocalDate().toString() + '-' + #end.toLocalDate().toString() + '-' + #limit + '-' + #sortAsc")
+    @Cacheable(value = METRICS_CACHE, key = "#start.toLocalDate().toString() + '-' + #end.toLocalDate().toString() + '-' + #limit + '-' + #sortAsc")
     public List<MetricDataDTO> getMetricsByTimeRangeWithLimit(LocalDateTime start, LocalDateTime end, int limit, boolean sortAsc) {
         Sort.Direction direction = sortAsc ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(0, limit, Sort.by(direction, "timestamp"));
@@ -216,5 +233,89 @@ public class MonitoringService {
         dto.setTimestamp(metric.getTimestamp());
         dto.setStatus(metric.getStatus());
         return dto;
+    }
+
+    /**
+     * Gets daily aggregated metrics for chart display.
+     * Uses MongoDB aggregation to efficiently calculate daily averages.
+     *
+     * @param start the start date (must not be null)
+     * @param end the end date (must not be null)
+     * @return list of daily aggregates sorted by date ascending (never null)
+     */
+    @Cacheable(value = METRICS_CACHE, key = "'daily-' + #start.toLocalDate().toString() + '-' + #end.toLocalDate().toString()")
+    public List<DailyMetricAggregateDTO> getDailyAggregates(LocalDateTime start, LocalDateTime end) {
+        Objects.requireNonNull(start, "Start time cannot be null");
+        Objects.requireNonNull(end, "End time cannot be null");
+
+        log.debug("Calculating daily aggregates from {} to {}", start, end);
+
+        // MongoDB aggregation pipeline:
+        // 1. Match documents in time range
+        // 2. Group by date and metricType, calculate sum and count
+        // 3. Group by date only, collecting all metric averages
+        // 4. Sort by date ascending
+        Aggregation aggregation = Aggregation.newAggregation(
+            Aggregation.match(Criteria.where("timestamp").gte(start).lte(end)),
+            Aggregation.project()
+                .and("timestamp").extractYear().as("year")
+                .and("timestamp").extractMonth().as("month")
+                .and("timestamp").extractDayOfMonth().as("day")
+                .and("metricType").as("metricType")
+                .and("value").as("value"),
+            Aggregation.group("year", "month", "day", "metricType")
+                .sum("value").as("sum")
+                .count().as("count"),
+            Aggregation.project()
+                .and("_id.year").as("year")
+                .and("_id.month").as("month")
+                .and("_id.day").as("day")
+                .and("_id.metricType").as("metricType")
+                .andExpression("sum / count").as("avg")
+                .and("count").as("count"),
+            Aggregation.sort(Sort.Direction.ASC, "year", "month", "day")
+        );
+
+        AggregationResults<Document> results = mongoTemplate.aggregate(
+            aggregation, "metric_data", Document.class
+        );
+
+        // Transform raw results into DTOs grouped by date
+        Map<LocalDate, DailyMetricAggregateDTO> dateMap = new HashMap<>();
+
+        for (Document doc : results.getMappedResults()) {
+            int year = doc.getInteger("year", 0);
+            int month = doc.getInteger("month", 0);
+            int day = doc.getInteger("day", 0);
+            String metricType = doc.getString("metricType");
+            Number avgNum = (Number) doc.get("avg");
+            double avg = avgNum != null ? avgNum.doubleValue() : 0.0;
+            Number countNum = (Number) doc.get("count");
+            long count = countNum != null ? countNum.longValue() : 0L;
+
+            LocalDate date = LocalDate.of(year, month, day);
+
+            DailyMetricAggregateDTO dto = dateMap.computeIfAbsent(date, d -> {
+                DailyMetricAggregateDTO newDto = new DailyMetricAggregateDTO();
+                newDto.setDate(d);
+                newDto.setAverages(new HashMap<>());
+                newDto.setCounts(new HashMap<>());
+                return newDto;
+            });
+
+            if (metricType != null && dto.getAverages() != null && dto.getCounts() != null) {
+                dto.getAverages().put(metricType, avg);
+                dto.getCounts().put(metricType, count);
+            }
+        }
+
+        List<DailyMetricAggregateDTO> sortedResults = new ArrayList<>(dateMap.values());
+        sortedResults.sort((a, b) -> {
+            if (a.getDate() == null || b.getDate() == null) return 0;
+            return a.getDate().compareTo(b.getDate());
+        });
+
+        log.debug("Aggregated {} days of metrics", sortedResults.size());
+        return sortedResults;
     }
 }

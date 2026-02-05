@@ -17,12 +17,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
+import com.huawei.common.constants.DiagnosticConstants;
 import com.huawei.common.dto.AlertEvent;
 import com.huawei.monitoring.client.DiagnosticClient;
 import com.huawei.monitoring.config.RabbitMQConfig;
 import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.AlertRule;
 import com.huawei.monitoring.model.AlertSeverity;
+import com.huawei.monitoring.model.DiagnosticSession;
+import com.huawei.monitoring.model.DiagnosticStatus;
 import com.huawei.monitoring.model.MetricType;
 
 /**
@@ -285,7 +288,8 @@ public class AlertingService {
 
     /**
      * Request AI diagnosis for an alert asynchronously.
-     * Creates a diagnostic session for learning and logs the recommended action.
+     * Creates or reuses a diagnostic session for learning and logs the recommended action.
+     * Skips diagnosis if an existing session is already being processed (DIAGNOSED or later).
      */
     private void requestDiagnosis(AlertEvent alert) {
         // Capture nullable fields in local variables to satisfy null safety checker
@@ -296,33 +300,57 @@ public class AlertingService {
             return;
         }
 
+        // Create or reuse session (deduplication handled in createSession)
         String problemId = generateProblemId(alert);
-        createDiagnosticSession(sessionService, alert, problemId);
+        DiagnosticSession session = createDiagnosticSession(sessionService, alert, problemId);
 
-        client.diagnoseAsync(alert)
-                .thenAccept(diagnosis -> handleDiagnosisResult(
-                        Objects.requireNonNull(diagnosis), alert, sessionService, problemId))
+        if (session == null) {
+            return;
+        }
+
+        // Use the actual session's problem ID (may differ if session was reused)
+        String actualProblemId = session.getProblemId();
+
+        // Skip diagnosis if session is already past DETECTED state
+        if (session.getStatus() != DiagnosticStatus.DETECTED) {
+            log.debug("Skipping diagnosis for session {} - already in {} state",
+                    actualProblemId, session.getStatus());
+            return;
+        }
+
+        client.diagnoseAsync(alert, actualProblemId)
+                .thenAccept(diagnosis -> {
+                    try {
+                        handleDiagnosisResult(
+                                Objects.requireNonNull(diagnosis), alert, sessionService, actualProblemId);
+                    } catch (Exception e) {
+                        log.error("Error in handleDiagnosisResult for {}: {}", actualProblemId, e.getMessage(), e);
+                    }
+                })
                 .exceptionally(ex -> {
-                    log.debug("Diagnostic request failed for alert {}: {}",
-                            alert.getAlertRuleId(), ex.getMessage());
+                    log.error("Diagnostic request failed for alert {}: {}",
+                            alert.getAlertRuleId(), ex.getMessage(), ex);
                     return null;
                 });
     }
 
     private String generateProblemId(AlertEvent alert) {
-        return "PRB-" + System.currentTimeMillis() + "-" + alert.getAlertRuleId();
+        return DiagnosticConstants.PROBLEM_ID_PREFIX + System.currentTimeMillis() + "-" + alert.getAlertRuleId();
     }
 
-    private void createDiagnosticSession(@Nullable DiagnosticSessionService sessionService,
-                                          AlertEvent alert, String problemId) {
+    @Nullable
+    private DiagnosticSession createDiagnosticSession(@Nullable DiagnosticSessionService sessionService,
+                                                       AlertEvent alert, String problemId) {
         if (sessionService == null) {
-            return;
+            return null;
         }
         try {
-            sessionService.createSession(alert, problemId);
-            log.debug("Created diagnostic session for problem {}", problemId);
+            DiagnosticSession session = sessionService.createSession(alert, problemId);
+            log.debug("Created/reused diagnostic session {} for problem {}", session.getId(), problemId);
+            return session;
         } catch (Exception e) {
             log.warn("Failed to create diagnostic session: {}", e.getMessage());
+            return null;
         }
     }
 

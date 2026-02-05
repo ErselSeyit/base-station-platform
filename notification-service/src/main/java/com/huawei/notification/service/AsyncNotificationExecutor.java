@@ -1,5 +1,7 @@
 package com.huawei.notification.service;
 
+import static com.huawei.notification.config.AsyncConfig.NOTIFICATION_EXECUTOR;
+
 import java.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
@@ -27,7 +29,7 @@ public class AsyncNotificationExecutor {
      * @param sendOperation  the operation to execute (typically NotificationService::sendNotification)
      * @return CompletableFuture that completes when the notification is sent
      */
-    @Async("notificationExecutor")
+    @Async(NOTIFICATION_EXECUTOR)
     public CompletableFuture<Void> sendAsync(Long notificationId, NotificationSendOperation sendOperation) {
         try {
             log.debug("Async sending notification {}", notificationId);

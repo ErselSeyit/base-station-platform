@@ -1,5 +1,8 @@
 package com.huawei.notification.filter;
 
+import static com.huawei.common.constants.HttpHeaders.*;
+import static com.huawei.common.security.Roles.*;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -34,12 +37,8 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(HeaderAuthenticationFilter.class);
 
-    private static final String HEADER_USER_NAME = "X-User-Name";
-    private static final String HEADER_USER_ROLE = "X-User-Role";
-    private static final String ROLE_PREFIX = "ROLE_";
-
     /** Allowed roles - reject any role not in this whitelist */
-    private static final Set<String> ALLOWED_ROLES = Set.of("ADMIN", "OPERATOR", "USER", "VIEWER");
+    private static final Set<String> ALLOWED_ROLES = Set.of(ADMIN, OPERATOR, USER, VIEWER);
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,

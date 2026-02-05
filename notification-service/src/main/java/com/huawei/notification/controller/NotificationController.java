@@ -17,6 +17,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import static com.huawei.common.constants.JsonResponseKeys.KEY_MESSAGE;
+import static com.huawei.common.constants.JsonResponseKeys.KEY_STATUS;
+
+import com.huawei.common.security.Roles;
 import com.huawei.notification.dto.NotificationRequest;
 import com.huawei.notification.dto.NotificationResponse;
 import com.huawei.notification.exception.NotificationException;
@@ -41,8 +45,6 @@ import jakarta.validation.Valid;
 public class NotificationController {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationController.class);
-    private static final String STATUS_KEY = "status";
-    private static final String MESSAGE_KEY = "message";
 
     private final NotificationService service;
 
@@ -55,7 +57,7 @@ public class NotificationController {
             content = @Content(schema = @Schema(implementation = NotificationResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid parameters")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<NotificationResponse> createNotification(
             @Parameter(description = "Notification data") @Valid @RequestBody NotificationRequest request) {
         // @Valid ensures request fields are non-null per DTO validation constraints
@@ -72,18 +74,18 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Notification not found")
     @ApiResponse(responseCode = "500", description = "Failed to send notification")
     @PostMapping("/{id}/send")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+    @PreAuthorize(Roles.HAS_OPERATOR)
     public ResponseEntity<Map<String, String>> sendNotification(
             @Parameter(description = "Notification ID") @PathVariable Long id) {
         try {
             service.sendNotification(id);
-            return ResponseEntity.ok(Map.of(STATUS_KEY, "sent", MESSAGE_KEY, "Notification sent successfully"));
+            return ResponseEntity.ok(Map.of(KEY_STATUS, "sent", KEY_MESSAGE, "Notification sent successfully"));
         } catch (NotificationNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of(STATUS_KEY, "error", MESSAGE_KEY, e.getMessage()));
+                    .body(Map.of(KEY_STATUS, "error", KEY_MESSAGE, e.getMessage()));
         } catch (NotificationException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of(STATUS_KEY, "error", MESSAGE_KEY, e.getMessage()));
+                    .body(Map.of(KEY_STATUS, "error", KEY_MESSAGE, e.getMessage()));
         }
     }
 
@@ -91,7 +93,7 @@ public class NotificationController {
             description = "Triggers async processing of all pending notifications")
     @ApiResponse(responseCode = "202", description = "Processing started")
     @PostMapping("/process-pending")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Roles.HAS_ADMIN)
     public ResponseEntity<Map<String, String>> processPendingNotifications() {
         // Start processing asynchronously (fire and forget)
         service.processPendingNotifications()
@@ -103,7 +105,7 @@ public class NotificationController {
 
         // Return immediately - processing happens in background
         return ResponseEntity.accepted()
-                .body(Map.of(STATUS_KEY, "processing", MESSAGE_KEY, "Processing pending notifications in background"));
+                .body(Map.of(KEY_STATUS, "processing", KEY_MESSAGE, "Processing pending notifications in background"));
     }
 
     @Operation(summary = "Get notifications by station",
