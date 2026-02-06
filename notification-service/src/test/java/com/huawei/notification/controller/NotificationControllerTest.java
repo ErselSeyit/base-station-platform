@@ -19,14 +19,13 @@ import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.huawei.notification.config.TestSecurityConfig;
 import com.huawei.notification.dto.NotificationRequest;
 import com.huawei.notification.exception.NotificationException;
 import com.huawei.notification.model.Notification;
@@ -38,9 +37,10 @@ import com.huawei.notification.service.NotificationService;
  * Unit tests for NotificationController.
  *
  * Tests all REST endpoints for creating, sending, and retrieving notifications.
+ * Security is disabled via addFilters=false to focus on controller logic.
  */
 @WebMvcTest(NotificationController.class)
-@Import(TestSecurityConfig.class)
+@AutoConfigureMockMvc(addFilters = false)
 @DisplayName("NotificationController Tests")
 class NotificationControllerTest {
 
