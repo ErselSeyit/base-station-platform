@@ -17,7 +17,7 @@ export default function AnimatedCounter({
   prefix = '',
   suffix = '',
   ...typographyProps
-}: AnimatedCounterProps) {
+}: Readonly<AnimatedCounterProps>) {
   const [count, setCount] = useState(0)
   const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.1 })
 
@@ -25,6 +25,7 @@ export default function AnimatedCounter({
     if (!inView) return
 
     let startTime: number | null = null
+    let frameId: number
     const startValue = 0
     const endValue = value
 
@@ -39,13 +40,16 @@ export default function AnimatedCounter({
       setCount(currentCount)
 
       if (progress < 1) {
-        requestAnimationFrame(animate)
+        frameId = requestAnimationFrame(animate)
       } else {
         setCount(endValue)
       }
     }
 
-    requestAnimationFrame(animate)
+    frameId = requestAnimationFrame(animate)
+
+    // Cleanup: cancel animation frame on unmount to prevent memory leak
+    return () => cancelAnimationFrame(frameId)
   }, [value, duration, inView])
 
   return (

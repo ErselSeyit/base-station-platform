@@ -56,3 +56,25 @@ export function formatTimestamp(timestamp?: string | Date): string {
   if (!timestamp) return 'N/A'
   return new Date(timestamp).toLocaleString()
 }
+
+/**
+ * Extract error message from unknown error type.
+ * Safely handles Error instances and unknown values.
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return 'Failed to fetch'
+}
+
+/**
+ * Get appropriate date format based on time range.
+ * Uses shorter formats for longer time ranges.
+ *
+ * @param days - Number of days in the time range
+ * @returns date-fns format string
+ */
+export function getDateFormat(days: number): string {
+  if (days <= 7) return 'MMM dd'
+  if (days <= 30) return 'MM/dd'
+  return 'M/d'
+}

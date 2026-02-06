@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
+import com.huawei.monitoring.config.AlertThresholdConfig;
 import com.huawei.monitoring.dto.MetricDataDTO;
 import com.huawei.monitoring.model.AlertRule;
 import com.huawei.monitoring.model.MetricType;
@@ -26,7 +27,6 @@ import com.huawei.monitoring.model.MetricType;
  * and can run in any environment including CI/CD without Docker.
  */
 @DisplayName("AlertingService Unit Tests")
-@SuppressWarnings("null") // Intentionally passing null to test graceful handling
 class AlertingServiceUnitTest {
 
     private AlertingService alertingService;
@@ -35,8 +35,9 @@ class AlertingServiceUnitTest {
     @BeforeEach
     void setUp() {
         rabbitTemplate = mock(RabbitTemplate.class);
-        // DiagnosticClient is null - AlertingService handles this gracefully
-        alertingService = new AlertingService(rabbitTemplate, null);
+        AlertThresholdConfig thresholdConfig = new AlertThresholdConfig();
+        // DiagnosticClient and DiagnosticSessionService are null - AlertingService handles this gracefully
+        alertingService = new AlertingService(rabbitTemplate, null, null, thresholdConfig);
     }
 
     @Nested

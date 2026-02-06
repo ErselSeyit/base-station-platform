@@ -1,5 +1,8 @@
 package com.huawei.common.config;
 
+import com.huawei.common.constants.HttpHeaders;
+import com.huawei.common.util.RequestUtils;
+
 import java.io.IOException;
 import java.util.UUID;
 
@@ -34,7 +37,6 @@ import jakarta.servlet.http.HttpServletResponse;
 @Component
 public class CorrelationIdFilter implements Filter {
 
-    public static final String CORRELATION_ID_HEADER = "X-Correlation-ID";
     public static final String CORRELATION_ID_LOG_KEY = "correlationId";
     public static final String REQUEST_ID_LOG_KEY = "requestId";
 
@@ -45,18 +47,18 @@ public class CorrelationIdFilter implements Filter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
-        String correlationId = httpRequest.getHeader(CORRELATION_ID_HEADER);
+        String correlationId = httpRequest.getHeader(HttpHeaders.HEADER_CORRELATION_ID);
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
         
-        String requestId = UUID.randomUUID().toString().substring(0, 8);
+        String requestId = UUID.randomUUID().toString().substring(0, RequestUtils.REQUEST_ID_LENGTH);
 
         try {
             MDC.put(CORRELATION_ID_LOG_KEY, correlationId);
             MDC.put(REQUEST_ID_LOG_KEY, requestId);
             
-            httpResponse.setHeader(CORRELATION_ID_HEADER, correlationId);
+            httpResponse.setHeader(HttpHeaders.HEADER_CORRELATION_ID, correlationId);
             
             chain.doFilter(request, response);
         } finally {

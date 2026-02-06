@@ -42,7 +42,7 @@ public class AlertEventListener {
                     String.format("[%s] %s - %s (Value: %.2f, Threshold: %.2f)",
                             alertEvent.getAlertRuleName(),
                             alertEvent.getMessage(),
-                            alertEvent.getStationName() != null ? alertEvent.getStationName() : "Station " + alertEvent.getStationId(),
+                            Objects.requireNonNullElseGet(alertEvent.getStationName(), () -> "Station " + alertEvent.getStationId()),
                             alertEvent.getMetricValue(),
                             alertEvent.getThreshold()),
                     "Notification message cannot be null");

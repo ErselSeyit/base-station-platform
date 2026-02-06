@@ -2,6 +2,7 @@ package com.huawei.gateway.exception;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -21,7 +22,12 @@ import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
+import org.springframework.lang.Nullable;
 import org.springframework.web.server.ResponseStatusException;
+
+import static com.huawei.common.constants.JsonResponseKeys.KEY_MESSAGE;
+
+import com.huawei.common.util.RequestUtils;
 
 import reactor.core.publisher.Mono;
 
@@ -38,7 +44,6 @@ import reactor.core.publisher.Mono;
 public class GlobalExceptionHandler extends AbstractErrorWebExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-    private static final String MESSAGE_KEY = "message";
 
     public GlobalExceptionHandler(
             ErrorAttributes errorAttributes,
@@ -51,7 +56,7 @@ public class GlobalExceptionHandler extends AbstractErrorWebExceptionHandler {
     }
 
     @Override
-    protected RouterFunction<ServerResponse> getRoutingFunction(ErrorAttributes errorAttributes) {
+    protected RouterFunction<ServerResponse> getRoutingFunction(@Nullable ErrorAttributes errorAttributes) {
         return RouterFunctions.route(RequestPredicates.all(), this::renderErrorResponse);
     }
 
@@ -77,12 +82,12 @@ public class GlobalExceptionHandler extends AbstractErrorWebExceptionHandler {
         response.put("error", status.getReasonPhrase());
 
         if (error instanceof ResponseStatusException rse) {
-            response.put(MESSAGE_KEY, rse.getReason() != null ? rse.getReason() : "Gateway error");
+            response.put(KEY_MESSAGE, Objects.requireNonNullElse(rse.getReason(), "Gateway error"));
         } else if (error instanceof IllegalArgumentException) {
-            response.put(MESSAGE_KEY, error.getMessage());
+            response.put(KEY_MESSAGE, error.getMessage());
         } else {
             // Don't expose internal error details to client
-            response.put(MESSAGE_KEY, "An error occurred while processing your request");
+            response.put(KEY_MESSAGE, "An error occurred while processing your request");
             response.put("details", "Please contact support with error ID: " + errorId);
         }
 
@@ -117,6 +122,6 @@ public class GlobalExceptionHandler extends AbstractErrorWebExceptionHandler {
     }
 
     private String generateErrorId() {
-        return UUID.randomUUID().toString().substring(0, 8);
+        return Objects.requireNonNull(UUID.randomUUID().toString().substring(0, RequestUtils.REQUEST_ID_LENGTH));
     }
 }

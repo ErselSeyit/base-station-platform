@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anomaly-simulator
+  namespace: basestation-platform
+  labels:
+    app: anomaly-simulator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anomaly-simulator
+  template:
+    metadata:
+      labels:
+        app: anomaly-simulator
+    spec:
+      containers:
+        - name: anomaly-simulator
+          image: anomaly-simulator:latest
+          imagePullPolicy: Never
+          env:
+            - name: MONITORING_SERVICE_URL
+              value: "http://monitoring-service:8082"
+            - name: AI_DIAGNOSTIC_URL
+              value: "http://ai-diagnostic:9091"
+            - name: STATION_ID
+              value: "1"
+            - name: STATION_NAME
+              value: "BS-001"
+            - name: METRIC_INTERVAL
+              value: "5"
+            - name: ANOMALY_CHECK_INTERVAL
+              value: "20"  # Check for anomaly every 20 seconds
+            - name: SECURITY_INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: security-internal-secret
+                  key: secret
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

@@ -17,9 +17,12 @@ export default function LoadingSpinner({
   minHeight = '400px',
   message,
   size = 40,
-}: LoadingSpinnerProps) {
+}: Readonly<LoadingSpinnerProps>) {
   return (
     <Box
+      role="status"
+      aria-live="polite"
+      aria-label="Loading"
       display="flex"
       flexDirection="column"
       justifyContent="center"
@@ -27,7 +30,7 @@ export default function LoadingSpinner({
       minHeight={minHeight}
       gap={2}
     >
-      <CircularProgress size={size} />
+      <CircularProgress size={size} aria-hidden="true" />
       {message && (
         <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
           {message}

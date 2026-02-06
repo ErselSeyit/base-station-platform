@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,12 +30,13 @@ import com.huawei.monitoring.service.MonitoringService;
 
 /**
  * Tests for batch metrics endpoint in MonitoringController.
- * 
+ *
  * Verifies that the batch endpoint correctly handles requests
  * and returns metrics for multiple stations.
  */
 @WebMvcTest(MonitoringController.class)
 @Import(TestSecurityConfig.class)
+@ActiveProfiles("test")
 @DisplayName("MonitoringController Batch Endpoint Tests")
 class MonitoringControllerBatchTest {
 

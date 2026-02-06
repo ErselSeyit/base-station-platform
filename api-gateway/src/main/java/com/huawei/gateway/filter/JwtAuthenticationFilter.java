@@ -12,14 +12,23 @@ import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 
+import com.huawei.common.constants.SecurityConstants;
+import com.huawei.common.security.AuthConstants;
+import com.huawei.common.security.Roles;
 import com.huawei.gateway.util.JwtValidator;
 
+import static com.huawei.common.constants.HttpHeaders.*;
+
 import reactor.core.publisher.Mono;
+
+import org.springframework.http.HttpCookie;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * JWT Authentication Filter for API Gateway.
@@ -39,12 +48,18 @@ import java.util.HexFormat;
 public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAuthenticationFilter.Config> {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
-    private static final String BEARER_PREFIX = "Bearer ";
+
+    // RFC 1918 Class B private address range: 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
+    private static final int CLASS_B_PRIVATE_OCTET_MIN = 16;
+    private static final int CLASS_B_PRIVATE_OCTET_MAX = 31;
 
     private final JwtValidator jwtValidator;
 
     @Value("${security.internal.secret:}")
     private String internalSecret;
+
+    @Value("${security.actuator.allowed-ips:127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}")
+    private String actuatorAllowedIps;
 
     public JwtAuthenticationFilter(JwtValidator jwtValidator) {
         super(Config.class);
@@ -57,66 +72,171 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
             ServerHttpRequest request = exchange.getRequest();
             String path = request.getURI().getPath();
 
+            // Handle actuator endpoints separately
+            if (path.startsWith("/actuator")) {
+                return handleActuatorRequest(exchange, chain, request, path);
+            }
+
             // Skip validation for public endpoints
             if (isPublicEndpoint(path)) {
                 log.debug("Skipping JWT validation for public endpoint: {}", path);
                 return chain.filter(exchange);
             }
 
-            // Extract token from Authorization header
-            String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-            
-            if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-                log.warn("Missing or invalid Authorization header for path: {}", path);
+            // Extract and validate token
+            String token = extractToken(request, path);
+            if (token == null) {
                 return unauthorizedResponse(exchange, "Missing or invalid Authorization header");
             }
 
-            String token = authHeader.substring(BEARER_PREFIX.length());
-            if (token.isBlank()) {
-                log.warn("Empty token in Authorization header for path: {}", path);
-                return unauthorizedResponse(exchange, "Token cannot be empty");
-            }
-
-            // Validate token
             JwtValidator.ValidationResult validationResult = jwtValidator.validateToken(token);
-            
             if (!validationResult.isValid()) {
                 log.warn("Token validation failed for path {}: {}", path, validationResult.getErrorMessage());
                 return unauthorizedResponse(exchange, "Invalid token: " + validationResult.getErrorMessage());
             }
 
-            // Token is valid - add username and role to request headers for downstream services
-            String username = validationResult.getUsername();
-            String role = validationResult.getRole();
-            if (username != null) {
-                ServerHttpRequest.Builder requestBuilder = request.mutate()
-                        .header("X-User-Name", username);
-                if (role != null) {
-                    requestBuilder.header("X-User-Role", role);
-                }
-
-                // Add internal authentication token to prevent header spoofing
-                String internalAuthToken = generateInternalAuthToken(username, role);
-                requestBuilder.header("X-Internal-Auth", internalAuthToken);
-
-                ServerHttpRequest modifiedRequest = requestBuilder.build();
-                exchange = exchange.mutate().request(modifiedRequest).build();
-            }
-
-            log.debug("Token validated successfully for path: {}, user: {}", path, username);
-            return chain.filter(exchange);
+            // Add user context to request
+            ServerWebExchange modifiedExchange = addUserHeaders(exchange, request, validationResult);
+            log.debug("Token validated successfully for path: {}, user: {}", path, validationResult.getUsername());
+            return chain.filter(modifiedExchange);
         };
+    }
+
+    /**
+     * Handles actuator endpoint requests with IP-based access control.
+     */
+    private Mono<Void> handleActuatorRequest(ServerWebExchange exchange,
+            org.springframework.cloud.gateway.filter.GatewayFilterChain chain,
+            ServerHttpRequest request, String path) {
+        String clientIp = getClientIp(request);
+        if (!isAllowedActuatorIp(clientIp)) {
+            log.warn("Actuator access denied from IP: {} for path: {}", clientIp, path);
+            return forbiddenResponse(exchange, "Actuator access denied");
+        }
+        log.debug("Actuator access allowed from internal IP: {}", clientIp);
+        return chain.filter(exchange);
+    }
+
+    /**
+     * Extracts JWT token from Authorization header or HttpOnly cookie.
+     * Priority: Authorization header > auth_token cookie
+     * Returns null if neither source contains a valid token.
+     */
+    private String extractToken(ServerHttpRequest request, String path) {
+        // First, try Authorization header
+        String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        if (authHeader != null && authHeader.startsWith(AuthConstants.BEARER_PREFIX)) {
+            String token = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
+            if (!token.isBlank()) {
+                log.debug("Token extracted from Authorization header for path: {}", path);
+                return token;
+            }
+        }
+
+        // Fall back to HttpOnly cookie
+        List<HttpCookie> cookies = request.getCookies().get(AuthConstants.AUTH_COOKIE_NAME);
+        if (cookies != null && !cookies.isEmpty()) {
+            String token = cookies.getFirst().getValue();
+            if (!token.isBlank()) {
+                log.debug("Token extracted from auth_token cookie for path: {}", path);
+                return token;
+            }
+        }
+
+        log.warn("No valid token found in Authorization header or cookie for path: {}", path);
+        return null;
+    }
+
+    /**
+     * Adds user context headers to the request for downstream services.
+     */
+    private ServerWebExchange addUserHeaders(ServerWebExchange exchange,
+            ServerHttpRequest request, JwtValidator.ValidationResult validationResult) {
+        String username = validationResult.getUsername();
+        if (username == null) {
+            return exchange;
+        }
+
+        String role = validationResult.getRole();
+        ServerHttpRequest.Builder requestBuilder = request.mutate()
+                .header(HEADER_USER_NAME, username);
+
+        if (role != null) {
+            requestBuilder.header(HEADER_USER_ROLE, role);
+        }
+
+        String internalAuthToken = generateInternalAuthToken(username, role);
+        requestBuilder.header(HEADER_INTERNAL_AUTH, internalAuthToken);
+
+        return exchange.mutate().request(requestBuilder.build()).build();
     }
 
     /**
      * Checks if the endpoint is public (does not require authentication).
      */
     private boolean isPublicEndpoint(String path) {
-        return path.startsWith("/api/v1/auth/login") 
-                || path.startsWith("/api/v1/auth/register") 
-                || path.startsWith("/actuator")
+        return path.startsWith("/api/v1/auth/login")
+                || path.startsWith("/api/v1/auth/register")
+                || path.startsWith("/api/v1/auth/logout")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs");
+        // REMOVED: /api/reports and /reports - now require authentication
+    }
+
+    /**
+     * Checks if the client IP is allowed to access actuator endpoints.
+     */
+    private boolean isAllowedActuatorIp(String clientIp) {
+        if (clientIp == null) return false;
+
+        for (String allowed : actuatorAllowedIps.split(",")) {
+            allowed = allowed.trim();
+            if (allowed.contains("/")) {
+                // CIDR notation - simplified check for common ranges
+                if (isIpInCidr(clientIp, allowed)) {
+                    return true;
+                }
+            } else if (clientIp.equals(allowed)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Simplified CIDR check for common private IP ranges.
+     */
+    private boolean isIpInCidr(String ip, String cidr) {
+        if (cidr.equals("10.0.0.0/8")) {
+            return ip.startsWith("10.");
+        } else if (cidr.equals("172.16.0.0/12")) {
+            if (ip.startsWith("172.")) {
+                try {
+                    int second = Integer.parseInt(ip.split("\\.")[1]);
+                    return second >= CLASS_B_PRIVATE_OCTET_MIN && second <= CLASS_B_PRIVATE_OCTET_MAX;
+                } catch (NumberFormatException e) {
+                    return false;
+                }
+            }
+        } else if (cidr.equals("192.168.0.0/16")) {
+            return ip.startsWith("192.168.");
+        }
+        return false;
+    }
+
+    /**
+     * Extracts client IP from request, considering X-Forwarded-For header.
+     */
+    private String getClientIp(ServerHttpRequest request) {
+        String xForwardedFor = request.getHeaders().getFirst(HEADER_FORWARDED_FOR);
+        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        var remoteAddress = request.getRemoteAddress();
+        if (remoteAddress != null && remoteAddress.getAddress() != null) {
+            return remoteAddress.getAddress().getHostAddress();
+        }
+        return null;
     }
 
     /**
@@ -125,7 +245,17 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private Mono<Void> unauthorizedResponse(ServerWebExchange exchange, String message) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
-        response.getHeaders().add("X-Error-Message", message);
+        response.getHeaders().add(HEADER_ERROR_MESSAGE, message);
+        return response.setComplete();
+    }
+
+    /**
+     * Creates a forbidden response.
+     */
+    private Mono<Void> forbiddenResponse(ServerWebExchange exchange, String message) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.FORBIDDEN);
+        response.getHeaders().add(HEADER_ERROR_MESSAGE, message);
         return response.setComplete();
     }
 
@@ -143,7 +273,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
         }
 
         long timestamp = System.currentTimeMillis();
-        String payload = username + ":" + (role != null ? role : "USER") + ":" + timestamp;
+        String payload = username + ":" + Objects.requireNonNullElse(role, Roles.USER) + ":" + timestamp;
         String signature = computeHmac(payload, internalSecret);
 
         return signature + "." + payload;
@@ -151,17 +281,16 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
 
     private String computeHmac(String data, String secret) {
         try {
-            Mac hmac = Mac.getInstance("HmacSHA256");
+            Mac hmac = Mac.getInstance(SecurityConstants.HMAC_ALGORITHM);
             SecretKeySpec secretKey = new SecretKeySpec(
                 secret.getBytes(StandardCharsets.UTF_8),
-                "HmacSHA256"
+                SecurityConstants.HMAC_ALGORITHM
             );
             hmac.init(secretKey);
             byte[] hash = hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (Exception e) {
-            log.error("Failed to compute HMAC", e);
-            return "ERROR";
+            throw new IllegalStateException("HMAC computation failed - cannot generate secure token", e);
         }
     }
 

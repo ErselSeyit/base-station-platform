@@ -1,6 +1,6 @@
 import { Box, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
+import { format, subDays } from 'date-fns'
 import {
   CartesianGrid,
   Legend,
@@ -11,103 +11,143 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { CHART_COLORS } from '../constants/colors'
+import { CHART_CONFIG } from '../constants/designSystem'
 import { metricsApi } from '../services/api'
-import { MetricData } from '../types'
+import type { DailyMetricAggregate } from '../services/api/metrics'
+import { ensureArray } from '../utils/arrayUtils'
 import LoadingSpinner from './LoadingSpinner'
 
 interface ChartDataPoint {
   date: string
+  sortKey: string  // ISO date for sorting
   cpuUsage?: number
   memoryUsage?: number
-}
-
-interface AggregatedValues {
-  cpuSum: number
-  cpuCount: number
-  memorySum: number
-  memoryCount: number
+  temperature?: number
+  signalStrength?: number
 }
 
 export default function MetricsChart() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['metrics-chart'],
+  // Use server-side daily aggregates for efficient chart data
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['metrics-chart-daily'],
     queryFn: async () => {
-      const response = await metricsApi.getAll({
-        startTime: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      const response = await metricsApi.getDailyAggregates({
+        startTime: subDays(new Date(), 7).toISOString(),
+        endTime: new Date().toISOString(),
       })
       return response.data
     },
+    staleTime: CHART_CONFIG.DEFAULT_STALE_TIME_MS,
   })
 
   if (isLoading) {
     return <LoadingSpinner />
   }
 
-  const metrics = Array.isArray(data) ? data : []
+  if (error) {
+    return (
+      <Box
+        sx={{
+          height: CHART_CONFIG.DEFAULT_HEIGHT,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Typography sx={{ color: 'var(--status-offline)', fontSize: '0.875rem' }}>
+          Unable to load chart data
+        </Typography>
+      </Box>
+    )
+  }
 
-  // Group metrics by date and calculate averages (only CPU and Memory - true percentages)
-  const aggregated: Record<string, AggregatedValues> = {}
-  
-  metrics.forEach((metric: MetricData) => {
-    if (!metric.timestamp) return
-    const date = format(new Date(metric.timestamp), 'MMM dd')
-    
-    if (!aggregated[date]) {
-      aggregated[date] = { cpuSum: 0, cpuCount: 0, memorySum: 0, memoryCount: 0 }
-    }
+  const dailyAggregates = ensureArray(data as DailyMetricAggregate[])
 
-    if (metric.metricType === 'CPU_USAGE') {
-      aggregated[date].cpuSum += metric.value
-      aggregated[date].cpuCount += 1
-    } else if (metric.metricType === 'MEMORY_USAGE') {
-      aggregated[date].memorySum += metric.value
-      aggregated[date].memoryCount += 1
-    }
-  })
-
-  // Convert to chart data with averages
-  const chartData: ChartDataPoint[] = Object.keys(aggregated)
-    .map((date) => {
-      const values = aggregated[date]
+  // Transform server-aggregated data to chart format
+  const chartData: ChartDataPoint[] = dailyAggregates
+    .filter((d): d is DailyMetricAggregate => d !== null && d.date !== null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((daily) => {
+      const dateObj = new Date(daily.date)
       return {
-        date,
-        cpuUsage: values.cpuCount > 0 ? values.cpuSum / values.cpuCount : undefined,
-        memoryUsage: values.memoryCount > 0 ? values.memorySum / values.memoryCount : undefined,
+        date: format(dateObj, 'MMM dd'),
+        sortKey: daily.date,
+        cpuUsage: daily.averages?.CPU_USAGE,
+        memoryUsage: daily.averages?.MEMORY_USAGE,
+        temperature: daily.averages?.TEMPERATURE,
+        signalStrength: daily.averages?.SIGNAL_STRENGTH,
       }
     })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   // Check if we have any data
-  const hasData = chartData.some(d => d.cpuUsage !== undefined || d.memoryUsage !== undefined)
+  const hasData = chartData.some(d =>
+    d.cpuUsage !== undefined || d.memoryUsage !== undefined ||
+    d.temperature !== undefined || d.signalStrength !== undefined
+  )
 
   if (!hasData) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: CHART_CONFIG.DEFAULT_HEIGHT }}>
         <Typography color="text.secondary">No metrics data available</Typography>
       </Box>
     )
   }
 
+  const formatValue = (value: number, name: string): [string, string] => {
+    switch (name) {
+      case 'cpuUsage':
+        return [`${value.toFixed(1)}%`, 'CPU Usage']
+      case 'memoryUsage':
+        return [`${value.toFixed(1)}%`, 'Memory Usage']
+      case 'temperature':
+        return [`${value.toFixed(1)}°C`, 'Temperature']
+      case 'signalStrength':
+        return [`${value.toFixed(1)} dBm`, 'Signal Strength']
+      default:
+        return [`${value.toFixed(1)}`, name]
+    }
+  }
+
+  const legendFormatter = (value: string) => {
+    switch (value) {
+      case 'cpuUsage': return 'CPU Usage'
+      case 'memoryUsage': return 'Memory Usage'
+      case 'temperature': return 'Temperature'
+      case 'signalStrength': return 'Signal Strength'
+      default: return value
+    }
+  }
+
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--mono-200)" />
+    <Box
+      role="img"
+      aria-label="7-day metrics trend chart showing CPU usage, memory usage, temperature, and signal strength"
+    >
+      <ResponsiveContainer width="100%" height={CHART_CONFIG.DEFAULT_HEIGHT}>
+        <LineChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--mono-400)" />
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 12, fill: 'var(--mono-600)' }}
-          stroke="var(--mono-300)"
+          tick={{ fontSize: 12, fill: 'var(--mono-700)' }}
+          stroke="var(--mono-500)"
         />
         <YAxis
+          yAxisId="left"
           domain={[0, 100]}
           tickFormatter={(v) => `${v}%`}
-          tick={{ fontSize: 12, fill: 'var(--mono-600)' }}
-          stroke="var(--mono-300)"
+          tick={{ fontSize: 12, fill: 'var(--mono-700)' }}
+          stroke="var(--mono-500)"
+        />
+        <YAxis
+          yAxisId="right"
+          orientation="right"
+          domain={[-100, 100]}
+          tick={{ fontSize: 12, fill: 'var(--mono-700)' }}
+          stroke="var(--mono-500)"
         />
         <Tooltip
-          formatter={(value: number, name: string) => {
-            const label = name === 'cpuUsage' ? 'CPU Usage' : 'Memory Usage'
-            return [`${value.toFixed(1)}%`, label]
-          }}
+          formatter={formatValue}
           labelStyle={{ fontWeight: 600, color: 'var(--mono-950)' }}
           contentStyle={{
             borderRadius: 8,
@@ -118,27 +158,48 @@ export default function MetricsChart() {
           itemStyle={{ color: 'var(--mono-700)' }}
         />
         <Legend
-          formatter={(value) => value === 'cpuUsage' ? 'CPU Usage' : 'Memory Usage'}
-          wrapperStyle={{ color: 'var(--mono-700)' }}
+          formatter={legendFormatter}
+          wrapperStyle={{ color: 'var(--mono-800)' }}
         />
         <Line
+          yAxisId="left"
           type="monotone"
           dataKey="cpuUsage"
-          stroke="var(--status-active)"
+          stroke={CHART_COLORS.cpuUsage}
           strokeWidth={2}
           dot={false}
           connectNulls
         />
         <Line
+          yAxisId="left"
           type="monotone"
           dataKey="memoryUsage"
-          stroke="var(--status-maintenance)"
+          stroke={CHART_COLORS.memoryUsage}
           strokeWidth={2}
           dot={false}
           connectNulls
         />
-      </LineChart>
-    </ResponsiveContainer>
+        <Line
+          yAxisId="right"
+          type="monotone"
+          dataKey="temperature"
+          stroke={CHART_COLORS.temperature}
+          strokeWidth={2}
+          dot={false}
+          connectNulls
+        />
+        <Line
+          yAxisId="right"
+          type="monotone"
+          dataKey="signalStrength"
+          stroke={CHART_COLORS.signalStrength}
+          strokeWidth={2}
+          dot={false}
+          connectNulls
+        />
+        </LineChart>
+      </ResponsiveContainer>
+    </Box>
   )
 }
 

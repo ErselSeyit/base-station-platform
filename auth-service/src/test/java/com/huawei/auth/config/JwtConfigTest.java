@@ -1,5 +1,6 @@
 package com.huawei.auth.config;
 
+import static com.huawei.common.constants.SecurityConstants.MIN_SECRET_LENGTH;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -14,13 +15,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Tests for JWT configuration.
- * 
+ *
  * Verifies secret validation, length requirements, and error handling.
  */
 @DisplayName("JWT Config Tests")
 class JwtConfigTest {
-
-    private static final int MIN_SECRET_LENGTH = 32;
 
     @Test
     @DisplayName("Should create SecretKey with valid secret")

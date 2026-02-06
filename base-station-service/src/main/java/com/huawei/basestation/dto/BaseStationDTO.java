@@ -1,5 +1,6 @@
 package com.huawei.basestation.dto;
 
+import com.huawei.basestation.model.ManagementProtocol;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.model.StationType;
 import jakarta.validation.constraints.Max;
@@ -10,178 +11,151 @@ import jakarta.validation.constraints.Positive;
 
 import java.time.LocalDateTime;
 
-public class BaseStationDTO {
+import org.springframework.lang.Nullable;
 
-    private Long id;
+/**
+ * Immutable DTO for base station data transfer.
+ * Uses builder pattern for ergonomic construction.
+ */
+public record BaseStationDTO(
+        @Nullable Long id,
 
-    @NotBlank(message = "Station name is required")
-    private String stationName;
+        @NotBlank(message = "Station name is required")
+        String stationName,
 
-    @NotBlank(message = "Location is required")
-    private String location;
+        @NotBlank(message = "Location is required")
+        String location,
 
-    @NotNull(message = "Latitude is required")
-    @Min(value = -90, message = "Latitude must be between -90 and 90 degrees")
-    @Max(value = 90, message = "Latitude must be between -90 and 90 degrees")
-    private Double latitude;
+        @NotNull(message = "Latitude is required")
+        @Min(value = -90, message = "Latitude must be between -90 and 90 degrees")
+        @Max(value = 90, message = "Latitude must be between -90 and 90 degrees")
+        Double latitude,
 
-    @NotNull(message = "Longitude is required")
-    @Min(value = -180, message = "Longitude must be between -180 and 180 degrees")
-    @Max(value = 180, message = "Longitude must be between -180 and 180 degrees")
-    private Double longitude;
+        @NotNull(message = "Longitude is required")
+        @Min(value = -180, message = "Longitude must be between -180 and 180 degrees")
+        @Max(value = 180, message = "Longitude must be between -180 and 180 degrees")
+        Double longitude,
 
-    @NotNull(message = "Station type is required")
-    private StationType stationType;
+        @NotNull(message = "Station type is required")
+        StationType stationType,
 
-    private StationStatus status;
+        @Nullable StationStatus status,
 
-    @Positive(message = "Power consumption must be positive")
-    private Double powerConsumption;
+        @Nullable
+        @Positive(message = "Power consumption must be positive")
+        Double powerConsumption,
 
-    private String description;
-
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
-
-    // Constructors
-    public BaseStationDTO() {
-        // Default constructor required for Jackson deserialization and JPA
+        @Nullable String description,
+        @Nullable String ipAddress,
+        @Nullable Integer port,
+        @Nullable ManagementProtocol managementProtocol,
+        @Nullable LocalDateTime createdAt,
+        @Nullable LocalDateTime updatedAt
+) {
+    /**
+     * Creates a new builder for BaseStationDTO.
+     */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    // Getters and Setters
-    public Long getId() {
-        return id;
-    }
+    /**
+     * Builder for constructing BaseStationDTO instances.
+     */
+    public static final class Builder {
+        private Long id;
+        private String stationName;
+        private String location;
+        private Double latitude;
+        private Double longitude;
+        private StationType stationType;
+        private StationStatus status;
+        private Double powerConsumption;
+        private String description;
+        private String ipAddress;
+        private Integer port;
+        private ManagementProtocol managementProtocol;
+        private LocalDateTime createdAt;
+        private LocalDateTime updatedAt;
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+        private Builder() {}
 
-    public String getStationName() {
-        return stationName;
-    }
+        public Builder id(@Nullable Long id) {
+            this.id = id;
+            return this;
+        }
 
-    public void setStationName(String stationName) {
-        this.stationName = stationName;
-    }
+        public Builder stationName(@Nullable String stationName) {
+            this.stationName = stationName;
+            return this;
+        }
 
-    public String getLocation() {
-        return location;
-    }
+        public Builder location(@Nullable String location) {
+            this.location = location;
+            return this;
+        }
 
-    public void setLocation(String location) {
-        this.location = location;
-    }
+        public Builder latitude(@Nullable Double latitude) {
+            this.latitude = latitude;
+            return this;
+        }
 
-    public Double getLatitude() {
-        return latitude;
-    }
+        public Builder longitude(@Nullable Double longitude) {
+            this.longitude = longitude;
+            return this;
+        }
 
-    public void setLatitude(Double latitude) {
-        this.latitude = latitude;
-    }
+        public Builder stationType(@Nullable StationType stationType) {
+            this.stationType = stationType;
+            return this;
+        }
 
-    public Double getLongitude() {
-        return longitude;
-    }
+        public Builder status(@Nullable StationStatus status) {
+            this.status = status;
+            return this;
+        }
 
-    public void setLongitude(Double longitude) {
-        this.longitude = longitude;
-    }
+        public Builder powerConsumption(@Nullable Double powerConsumption) {
+            this.powerConsumption = powerConsumption;
+            return this;
+        }
 
-    public StationType getStationType() {
-        return stationType;
-    }
+        public Builder description(@Nullable String description) {
+            this.description = description;
+            return this;
+        }
 
-    public void setStationType(StationType stationType) {
-        this.stationType = stationType;
-    }
+        public Builder ipAddress(@Nullable String ipAddress) {
+            this.ipAddress = ipAddress;
+            return this;
+        }
 
-    public StationStatus getStatus() {
-        return status;
-    }
+        public Builder port(@Nullable Integer port) {
+            this.port = port;
+            return this;
+        }
 
-    public void setStatus(StationStatus status) {
-        this.status = status;
-    }
+        public Builder managementProtocol(@Nullable ManagementProtocol managementProtocol) {
+            this.managementProtocol = managementProtocol;
+            return this;
+        }
 
-    public Double getPowerConsumption() {
-        return powerConsumption;
-    }
+        public Builder createdAt(@Nullable LocalDateTime createdAt) {
+            this.createdAt = createdAt;
+            return this;
+        }
 
-    public void setPowerConsumption(Double powerConsumption) {
-        this.powerConsumption = powerConsumption;
-    }
+        public Builder updatedAt(@Nullable LocalDateTime updatedAt) {
+            this.updatedAt = updatedAt;
+            return this;
+        }
 
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        BaseStationDTO that = (BaseStationDTO) o;
-
-        if (id != null ? !id.equals(that.id) : that.id != null) return false;
-        if (stationName != null ? !stationName.equals(that.stationName) : that.stationName != null) return false;
-        if (location != null ? !location.equals(that.location) : that.location != null) return false;
-        if (latitude != null ? !latitude.equals(that.latitude) : that.latitude != null) return false;
-        if (longitude != null ? !longitude.equals(that.longitude) : that.longitude != null) return false;
-        if (stationType != that.stationType) return false;
-        if (status != that.status) return false;
-        return powerConsumption != null ? powerConsumption.equals(that.powerConsumption) : that.powerConsumption == null;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = id != null ? id.hashCode() : 0;
-        result = 31 * result + (stationName != null ? stationName.hashCode() : 0);
-        result = 31 * result + (location != null ? location.hashCode() : 0);
-        result = 31 * result + (latitude != null ? latitude.hashCode() : 0);
-        result = 31 * result + (longitude != null ? longitude.hashCode() : 0);
-        result = 31 * result + (stationType != null ? stationType.hashCode() : 0);
-        result = 31 * result + (status != null ? status.hashCode() : 0);
-        result = 31 * result + (powerConsumption != null ? powerConsumption.hashCode() : 0);
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "BaseStationDTO{" +
-                "id=" + id +
-                ", stationName='" + stationName + '\'' +
-                ", location='" + location + '\'' +
-                ", latitude=" + latitude +
-                ", longitude=" + longitude +
-                ", stationType=" + stationType +
-                ", status=" + status +
-                ", powerConsumption=" + powerConsumption +
-                ", description='" + description + '\'' +
-                ", createdAt=" + createdAt +
-                ", updatedAt=" + updatedAt +
-                '}';
+        public BaseStationDTO build() {
+            return new BaseStationDTO(
+                    id, stationName, location, latitude, longitude,
+                    stationType, status, powerConsumption, description,
+                    ipAddress, port, managementProtocol, createdAt, updatedAt
+            );
+        }
     }
 }
-

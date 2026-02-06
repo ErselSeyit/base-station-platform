@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { BaseStation, MetricData, MetricType, StationType, StationStatus } from '../../types'
+import { BaseStation, ManagementProtocol, MetricData, MetricType, StationType, StationStatus } from '../../types'
 
 // Create persistent mock functions at module level
 const mockGet = vi.fn()
@@ -47,6 +47,8 @@ describe('API Service', () => {
           latitude: 40.7128,
           longitude: -74.006,
           stationType: StationType.MACRO_CELL,
+          ipAddress: '10.100.1.101',
+          managementProtocol: ManagementProtocol.DIRECT,
           status: StationStatus.ACTIVE,
           powerConsumption: 1500,
         },
@@ -67,6 +69,8 @@ describe('API Service', () => {
         latitude: 40.7128,
         longitude: -74.006,
         stationType: StationType.MACRO_CELL,
+        ipAddress: '10.100.1.101',
+        managementProtocol: ManagementProtocol.DIRECT,
         status: StationStatus.ACTIVE,
         powerConsumption: 1500,
       }
@@ -85,6 +89,8 @@ describe('API Service', () => {
         latitude: 40.758,
         longitude: -73.9855,
         stationType: StationType.SMALL_CELL,
+        ipAddress: '10.100.1.102',
+        managementProtocol: ManagementProtocol.DIRECT,
         status: StationStatus.ACTIVE,
         powerConsumption: 800,
       }

@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { Box, Button, Typography } from '@mui/material'
 import { Error as ErrorIcon, Refresh as RefreshIcon } from '@mui/icons-material'
+import { logger } from '../services/logger'
 
 interface Props {
   children: ReactNode
@@ -22,17 +23,19 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('ErrorBoundary caught an error:', error, errorInfo)
+    logger.error('ErrorBoundary caught an error', { error, errorInfo })
   }
 
   handleReload = (): void => {
-    window.location.reload()
+    globalThis.location.reload()
   }
 
   render(): ReactNode {
     if (this.state.hasError) {
       return (
         <Box
+          role="alert"
+          aria-live="assertive"
           sx={{
             display: 'flex',
             flexDirection: 'column',
@@ -73,7 +76,7 @@ export class ErrorBoundary extends Component<Props, State> {
           {this.state.error && (
             <Box
               sx={{
-                background: 'var(--mono-50)',
+                background: 'var(--surface-elevated)',
                 border: '1px solid var(--surface-border)',
                 borderRadius: '8px',
                 padding: '16px',

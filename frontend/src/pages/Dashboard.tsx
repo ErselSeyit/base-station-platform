@@ -1,552 +1,387 @@
 import {
   TrendingUp as TrendingUpIcon,
+  CheckCircle as HealthyIcon,
+  CellTower as StationIcon,
+  PowerOff as OfflineIcon,
+  Build as MaintenanceIcon,
+  Notifications as NotificationsIcon,
+  Close as CloseIcon,
+  Speed as PerformanceIcon,
+  Router as NetworkIcon,
+  FiveG as FiveGIcon,
 } from '@mui/icons-material'
 import {
-  Alert,
+  Badge,
   Box,
+  Drawer,
+  Fab,
   Grid,
+  IconButton,
   Typography,
 } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useState } from 'react'
-import AnimatedCounter from '../components/AnimatedCounter'
+import ErrorDisplay from '../components/ErrorDisplay'
 import LiveActivityFeed from '../components/LiveActivityFeed'
 import LoadingSpinner from '../components/LoadingSpinner'
 import MetricsChart from '../components/MetricsChart'
-import { notificationsApi, stationApi } from '../services/api'
-import { BaseStation, Notification, StationStatus } from '../types'
-
-// Status colors now use CSS variables
-const STATUS_COLORS = {
-  active: 'var(--status-active)',
-  maintenance: 'var(--status-maintenance)',
-  offline: 'var(--status-offline)',
-  neutral: 'var(--status-info)',
-}
-
-// Revolutionary micro-metric component with magnetic hover
-interface MicroMetricProps {
-  label: string
-  value: number | string
-  status?: 'active' | 'maintenance' | 'offline' | 'neutral'
-  unit?: string
-  trend?: number
-  delay?: number
-}
-
-const MicroMetric = ({ label, value, status = 'neutral', unit = '', trend, delay = 0 }: MicroMetricProps) => {
-  const [isHovered, setIsHovered] = useState(false)
-  const mouseX = useMotionValue(0)
-  const mouseY = useMotionValue(0)
-
-  const springConfig = { damping: 25, stiffness: 400 }
-  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [5, -5]), springConfig)
-  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-5, 5]), springConfig)
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height / 2
-    mouseX.set((e.clientX - centerX) / rect.width)
-    mouseY.set((e.clientY - centerY) / rect.height)
-  }
-
-  return (
-    <Box
-      component={motion.div}
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => {
-        setIsHovered(false)
-        mouseX.set(0)
-        mouseY.set(0)
-      }}
-      sx={{
-        position: 'relative',
-        padding: '20px',
-        background: 'var(--surface-base)',
-        border: '1px solid var(--surface-border)',
-        borderRadius: '12px',
-        cursor: 'pointer',
-        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: 'var(--shadow-lg)',
-          borderColor: 'var(--mono-300)',
-        },
-        '&::after': {
-          content: '""',
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '2px',
-          background: STATUS_COLORS[status],
-          transform: isHovered ? 'scaleX(1)' : 'scaleX(0)',
-          transformOrigin: 'left',
-          transition: 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-        },
-      }}
-      style={{
-        rotateX,
-        rotateY,
-        transformStyle: 'preserve-3d',
-      }}
-    >
-      {/* Label */}
-      <Typography
-        variant="caption"
-        sx={{
-          display: 'block',
-          fontSize: '0.75rem',
-          fontWeight: 500,
-          color: 'var(--mono-500)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          marginBottom: '8px',
-        }}
-      >
-        {label}
-      </Typography>
-
-      {/* Value with tabular nums */}
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '4px' }}>
-        <Typography
-          sx={{
-            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2rem' },
-            fontWeight: 600,
-            lineHeight: 1,
-            letterSpacing: '-0.02em',
-            fontVariantNumeric: 'tabular-nums',
-            color: 'var(--mono-950)',
-          }}
-        >
-          {typeof value === 'number' ? (
-            <AnimatedCounter value={value} decimals={unit === 'kW' ? 1 : 0} duration={1200} />
-          ) : (
-            value
-          )}
-        </Typography>
-        {unit && (
-          <Typography
-            sx={{
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: 'var(--mono-500)',
-            }}
-          >
-            {unit}
-          </Typography>
-        )}
-      </Box>
-
-      {/* Trend indicator */}
-      {trend !== undefined && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}>
-          <TrendingUpIcon
-            sx={{
-              fontSize: '14px',
-              color: trend > 0 ? STATUS_COLORS.active : trend < 0 ? STATUS_COLORS.offline : STATUS_COLORS.neutral,
-              transform: trend < 0 ? 'rotate(180deg)' : 'none',
-            }}
-          />
-          <Typography
-            sx={{
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              color: trend > 0 ? STATUS_COLORS.active : trend < 0 ? STATUS_COLORS.offline : STATUS_COLORS.neutral,
-            }}
-          >
-            {trend > 0 ? '+' : ''}{trend}%
-          </Typography>
-        </Box>
-      )}
-
-      {/* Status indicator */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: '16px',
-          right: '16px',
-          width: '6px',
-          height: '6px',
-          borderRadius: '50%',
-          background: STATUS_COLORS[status],
-          boxShadow: `0 0 0 2px ${STATUS_COLORS[status]}20`,
-        }}
-      >
-        {status === 'active' && (
-          <Box
-            sx={{
-              position: 'absolute',
-              inset: '-2px',
-              borderRadius: '50%',
-              background: STATUS_COLORS[status],
-              opacity: 0.2,
-              animation: 'pulse 2s ease-in-out infinite',
-            }}
-          />
-        )}
-      </Box>
-    </Box>
-  )
-}
-
-// Inline status row component
-interface StatusRowProps {
-  station: BaseStation
-  delay: number
-}
-
-const StatusRow = ({ station, delay }: StatusRowProps) => {
-  const statusColor =
-    station.status === StationStatus.ACTIVE
-      ? STATUS_COLORS.active
-      : station.status === StationStatus.MAINTENANCE
-      ? STATUS_COLORS.maintenance
-      : STATUS_COLORS.offline
-
-  return (
-    <Box
-      component={motion.div}
-      initial={{ opacity: 0, x: -16 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '12px 16px',
-        borderBottom: '1px solid var(--surface-border)',
-        transition: 'background 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-        cursor: 'pointer',
-        '&:hover': {
-          background: 'var(--mono-50)',
-        },
-        '&:last-child': {
-          borderBottom: 'none',
-        },
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-        <Box
-          sx={{
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            background: statusColor,
-            position: 'relative',
-          }}
-        >
-          {station.status === StationStatus.ACTIVE && (
-            <Box
-              sx={{
-                position: 'absolute',
-                inset: '-2px',
-                borderRadius: '50%',
-                background: statusColor,
-                opacity: 0.2,
-                animation: 'pulse 2s ease-in-out infinite',
-              }}
-            />
-          )}
-        </Box>
-        <Typography
-          sx={{
-            fontSize: '0.875rem',
-            fontWeight: 500,
-            color: 'var(--mono-950)',
-          }}
-        >
-          {station.stationName}
-        </Typography>
-      </Box>
-      <Typography
-        sx={{
-          fontSize: '0.875rem',
-          fontWeight: 600,
-          fontVariantNumeric: 'tabular-nums',
-          fontFamily: "'JetBrains Mono', monospace",
-          color: 'var(--mono-600)',
-        }}
-      >
-        {(station.powerConsumption || 0).toFixed(1)} kW
-      </Typography>
-    </Box>
-  )
-}
+import {
+  StatusBanner,
+  SectionHeader,
+  MetricSection,
+  StationsAttentionList,
+  InfraCard,
+  FAB_STYLES,
+} from '../components/DashboardComponents'
+import { CSS_VARS } from '../constants/designSystem'
+import {
+  useDashboardData,
+  getActiveStationStatus,
+  getMaintenanceStatus,
+  getOfflineStatus,
+} from '../hooks/useDashboardData'
+import { getErrorMessage } from '../utils/statusHelpers'
 
 export default function Dashboard() {
-  const { data: stations, isLoading: stationsLoading } = useQuery({
-    queryKey: ['stations'],
-    queryFn: async () => {
-      const response = await stationApi.getAll()
-      return response.data
-    },
-  })
-  const { data: notifications } = useQuery({
-    queryKey: ['recent-notifications'],
-    queryFn: async () => {
-      const response = await notificationsApi.getAll()
-      return response.data
-    },
-  })
+  const [activityDrawerOpen, setActivityDrawerOpen] = useState(false)
 
-  if (stationsLoading) {
+  // Use custom hook for all data fetching and processing
+  const {
+    isLoading,
+    error,
+    stations,
+    activeCount,
+    maintenanceStations,
+    offlineStations,
+    unreadAlerts,
+    metrics,
+    systemMetrics,
+    nr78Metrics,
+    nr28Metrics,
+    qualityMetrics,
+    systemStatus,
+    nr78Status,
+    nr28Status,
+    qualityStatus,
+    infraStatus,
+    overallStatus,
+    issueCount,
+  } = useDashboardData()
+
+  if (isLoading) {
     return <LoadingSpinner />
   }
 
-  const stationsData = Array.isArray(stations) ? stations : []
-  const activeCount = stationsData.filter((s: BaseStation) => s.status === StationStatus.ACTIVE).length
-  const maintenanceCount = stationsData.filter((s: BaseStation) => s.status === StationStatus.MAINTENANCE).length
-  const offlineCount = stationsData.filter((s: BaseStation) => s.status === StationStatus.OFFLINE).length
-  const totalPower = stationsData.reduce((sum: number, s: BaseStation) => sum + (s.powerConsumption || 0), 0)
-  const notificationsList = Array.isArray(notifications) ? notifications : []
-  const unreadAlerts = notificationsList.filter((n: Notification) => n.status === 'UNREAD').length || 0
+  if (error) {
+    return <ErrorDisplay title="Failed to load dashboard" message={getErrorMessage(error)} />
+  }
 
-  const uptime = stationsData.length > 0 ? ((activeCount / stationsData.length) * 100).toFixed(1) : '0'
+  // Fab button styles
+  const fabStyles = unreadAlerts > 0 ? FAB_STYLES.alert : FAB_STYLES.normal
 
   return (
-    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
-      {/* Header - Brutally minimal */}
-      <Box
-        component={motion.div}
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        sx={{ marginBottom: '32px' }}
-      >
+    <Box sx={{ maxWidth: '1600px', margin: '0 auto', padding: { xs: '16px', sm: '24px', md: '32px' } }}>
+      {/* Header */}
+      <Box component={motion.div} initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} sx={{ marginBottom: '8px' }}>
         <Typography
           variant="h1"
           sx={{
-            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.25rem' },
-            fontWeight: 700,
-            letterSpacing: '-0.025em',
+            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2rem' },
+            fontWeight: 800,
+            letterSpacing: '-0.03em',
             color: 'var(--mono-950)',
-            marginBottom: '8px',
           }}
         >
-          Operations
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: '0.875rem',
-            color: 'var(--mono-500)',
-            letterSpacing: '0.01em',
-          }}
-        >
-          Real-time infrastructure monitoring · {stationsData.length} stations · {uptime}% uptime
+          Operations Dashboard
         </Typography>
       </Box>
 
-      {/* Alert banner - minimal */}
-      {unreadAlerts > 0 && (
-        <Box
-          component={motion.div}
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          sx={{ marginBottom: '24px' }}
-        >
-          <Alert
-            severity="warning"
+      {/* Executive Status Banner */}
+      <StatusBanner status={overallStatus} issueCount={issueCount} totalMetrics={metrics.length} />
+
+      {/* Infrastructure Overview */}
+      <Box sx={{ marginBottom: '32px' }}>
+        <SectionHeader
+          title="Infrastructure"
+          subtitle="Base station fleet status"
+          icon={StationIcon}
+          status={infraStatus}
+        />
+        <Grid container spacing={2} alignItems="stretch">
+          <Grid item xs={6} md={3}>
+            <InfraCard
+              icon={StationIcon}
+              label="Total Stations"
+              value={stations.length}
+              status="info"
+              description="Deployed units"
+              delay={0.1}
+            />
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <InfraCard
+              icon={HealthyIcon}
+              label="Active"
+              value={activeCount}
+              status={getActiveStationStatus(activeCount, stations.length)}
+              description="Operating normally"
+              delay={0.15}
+            />
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <InfraCard
+              icon={MaintenanceIcon}
+              label="Maintenance"
+              value={maintenanceStations.length}
+              status={getMaintenanceStatus(maintenanceStations.length)}
+              description="Scheduled work"
+              delay={0.2}
+            />
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <InfraCard
+              icon={OfflineIcon}
+              label="Offline"
+              value={offlineStations.length}
+              status={getOfflineStatus(offlineStations.length)}
+              description="Need attention"
+              delay={0.25}
+            />
+          </Grid>
+        </Grid>
+      </Box>
+
+      {/* System Performance */}
+      <MetricSection
+        title="System Performance"
+        subtitle="Hardware utilization metrics"
+        icon={PerformanceIcon}
+        status={systemStatus}
+        metrics={systemMetrics}
+        baseDelay={0.3}
+      />
+
+      {/* 5G NR n78 (3.5 GHz) */}
+      <MetricSection
+        title="5G NR n78"
+        subtitle="3.5 GHz high-speed band"
+        icon={FiveGIcon}
+        status={nr78Status}
+        metrics={nr78Metrics}
+        baseDelay={0.35}
+      />
+
+      {/* 5G NR n28 + Network Quality + Stations Requiring Attention */}
+      <Grid container spacing={3} alignItems="stretch" sx={{ marginBottom: '32px' }}>
+        {/* 5G NR n28 (700 MHz) - compact */}
+        <Grid item xs={12} md={4}>
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
             sx={{
-              background: 'var(--mono-50)',
+              background: 'var(--surface-base)',
               border: '1px solid var(--surface-border)',
-              borderLeft: `3px solid ${STATUS_COLORS.maintenance}`,
-              borderRadius: '8px',
-              padding: '12px 16px',
-              fontSize: '0.875rem',
-              '& .MuiAlert-icon': {
-                fontSize: '18px',
-                color: STATUS_COLORS.maintenance,
-              },
+              borderRadius: '16px',
+              padding: '20px',
+              height: '100%',
             }}
           >
-            {unreadAlerts} unread alert{unreadAlerts > 1 ? 's' : ''} require attention
-          </Alert>
-        </Box>
-      )}
+            <MetricSection
+              title="5G NR n28"
+              icon={NetworkIcon}
+              status={nr28Status}
+              metrics={nr28Metrics}
+              baseDelay={0.4}
+              compact
+            />
+          </Box>
+        </Grid>
 
-      {/* Metrics grid - hyper-dense */}
-      <Grid container spacing={2} sx={{ marginBottom: '24px' }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <MicroMetric
-            label="Total Stations"
-            value={stationsData.length}
-            status="neutral"
-            delay={0}
-          />
+        {/* Network Quality - compact */}
+        <Grid item xs={12} md={4}>
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '16px',
+              padding: '20px',
+              height: '100%',
+            }}
+          >
+            <MetricSection
+              title="Network Quality"
+              icon={TrendingUpIcon}
+              status={qualityStatus}
+              metrics={qualityMetrics}
+              baseDelay={0.45}
+              compact
+            />
+          </Box>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <MicroMetric
-            label="Active"
-            value={activeCount}
-            status="active"
-            trend={5}
-            delay={0.05}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <MicroMetric
-            label="Maintenance"
-            value={maintenanceCount}
-            status="maintenance"
-            delay={0.1}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <MicroMetric
-            label="Offline"
-            value={offlineCount}
-            status="offline"
-            trend={offlineCount > 0 ? -2 : 0}
-            delay={0.15}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <MicroMetric
-            label="Power Consumption"
-            value={totalPower.toFixed(1)}
-            unit="kW"
-            status="neutral"
-            delay={0.2}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <MicroMetric
-            label="System Uptime"
-            value={uptime}
-            unit="%"
-            status="active"
-            trend={1}
-            delay={0.25}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <MicroMetric
-            label="Alerts"
-            value={unreadAlerts}
-            status={unreadAlerts > 0 ? 'maintenance' : 'neutral'}
-            delay={0.3}
-          />
+
+        {/* Stations requiring attention */}
+        <Grid item xs={12} md={4}>
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            sx={{
+              background: 'var(--surface-base)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              height: '100%',
+            }}
+          >
+            <Box sx={{ padding: '16px 20px', borderBottom: '1px solid var(--surface-border)' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Typography sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--mono-950)' }}>
+                  Attention Required
+                </Typography>
+                {(maintenanceStations.length + offlineStations.length) > 0 && (
+                  <Box sx={{ padding: '3px 10px', borderRadius: '100px', background: CSS_VARS.statusErrorBg }}>
+                    <Typography sx={{ fontSize: '0.6875rem', fontWeight: 700, color: CSS_VARS.statusOffline }}>
+                      {maintenanceStations.length + offlineStations.length}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </Box>
+            <Box sx={{ maxHeight: 280, overflow: 'auto' }}>
+              <StationsAttentionList offlineStations={offlineStations} maintenanceStations={maintenanceStations} />
+            </Box>
+          </Box>
         </Grid>
       </Grid>
 
-      {/* Main content grid */}
-      <Grid container spacing={2}>
-        {/* Metrics chart */}
-        <Grid item xs={12} lg={8}>
+      {/* Trends Chart - full width */}
+      <Box
+        component={motion.div}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.55 }}
+        sx={{
+          background: 'var(--surface-base)',
+          border: '1px solid var(--surface-border)',
+          borderRadius: '16px',
+          padding: '24px',
+          marginBottom: '32px',
+        }}
+      >
+        <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: 'var(--mono-950)', marginBottom: '16px' }}>
+          Performance Trends
+        </Typography>
+        <MetricsChart />
+      </Box>
+
+      {/* Floating Activity Feed Button */}
+      <Fab
+        aria-label="Open activity feed"
+        onClick={() => setActivityDrawerOpen(true)}
+        sx={{
+          position: 'fixed',
+          bottom: 28,
+          right: 28,
+          width: 60,
+          height: 60,
+          background: fabStyles.background,
+          boxShadow: fabStyles.boxShadow,
+          animation: fabStyles.animation,
+          '&:hover': { background: fabStyles.hoverBg, transform: 'scale(1.05)' },
+        }}
+      >
+        <Badge
+          badgeContent={unreadAlerts}
+          max={99}
+          sx={{
+            '& .MuiBadge-badge': {
+              background: fabStyles.badgeBg,
+              color: fabStyles.badgeColor,
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              minWidth: '22px',
+              height: '22px',
+              top: -4,
+              right: -4,
+            },
+          }}
+        >
+          <NotificationsIcon sx={{ fontSize: 28, color: 'var(--mono-50)' }} />
+        </Badge>
+      </Fab>
+
+      {/* Activity Feed Drawer */}
+      <Drawer
+        anchor="right"
+        open={activityDrawerOpen}
+        onClose={() => setActivityDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', sm: 420 },
+            background: 'var(--surface-base)',
+            borderLeft: '1px solid var(--surface-border)',
+          },
+        }}
+      >
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <Box
-            component={motion.div}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             sx={{
-              background: 'var(--surface-base)',
-              border: '1px solid var(--surface-border)',
-              borderRadius: '12px',
-              padding: '24px',
-              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-              '&:hover': {
-                boxShadow: 'var(--shadow-md)',
-                borderColor: 'var(--mono-300)',
-              },
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '20px 24px',
+              borderBottom: '1px solid var(--surface-border)',
+              background: unreadAlerts > 0 ? CSS_VARS.statusErrorBgSubtle : 'transparent',
             }}
           >
-            <Typography
-              sx={{
-                fontSize: '0.875rem',
-                fontWeight: 600,
-                color: 'var(--mono-950)',
-                marginBottom: '20px',
-                letterSpacing: '-0.01em',
-              }}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Box
+                sx={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: unreadAlerts > 0 ? CSS_VARS.statusOffline : CSS_VARS.statusActive,
+                  animation: unreadAlerts > 0 ? 'pulse 1.5s infinite' : 'none',
+                }}
+              />
+              <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--mono-950)' }}>
+                Activity Feed
+              </Typography>
+              {unreadAlerts > 0 && (
+                <Box
+                  sx={{
+                    padding: '4px 10px',
+                    borderRadius: '100px',
+                    background: CSS_VARS.statusErrorBg,
+                    border: `1px solid ${CSS_VARS.statusErrorBorder}`,
+                  }}
+                >
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: CSS_VARS.statusOffline }}>
+                    {unreadAlerts} unread
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+            <IconButton
+              aria-label="Close activity feed"
+              onClick={() => setActivityDrawerOpen(false)}
+              sx={{ color: 'var(--mono-500)', '&:hover': { background: 'var(--surface-hover)' } }}
             >
-              Performance Metrics
-            </Typography>
-            <MetricsChart />
+              <CloseIcon />
+            </IconButton>
           </Box>
-        </Grid>
-
-        {/* Station health list */}
-        <Grid item xs={12} lg={4}>
-          <Box
-            component={motion.div}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            sx={{
-              background: 'var(--surface-base)',
-              border: '1px solid var(--surface-border)',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-              '&:hover': {
-                boxShadow: 'var(--shadow-md)',
-                borderColor: 'var(--mono-300)',
-              },
-            }}
-          >
-            <Box sx={{ padding: '24px 24px 16px' }}>
-              <Typography
-                sx={{
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: 'var(--mono-950)',
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                Power Consumption
-              </Typography>
-              <Typography
-                sx={{
-                  fontSize: '0.75rem',
-                  color: 'var(--mono-500)',
-                  marginTop: '4px',
-                }}
-              >
-                Top consumers by usage
-              </Typography>
-            </Box>
-            <Box>
-              {[...stationsData]
-                .sort((a: BaseStation, b: BaseStation) => (b.powerConsumption || 0) - (a.powerConsumption || 0))
-                .slice(0, 6)
-                .map((station: BaseStation, idx: number) => (
-                  <StatusRow key={station.id} station={station} delay={0.45 + idx * 0.05} />
-                ))}
-            </Box>
-          </Box>
-        </Grid>
-
-        {/* Activity feed */}
-        <Grid item xs={12}>
-          <Box
-            component={motion.div}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            sx={{
-              background: 'var(--surface-base)',
-              border: '1px solid var(--surface-border)',
-              borderRadius: '12px',
-              padding: '24px',
-              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-              '&:hover': {
-                boxShadow: 'var(--shadow-md)',
-                borderColor: 'var(--mono-300)',
-              },
-            }}
-          >
+          <Box sx={{ flex: 1, overflow: 'auto', padding: '20px' }}>
             <LiveActivityFeed />
           </Box>
-        </Grid>
-      </Grid>
+        </Box>
+      </Drawer>
     </Box>
   )
 }

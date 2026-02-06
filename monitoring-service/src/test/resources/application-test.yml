@@ -3,14 +3,15 @@ spring:
     name: monitoring-service-test
   data:
     mongodb:
-      database: test-monitoring
-      port: 0  # Random port
+      # Uses embedded MongoDB or Testcontainers for integration tests
+      # For unit tests with mocks, MongoDB is not needed
+      uri: mongodb://localhost:27017/test-monitoring
 
 # Disable internal authentication for tests
 security:
   internal:
     enabled: false
 
-# Enable demo mode for tests
+# Demo mode configuration - integration tests check this to skip if Docker unavailable
 demo:
-  mode: ${demo.mode:true}
+  mode: ${demo.mode:false}

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '../../test/test-utils'
 import Stations from '../Stations'
 import { stationApi } from '../../services/api'
-import { BaseStation, StationStatus, StationType } from '../../types'
+import { BaseStation, ManagementProtocol, StationStatus, StationType } from '../../types'
 
 // Mock the API
 vi.mock('../../services/api', () => ({
@@ -38,6 +38,8 @@ describe('Stations', () => {
       latitude: 40.7128,
       longitude: -74.006,
       stationType: StationType.MACRO_CELL,
+      ipAddress: '10.100.1.101',
+      managementProtocol: ManagementProtocol.DIRECT,
       status: StationStatus.ACTIVE,
       powerConsumption: 1500,
       description: 'Main NYC station',
@@ -49,6 +51,8 @@ describe('Stations', () => {
       latitude: 34.0522,
       longitude: -118.2437,
       stationType: StationType.SMALL_CELL,
+      ipAddress: '10.100.1.102',
+      managementProtocol: ManagementProtocol.DIRECT,
       status: StationStatus.MAINTENANCE,
       powerConsumption: 800,
       description: 'LA backup station',
@@ -60,6 +64,8 @@ describe('Stations', () => {
       latitude: 41.8781,
       longitude: -87.6298,
       stationType: StationType.MACRO_CELL,
+      ipAddress: '10.100.1.103',
+      managementProtocol: ManagementProtocol.DIRECT,
       status: StationStatus.OFFLINE,
       powerConsumption: 0,
       description: 'Chicago station',

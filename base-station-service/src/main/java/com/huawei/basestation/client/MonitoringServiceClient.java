@@ -17,6 +17,15 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 
+import static com.huawei.common.constants.JsonResponseKeys.KEY_FALLBACK;
+import static com.huawei.common.constants.JsonResponseKeys.KEY_MESSAGE;
+import static com.huawei.common.constants.JsonResponseKeys.KEY_SOURCE;
+import static com.huawei.common.constants.JsonResponseKeys.KEY_STATION_ID;
+import static com.huawei.common.constants.JsonResponseKeys.KEY_STATUS;
+import static com.huawei.common.constants.JsonResponseKeys.STATUS_UNAVAILABLE;
+import static com.huawei.common.constants.PublicEndpoints.ACTUATOR_HEALTH;
+import static com.huawei.common.constants.ServiceNames.MONITORING_SERVICE;
+
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
@@ -34,12 +43,6 @@ import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 public class MonitoringServiceClient {
 
     private static final Logger log = LoggerFactory.getLogger(MonitoringServiceClient.class);
-    private static final String MONITORING_SERVICE = "monitoringService";
-    private static final String KEY_STATUS = "status";
-    private static final String KEY_STATION_ID = "stationId";
-    private static final String KEY_FALLBACK = "fallback";
-    private static final String KEY_MESSAGE = "message";
-    private static final String STATUS_UNAVAILABLE = "unavailable";
     private static final String MSG_SERVICE_UNAVAILABLE = "Service unavailable - using fallback response";
     @NonNull
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE_REF =
@@ -89,7 +92,8 @@ public class MonitoringServiceClient {
                 cachedMetrics.set(metrics);
             }
 
-            return metrics != null ? metrics : Collections.emptyMap();
+            // Return empty map instead of null - follows "return empty, not null" pattern
+            return Objects.requireNonNullElse(metrics, Collections.emptyMap());
         });
     }
 
@@ -111,7 +115,8 @@ public class MonitoringServiceClient {
             cachedMetrics.set(metrics);
         }
 
-        return metrics != null ? metrics : Collections.emptyMap();
+        // Return empty map instead of null - follows "return empty, not null" pattern
+        return Objects.requireNonNullElse(metrics, Collections.emptyMap());
     }
 
     /**
@@ -161,7 +166,8 @@ public class MonitoringServiceClient {
             log.debug("Successfully fetched batch metrics for {} stations", batchMetrics.size());
         }
 
-        return batchMetrics != null ? batchMetrics : Collections.emptyMap();
+        // Return empty map instead of null - follows "return empty, not null" pattern
+        return Objects.requireNonNullElse(batchMetrics, Collections.emptyMap());
     }
 
     /**
@@ -171,7 +177,7 @@ public class MonitoringServiceClient {
     @CircuitBreaker(name = MONITORING_SERVICE, fallbackMethod = "healthCheckFallback")
     public boolean isMonitoringServiceHealthy() {
         restClient.get()
-                .uri("/actuator/health")
+                .uri(ACTUATOR_HEALTH)
                 .retrieve()
                 .toBodilessEntity();
         return true;
@@ -199,7 +205,7 @@ public class MonitoringServiceClient {
         // Add fallback indicator to cached metrics
         Map<String, Object> fallbackResponse = new HashMap<>(cached);
         fallbackResponse.put(KEY_FALLBACK, true);
-        fallbackResponse.put("source", "cached");
+        fallbackResponse.put(KEY_SOURCE, "cached");
         return CompletableFuture.completedFuture(fallbackResponse);
     }
 
@@ -247,7 +253,7 @@ public class MonitoringServiceClient {
             Map<String, Object> cached = cachedMetrics.get();
             if (!cached.isEmpty()) {
                 fallbackResponse.put(KEY_MESSAGE, "Service unavailable - using cached data");
-                fallbackResponse.put("source", "cached");
+                fallbackResponse.put(KEY_SOURCE, "cached");
             } else {
                 fallbackResponse.put(KEY_MESSAGE, MSG_SERVICE_UNAVAILABLE);
             }

@@ -4,7 +4,7 @@ import {
   Description as DescriptionIcon,
   MyLocation as CoordinatesIcon,
   LocationOn as LocationIcon,
-  ElectricBolt as PowerIcon,
+  Lan as NetworkIcon,
   Settings as SettingsIcon,
 } from '@mui/icons-material'
 import {
@@ -28,7 +28,8 @@ import {
 } from '@mui/material'
 import { TransitionProps } from '@mui/material/transitions'
 import React from 'react'
-import { BaseStation, StationStatus, StationType } from '../types'
+import { INPUT_LABEL_SX, SELECT_INPUT_SX, SELECT_MENU_PROPS } from '../constants/designSystem'
+import { BaseStation, ManagementProtocol, StationType } from '../types'
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement },
@@ -56,7 +57,7 @@ export default function StationFormDialog({
   setFormData,
   isSubmitting,
 }: StationFormDialogProps) {
-  const isFormValid = formData.stationName && formData.location
+  const isFormValid = formData.stationName && formData.location && formData.ipAddress
 
   return (
     <Dialog
@@ -110,15 +111,20 @@ export default function StationFormDialog({
           </Box>
         </Box>
         <IconButton
+          aria-label="Close dialog"
           onClick={onClose}
           sx={{
+            width: 36,
+            height: 36,
+            borderRadius: '10px',
             color: 'var(--mono-600)',
             '&:hover': {
-              background: 'var(--mono-100)',
+              background: 'var(--surface-hover)',
+              color: 'var(--mono-950)',
             },
           }}
         >
-          <CloseIcon />
+          <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </Box>
 
@@ -286,173 +292,118 @@ export default function StationFormDialog({
 
           <Divider sx={{ my: 3, borderColor: 'var(--surface-border)' }} />
 
-          {/* Configuration Section */}
+          {/* Station Type Section */}
           <Box sx={{ mb: 3 }}>
             <Box display="flex" alignItems="center" gap={1} mb={2}>
               <SettingsIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
               <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--mono-500)' }}>
-                Configuration
+                Station Type
+              </Typography>
+            </Box>
+            <FormControl fullWidth>
+              <InputLabel id="station-type-label" sx={INPUT_LABEL_SX}>
+                Station Type
+              </InputLabel>
+              <Select
+                labelId="station-type-label"
+                id="station-type-select"
+                name="stationType"
+                value={formData.stationType || ''}
+                label="Station Type"
+                onChange={(e: SelectChangeEvent) =>
+                  setFormData({ ...formData, stationType: e.target.value as StationType })
+                }
+                sx={SELECT_INPUT_SX}
+                MenuProps={SELECT_MENU_PROPS}
+              >
+                {Object.values(StationType).map((type) => (
+                  <MenuItem key={type} value={type}>
+                    {type.replace('_', ' ')}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Divider sx={{ my: 3, borderColor: 'var(--surface-border)' }} />
+
+          {/* Connection Configuration Section */}
+          <Box sx={{ mb: 3 }}>
+            <Box display="flex" alignItems="center" gap={1} mb={2}>
+              <NetworkIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--mono-500)' }}>
+                Connection Configuration
               </Typography>
             </Box>
             <Box display="flex" gap={2} mb={2}>
-              <FormControl fullWidth>
-                <InputLabel
-                  id="station-type-label"
-                  sx={{
-                    color: 'var(--mono-500)',
-                    '&.Mui-focused': { color: 'var(--mono-700)' },
-                  }}
-                >
-                  Station Type
-                </InputLabel>
-                <Select
-                  labelId="station-type-label"
-                  id="station-type-select"
-                  name="stationType"
-                  value={formData.stationType || ''}
-                  label="Station Type"
-                  onChange={(e: SelectChangeEvent) =>
-                    setFormData({ ...formData, stationType: e.target.value as StationType })
-                  }
-                  sx={{
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--surface-border)',
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--mono-400)',
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--mono-600)',
-                    },
-                    '& .MuiSelect-select': {
-                      color: 'var(--mono-950)',
-                    },
-                  }}
-                  MenuProps={{
-                    PaperProps: {
-                      sx: {
-                        background: 'var(--surface-base)',
-                        border: '1px solid var(--surface-border)',
-                        borderRadius: '8px',
-                        boxShadow: 'var(--shadow-lg)',
-                        '& .MuiMenuItem-root': {
-                          color: 'var(--mono-950)',
-                          '&:hover': {
-                            background: 'var(--mono-100)',
-                          },
-                          '&.Mui-selected': {
-                            background: 'var(--mono-200)',
-                            '&:hover': {
-                              background: 'var(--mono-200)',
-                            },
-                          },
-                        },
-                      },
-                    },
-                  }}
-                >
-                  {Object.values(StationType).map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type.replace('_', ' ')}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl fullWidth>
-                <InputLabel
-                  id="station-status-label"
-                  sx={{
-                    color: 'var(--mono-500)',
-                    '&.Mui-focused': { color: 'var(--mono-700)' },
-                  }}
-                >
-                  Status
-                </InputLabel>
-                <Select
-                  labelId="station-status-label"
-                  id="station-status-select"
-                  name="status"
-                  value={formData.status || ''}
-                  label="Status"
-                  onChange={(e: SelectChangeEvent) =>
-                    setFormData({ ...formData, status: e.target.value as StationStatus })
-                  }
-                  sx={{
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--surface-border)',
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--mono-400)',
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--mono-600)',
-                    },
-                    '& .MuiSelect-select': {
-                      color: 'var(--mono-950)',
-                    },
-                  }}
-                  MenuProps={{
-                    PaperProps: {
-                      sx: {
-                        background: 'var(--surface-base)',
-                        border: '1px solid var(--surface-border)',
-                        borderRadius: '8px',
-                        boxShadow: 'var(--shadow-lg)',
-                        '& .MuiMenuItem-root': {
-                          color: 'var(--mono-950)',
-                          '&:hover': {
-                            background: 'var(--mono-100)',
-                          },
-                          '&.Mui-selected': {
-                            background: 'var(--mono-200)',
-                            '&:hover': {
-                              background: 'var(--mono-200)',
-                            },
-                          },
-                        },
-                      },
-                    },
-                  }}
-                >
-                  {Object.values(StationStatus).map((status) => (
-                    <MenuItem key={status} value={status}>
-                      {status}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <TextField
+                id="station-ip-address"
+                name="ipAddress"
+                fullWidth
+                label="IP Address"
+                placeholder="192.168.1.100"
+                value={formData.ipAddress || ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, ipAddress: e.target.value })}
+                required
+                inputProps={{
+                  name: 'ipAddress',
+                  id: 'station-ip-address',
+                  autoComplete: 'off',
+                  'aria-label': 'IP Address',
+                  pattern: String.raw`^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^[a-zA-Z0-9.-]+$`,
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <NetworkIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+                helperText="IPv4 address or hostname of the station"
+              />
+              <TextField
+                id="station-port"
+                name="port"
+                label="Port"
+                type="number"
+                placeholder="22"
+                value={formData.port ?? ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.target.value === '' ? undefined : Number.parseInt(e.target.value, 10)
+                  setFormData({ ...formData, port: value })
+                }}
+                inputProps={{
+                  name: 'port',
+                  id: 'station-port',
+                  autoComplete: 'off',
+                  'aria-label': 'Port',
+                  min: 1,
+                  max: 65535,
+                }}
+                helperText="Optional"
+                sx={{ maxWidth: 120 }}
+              />
             </Box>
-            <TextField
-              id="station-power-consumption"
-              name="powerConsumption"
-              fullWidth
-              label="Power Consumption"
-              type="number"
-              placeholder="1500"
-              value={formData.powerConsumption ?? ''}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                const value = e.target.value === '' ? undefined : Number.parseFloat(e.target.value)
-                setFormData({ ...formData, powerConsumption: value })
-              }}
-              inputProps={{
-                name: 'powerConsumption',
-                id: 'station-power-consumption',
-                autoComplete: 'off',
-                'aria-label': 'Power Consumption',
-                step: 'any',
-                min: 0.01,
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <PowerIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
-                  </InputAdornment>
-                ),
-                endAdornment: <InputAdornment position="end">kW</InputAdornment>,
-              }}
-              helperText="Must be greater than 0"
-            />
+            <FormControl fullWidth>
+              <InputLabel id="management-protocol-label" sx={INPUT_LABEL_SX}>
+                Management Protocol
+              </InputLabel>
+              <Select
+                labelId="management-protocol-label"
+                id="management-protocol-select"
+                name="managementProtocol"
+                value={formData.managementProtocol || ManagementProtocol.DIRECT}
+                label="Management Protocol"
+                onChange={(e: SelectChangeEvent) =>
+                  setFormData({ ...formData, managementProtocol: e.target.value as ManagementProtocol })
+                }
+                sx={SELECT_INPUT_SX}
+                MenuProps={SELECT_MENU_PROPS}
+              >
+                <MenuItem value={ManagementProtocol.DIRECT}>Direct Connection</MenuItem>
+                <MenuItem value={ManagementProtocol.EDGE_BRIDGE}>Via Edge Bridge</MenuItem>
+              </Select>
+            </FormControl>
           </Box>
 
           <Divider sx={{ my: 3, borderColor: 'var(--surface-border)' }} />
@@ -499,7 +450,7 @@ export default function StationFormDialog({
           sx={{
             color: 'var(--mono-600)',
             '&:hover': {
-              background: 'var(--mono-100)',
+              background: 'var(--surface-hover)',
             },
           }}
         >
@@ -523,7 +474,7 @@ export default function StationFormDialog({
               transform: 'translateY(-1px)',
             },
             '&:disabled': {
-              background: 'var(--mono-300)',
+              background: 'var(--mono-400)',
               color: 'var(--mono-600)',
             },
           }}

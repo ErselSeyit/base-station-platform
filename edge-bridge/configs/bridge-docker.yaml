@@ -1,0 +1,30 @@
+# Edge Bridge Configuration for Docker/Kubernetes deployment
+
+bridge:
+  station_id: "$STATION_ID"
+  station_name: "$STATION_NAME"
+  location: "$STATION_LOCATION"
+  latitude: $STATION_LATITUDE
+  longitude: $STATION_LONGITUDE
+  station_type: "$STATION_TYPE"
+  description: "$STATION_DESCRIPTION"
+  poll_interval: 10s
+  metrics_interval: 30s
+  log_level: info
+
+device:
+  transport: "tcp"  # Use TCP for containerized deployment
+  serial:
+    port: "/dev/ttyS0"
+    baud: 115200
+  tcp:
+    host: "$DEVICE_HOST"
+    port: $DEVICE_PORT
+
+cloud:
+  base_url: "$CLOUD_BASE_URL"
+  auth:
+    username: "$BRIDGE_USERNAME"
+    password: "$BRIDGE_PASSWORD"
+  timeout: 30s
+  retry_attempts: 3

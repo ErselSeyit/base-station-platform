@@ -7,16 +7,58 @@ import {
   Typography,
   Alert,
   CircularProgress,
+  InputAdornment,
+  IconButton,
 } from '@mui/material'
+import { Visibility, VisibilityOff } from '@mui/icons-material'
 import { motion } from 'framer-motion'
 import { showToast } from '../utils/toast'
 import { authService } from '../services/authService'
 import { logger } from '../services/logger'
 
+// Shared TextField styling
+const TEXT_FIELD_SX = {
+  '& .MuiOutlinedInput-root': {
+    background: 'var(--surface-base)',
+    borderRadius: '8px',
+    fontSize: '0.875rem',
+    transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+    '& fieldset': {
+      borderColor: 'var(--surface-border)',
+    },
+    '&:hover fieldset': {
+      borderColor: 'var(--mono-400)',
+    },
+    '&.Mui-focused fieldset': {
+      borderColor: 'var(--mono-950)',
+      borderWidth: '1px',
+    },
+  },
+  '& .MuiOutlinedInput-input': {
+    padding: '12px 14px',
+    color: 'var(--mono-950)',
+  },
+} as const
+
+// Shared label styling
+const LABEL_SX = {
+  display: 'block',
+  fontSize: '0.75rem',
+  fontWeight: 500,
+  color: 'var(--mono-700)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  marginBottom: '8px',
+} as const
+
+// Navigation delay to allow toast to display
+const NAVIGATION_DELAY_MS = 400
+
 export default function Login() {
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -30,7 +72,7 @@ export default function Login() {
       showToast.success('Welcome back')
       setTimeout(() => {
         navigate('/')
-      }, 400)
+      }, NAVIGATION_DELAY_MS)
     } catch (err) {
       logger.error('Login error', { error: err })
       setError('Invalid username or password')
@@ -96,7 +138,7 @@ export default function Login() {
             transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
             '&:hover': {
               boxShadow: 'var(--shadow-lg)',
-              borderColor: 'var(--mono-300)',
+              borderColor: 'var(--mono-400)',
             },
           }}
         >
@@ -110,7 +152,7 @@ export default function Login() {
               <Alert
                 severity="error"
                 sx={{
-                  background: 'var(--mono-50)',
+                  background: 'var(--surface-elevated)',
                   border: '1px solid var(--surface-border)',
                   borderLeft: '3px solid var(--status-offline)',
                   borderRadius: '8px',
@@ -130,14 +172,9 @@ export default function Login() {
           <Box component="form" onSubmit={handleSubmit}>
             <Box sx={{ marginBottom: '20px' }}>
               <Typography
-                sx={{
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  color: 'var(--mono-700)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  marginBottom: '8px',
-                }}
+                component="label"
+                htmlFor="username"
+                sx={LABEL_SX}
               >
                 Username
               </Typography>
@@ -150,41 +187,15 @@ export default function Login() {
                 autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    background: 'var(--surface-base)',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-                    '& fieldset': {
-                      borderColor: 'var(--surface-border)',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: 'var(--mono-300)',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: 'var(--mono-950)',
-                      borderWidth: '1px',
-                    },
-                  },
-                  '& .MuiOutlinedInput-input': {
-                    padding: '12px 14px',
-                    color: 'var(--mono-950)',
-                  },
-                }}
+                sx={TEXT_FIELD_SX}
               />
             </Box>
 
             <Box sx={{ marginBottom: '28px' }}>
               <Typography
-                sx={{
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  color: 'var(--mono-700)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  marginBottom: '8px',
-                }}
+                component="label"
+                htmlFor="password"
+                sx={LABEL_SX}
               >
                 Password
               </Typography>
@@ -192,33 +203,27 @@ export default function Login() {
                 required
                 fullWidth
                 name="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 id="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    background: 'var(--surface-base)',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-                    '& fieldset': {
-                      borderColor: 'var(--surface-border)',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: 'var(--mono-300)',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: 'var(--mono-950)',
-                      borderWidth: '1px',
-                    },
-                  },
-                  '& .MuiOutlinedInput-input': {
-                    padding: '12px 14px',
-                    color: 'var(--mono-950)',
-                  },
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword(!showPassword)}
+                        edge="end"
+                        size="small"
+                        sx={{ color: 'var(--mono-500)' }}
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
                 }}
+                sx={TEXT_FIELD_SX}
               />
             </Box>
 
@@ -263,49 +268,43 @@ export default function Login() {
           </Box>
         </Box>
 
-        {/* Demo credentials - Minimal info box */}
-        <Box
-          sx={{
-            marginTop: '24px',
-            padding: '16px',
-            borderRadius: '8px',
-            background: 'var(--mono-50)',
-            border: '1px solid var(--surface-border)',
-          }}
-        >
-          <Typography
+        {/* Demo credentials hint - only shown in development mode */}
+        {import.meta.env.DEV && (
+          <Box
             sx={{
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              color: 'var(--mono-700)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '8px',
+              marginTop: '24px',
+              padding: '16px',
+              borderRadius: '8px',
+              background: 'var(--surface-elevated)',
+              border: '1px solid var(--surface-border)',
             }}
           >
-            Demo Credentials
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <Typography
               sx={{
-                fontSize: '0.8125rem',
-                fontFamily: "'JetBrains Mono', monospace",
-                color: 'var(--mono-600)',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: 'var(--mono-700)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
               }}
             >
-              Admin: <Box component="strong" sx={{ color: 'var(--mono-950)' }}>admin</Box> / <Box component="strong" sx={{ color: 'var(--mono-950)' }}>admin</Box>
+              Demo Credentials (Dev Only)
             </Typography>
             <Typography
+              component="div"
               sx={{
                 fontSize: '0.8125rem',
-                fontFamily: "'JetBrains Mono', monospace",
                 color: 'var(--mono-600)',
+                marginTop: '4px',
+                fontFamily: "'JetBrains Mono', monospace",
+                lineHeight: 1.8,
               }}
             >
-              User: <Box component="strong" sx={{ color: 'var(--mono-950)' }}>user</Box> / <Box component="strong" sx={{ color: 'var(--mono-950)' }}>user</Box>
+              <div>admin / AdminPass12345!</div>
+              <div>operator / AdminPass12345!</div>
             </Typography>
           </Box>
-        </Box>
+        )}
       </Box>
     </Box>
   )
