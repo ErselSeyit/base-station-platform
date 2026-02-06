@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.huawei.basestation.dto.BaseStationDTO;
 import com.huawei.basestation.model.BaseStation;
+import com.huawei.basestation.model.ManagementProtocol;
 import com.huawei.basestation.model.StationStatus;
 import com.huawei.basestation.model.StationType;
 import com.huawei.basestation.repository.BaseStationRepository;
@@ -32,14 +33,14 @@ public class BaseStationService {
 
     public BaseStationDTO createStation(BaseStationDTO dto) {
         // @NotBlank validation ensures stationName is not null - requireNonNull satisfies null checker
-        String stationName = Objects.requireNonNull(dto.getStationName(), "Station name is required");
+        String stationName = Objects.requireNonNull(dto.stationName(), "Station name is required");
         if (repository.findByStationName(stationName).isPresent()) {
             throw new IllegalArgumentException("Station with name " + stationName + " already exists");
         }
         BaseStation station = convertToEntity(dto);
         BaseStationDTO saved = convertToDTO(repository.save(station));
         auditLogger.log(AuditAction.STATION_CREATED, SYSTEM_ACTOR,
-                AUDIT_RESOURCE_PREFIX + saved.getId(), "name=" + saved.getStationName());
+                AUDIT_RESOURCE_PREFIX + saved.id(), "name=" + saved.stationName());
         return saved;
     }
 
@@ -74,24 +75,28 @@ public class BaseStationService {
                 .orElseThrow(() -> new IllegalArgumentException("Station not found with id: " + id));
 
         // @NotBlank validation ensures stationName is not null - requireNonNull satisfies null checker
-        String newStationName = Objects.requireNonNull(dto.getStationName(), "Station name is required");
+        String newStationName = Objects.requireNonNull(dto.stationName(), "Station name is required");
         if (!station.getStationName().equals(newStationName)
                 && repository.findByStationName(newStationName).isPresent()) {
             throw new IllegalArgumentException("Station with name " + newStationName + " already exists");
         }
 
-        station.setStationName(dto.getStationName());
-        station.setLocation(dto.getLocation());
-        station.setLatitude(dto.getLatitude());
-        station.setLongitude(dto.getLongitude());
-        station.setStationType(dto.getStationType());
-        station.setStatus(Objects.requireNonNullElse(dto.getStatus(), station.getStatus()));
-        station.setPowerConsumption(dto.getPowerConsumption());
-        station.setDescription(dto.getDescription());
+        station.setStationName(dto.stationName());
+        station.setLocation(dto.location());
+        station.setLatitude(dto.latitude());
+        station.setLongitude(dto.longitude());
+        station.setStationType(dto.stationType());
+        station.setIpAddress(dto.ipAddress());
+        station.setPort(dto.port());
+        if (dto.managementProtocol() != null) {
+            station.setManagementProtocol(dto.managementProtocol());
+        }
+        // Status and powerConsumption are read-only (derived from metrics)
+        station.setDescription(dto.description());
 
         BaseStationDTO updated = convertToDTO(repository.save(station));
         auditLogger.log(AuditAction.STATION_UPDATED, SYSTEM_ACTOR,
-                AUDIT_RESOURCE_PREFIX + id, "name=" + updated.getStationName());
+                AUDIT_RESOURCE_PREFIX + id, "name=" + updated.stationName());
         return updated;
     }
 
@@ -128,30 +133,38 @@ public class BaseStationService {
 
     private BaseStation convertToEntity(BaseStationDTO dto) {
         BaseStation station = new BaseStation();
-        station.setStationName(dto.getStationName());
-        station.setLocation(dto.getLocation());
-        station.setLatitude(dto.getLatitude());
-        station.setLongitude(dto.getLongitude());
-        station.setStationType(dto.getStationType());
-        station.setStatus(Objects.requireNonNullElse(dto.getStatus(), StationStatus.ACTIVE));
-        station.setPowerConsumption(dto.getPowerConsumption());
-        station.setDescription(dto.getDescription());
+        station.setStationName(dto.stationName());
+        station.setLocation(dto.location());
+        station.setLatitude(dto.latitude());
+        station.setLongitude(dto.longitude());
+        station.setStationType(dto.stationType());
+        station.setIpAddress(dto.ipAddress());
+        station.setPort(dto.port());
+        station.setManagementProtocol(Objects.requireNonNullElse(
+                dto.managementProtocol(), ManagementProtocol.DIRECT));
+        // Status defaults to OFFLINE until first metrics/heartbeat received
+        station.setStatus(StationStatus.OFFLINE);
+        // powerConsumption comes from metrics, not user input
+        station.setDescription(dto.description());
         return station;
     }
 
     private BaseStationDTO convertToDTO(BaseStation station) {
-        BaseStationDTO dto = new BaseStationDTO();
-        dto.setId(station.getId());
-        dto.setStationName(station.getStationName());
-        dto.setLocation(station.getLocation());
-        dto.setLatitude(station.getLatitude());
-        dto.setLongitude(station.getLongitude());
-        dto.setStationType(station.getStationType());
-        dto.setStatus(station.getStatus());
-        dto.setPowerConsumption(station.getPowerConsumption());
-        dto.setDescription(station.getDescription());
-        dto.setCreatedAt(station.getCreatedAt());
-        dto.setUpdatedAt(station.getUpdatedAt());
-        return dto;
+        return BaseStationDTO.builder()
+                .id(station.getId())
+                .stationName(station.getStationName())
+                .location(station.getLocation())
+                .latitude(station.getLatitude())
+                .longitude(station.getLongitude())
+                .stationType(station.getStationType())
+                .ipAddress(station.getIpAddress())
+                .port(station.getPort())
+                .managementProtocol(station.getManagementProtocol())
+                .status(station.getStatus())
+                .powerConsumption(station.getPowerConsumption())
+                .description(station.getDescription())
+                .createdAt(station.getCreatedAt())
+                .updatedAt(station.getUpdatedAt())
+                .build();
     }
 }

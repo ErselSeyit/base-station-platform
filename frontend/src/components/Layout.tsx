@@ -14,6 +14,7 @@ import {
   Psychology as AIIcon,
   Assessment as ReportIcon,
 } from '@mui/icons-material'
+import { showToast } from '../utils/toast'
 import {
   AppBar,
   Badge,
@@ -57,9 +58,13 @@ const getMenuItems = (unreadCount: number) => [
   { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
 ]
 
-const handleLogout = (navigate: ReturnType<typeof useNavigate>) => {
-  authService.logout()
-  navigate('/login')
+const TOAST_DISPLAY_DELAY_MS = 300
+
+const handleLogout = async (navigate: ReturnType<typeof useNavigate>) => {
+  await authService.logout()
+  showToast.success('Signed out')
+  // Small delay to allow toast to render before navigation
+  setTimeout(() => navigate('/login'), TOAST_DISPLAY_DELAY_MS)
 }
 
 interface DrawerContentProps {

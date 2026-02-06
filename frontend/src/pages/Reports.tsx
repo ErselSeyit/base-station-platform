@@ -51,8 +51,8 @@ interface ReportItem {
   status: 'ready' | 'generating' | 'scheduled'
 }
 
-// Static report metadata - timestamps are placeholders until API integration
-// TODO: Replace with API fetch from /api/reports/metadata
+// Static report metadata - timestamps are placeholders
+// Future: Could fetch from /api/reports/metadata for dynamic report listing
 const STATIC_REPORTS: ReportItem[] = [
   {
     id: 'bi-report',

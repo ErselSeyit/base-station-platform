@@ -65,6 +65,25 @@ public class BaseStation {
     @Column(length = 1000)
     private String description;
 
+    /**
+     * IP address for station management (nullable for stations without direct IP).
+     */
+    @Column(length = 45)
+    private String ipAddress;
+
+    /**
+     * Management port (nullable, defaults depend on protocol).
+     */
+    private Integer port;
+
+    /**
+     * Protocol for communicating with this station.
+     * DIRECT = station has its own API, others = via edge-bridge.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ManagementProtocol managementProtocol = ManagementProtocol.DIRECT;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -165,6 +184,30 @@ public class BaseStation {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getIpAddress() {
+        return ipAddress;
+    }
+
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+
+    public Integer getPort() {
+        return port;
+    }
+
+    public void setPort(Integer port) {
+        this.port = port;
+    }
+
+    public ManagementProtocol getManagementProtocol() {
+        return managementProtocol;
+    }
+
+    public void setManagementProtocol(ManagementProtocol managementProtocol) {
+        this.managementProtocol = managementProtocol;
     }
 
     public LocalDateTime getCreatedAt() {

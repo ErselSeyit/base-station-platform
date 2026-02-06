@@ -19,6 +19,7 @@ export type { DailyMetricAggregate } from './metrics'
 export { notificationsApi } from './notifications'
 export { diagnosticsApi } from './diagnostics'
 export { sonApi } from './son'
+export { edgeBridgeApi } from './edgeBridge'
 
 // Re-export types
 export type {
@@ -37,3 +38,8 @@ export type {
 } from './son'
 
 export { SON_FUNCTION_NAMES } from './son'
+
+export type {
+  EdgeBridgeInstance,
+  BridgeStats,
+} from './edgeBridge'

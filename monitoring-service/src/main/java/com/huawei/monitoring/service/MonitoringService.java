@@ -4,7 +4,6 @@ import static com.huawei.monitoring.config.RedisConfig.METRICS_CACHE;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -42,6 +41,13 @@ import com.huawei.monitoring.repository.MetricDataRepository;
 public class MonitoringService {
 
     private static final Logger log = LoggerFactory.getLogger(MonitoringService.class);
+
+    // MongoDB field name constants for aggregation queries
+    private static final String FIELD_TIMESTAMP = "timestamp";
+    private static final String FIELD_MONTH = "month";
+    private static final String FIELD_METRIC_TYPE = "metricType";
+    private static final String FIELD_VALUE = "value";
+    private static final String FIELD_COUNT = "count";
 
     private final MetricDataRepository repository;
     private final MongoTemplate mongoTemplate;
@@ -121,7 +127,7 @@ public class MonitoringService {
     @Cacheable(value = METRICS_CACHE, key = "#start.toLocalDate().toString() + '-' + #end.toLocalDate().toString() + '-' + #limit + '-' + #sortAsc")
     public List<MetricDataDTO> getMetricsByTimeRangeWithLimit(LocalDateTime start, LocalDateTime end, int limit, boolean sortAsc) {
         Sort.Direction direction = sortAsc ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(0, limit, Sort.by(direction, "timestamp"));
+        Pageable pageable = PageRequest.of(0, limit, Sort.by(direction, FIELD_TIMESTAMP));
         return repository.findByTimestampBetween(start, end, pageable).stream()
                         .map(this::convertToDTO)
                         .toList();
@@ -256,24 +262,24 @@ public class MonitoringService {
         // 3. Group by date only, collecting all metric averages
         // 4. Sort by date ascending
         Aggregation aggregation = Aggregation.newAggregation(
-            Aggregation.match(Criteria.where("timestamp").gte(start).lte(end)),
+            Aggregation.match(Criteria.where(FIELD_TIMESTAMP).gte(start).lte(end)),
             Aggregation.project()
-                .and("timestamp").extractYear().as("year")
-                .and("timestamp").extractMonth().as("month")
-                .and("timestamp").extractDayOfMonth().as("day")
-                .and("metricType").as("metricType")
-                .and("value").as("value"),
-            Aggregation.group("year", "month", "day", "metricType")
-                .sum("value").as("sum")
-                .count().as("count"),
+                .and(FIELD_TIMESTAMP).extractYear().as("year")
+                .and(FIELD_TIMESTAMP).extractMonth().as(FIELD_MONTH)
+                .and(FIELD_TIMESTAMP).extractDayOfMonth().as("day")
+                .and(FIELD_METRIC_TYPE).as(FIELD_METRIC_TYPE)
+                .and(FIELD_VALUE).as(FIELD_VALUE),
+            Aggregation.group("year", FIELD_MONTH, "day", FIELD_METRIC_TYPE)
+                .sum(FIELD_VALUE).as("sum")
+                .count().as(FIELD_COUNT),
             Aggregation.project()
                 .and("_id.year").as("year")
-                .and("_id.month").as("month")
+                .and("_id." + FIELD_MONTH).as(FIELD_MONTH)
                 .and("_id.day").as("day")
-                .and("_id.metricType").as("metricType")
-                .andExpression("sum / count").as("avg")
-                .and("count").as("count"),
-            Aggregation.sort(Sort.Direction.ASC, "year", "month", "day")
+                .and("_id." + FIELD_METRIC_TYPE).as(FIELD_METRIC_TYPE)
+                .andExpression("sum / " + FIELD_COUNT).as("avg")
+                .and(FIELD_COUNT).as(FIELD_COUNT),
+            Aggregation.sort(Sort.Direction.ASC, "year", FIELD_MONTH, "day")
         );
 
         AggregationResults<Document> results = mongoTemplate.aggregate(
@@ -285,12 +291,12 @@ public class MonitoringService {
 
         for (Document doc : results.getMappedResults()) {
             int year = doc.getInteger("year", 0);
-            int month = doc.getInteger("month", 0);
+            int month = doc.getInteger(FIELD_MONTH, 0);
             int day = doc.getInteger("day", 0);
-            String metricType = doc.getString("metricType");
+            String metricType = doc.getString(FIELD_METRIC_TYPE);
             Number avgNum = (Number) doc.get("avg");
             double avg = avgNum != null ? avgNum.doubleValue() : 0.0;
-            Number countNum = (Number) doc.get("count");
+            Number countNum = (Number) doc.get(FIELD_COUNT);
             long count = countNum != null ? countNum.longValue() : 0L;
 
             LocalDate date = LocalDate.of(year, month, day);

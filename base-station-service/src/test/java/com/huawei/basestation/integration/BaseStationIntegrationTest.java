@@ -39,13 +39,13 @@ import com.huawei.basestation.repository.BaseStationRepository;
 
 /**
  * Integration tests using Testcontainers to spin up a real PostgreSQL database.
- * 
+ *
  * These tests verify:
  * - Full API lifecycle (CRUD operations)
  * - Database constraints and validations
  * - Geospatial queries (Haversine distance calculation)
  * - Transaction boundaries
- * 
+ *
  * @see <a href="https://testcontainers.com/">Testcontainers</a>
  */
 @SpringBootTest(
@@ -198,14 +198,20 @@ class BaseStationIntegrationTest {
             JsonNode created = objectMapper.readTree(createResult.getResponse().getContentAsString());
             Long id = created.get("id").asLong();
 
-            // Update it
-            station.setStationName("BS-UPDATED");
-            station.setStatus(StationStatus.MAINTENANCE);
-            station.setPowerConsumption(2500.0);
+            // Create updated DTO (immutable - create new instance)
+            BaseStationDTO updatedStation = BaseStationDTO.builder()
+                    .stationName("BS-UPDATED")
+                    .location("Test Location")
+                    .latitude(40.0)
+                    .longitude(-74.0)
+                    .stationType(StationType.MACRO_CELL)
+                    .status(StationStatus.MAINTENANCE)
+                    .powerConsumption(2500.0)
+                    .build();
 
             mockMvc.perform(put("/api/v1/stations/" + id)
                     .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
-                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(station))))
+                    .content(Objects.requireNonNull(objectMapper.writeValueAsString(updatedStation))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.stationName").value("BS-UPDATED"))
                     .andExpect(jsonPath("$.status").value("MAINTENANCE"))
@@ -247,8 +253,8 @@ class BaseStationIntegrationTest {
         @Test
         @DisplayName("Should reject station without required fields")
         void createStation_WithoutRequiredFields_ReturnsBadRequest() throws Exception {
-            BaseStationDTO invalidStation = new BaseStationDTO();
-            // Missing all required fields
+            // Create empty DTO (no required fields)
+            BaseStationDTO invalidStation = BaseStationDTO.builder().build();
 
             mockMvc.perform(post("/api/v1/stations")
                     .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
@@ -259,8 +265,15 @@ class BaseStationIntegrationTest {
         @Test
         @DisplayName("Should reject negative power consumption")
         void createStation_WithNegativePower_ReturnsBadRequest() throws Exception {
-            BaseStationDTO station = createStationDTO("BS-NEGATIVE", 40.0, -74.0);
-            station.setPowerConsumption(-100.0);
+            BaseStationDTO station = BaseStationDTO.builder()
+                    .stationName("BS-NEGATIVE")
+                    .location("Test Location")
+                    .latitude(40.0)
+                    .longitude(-74.0)
+                    .stationType(StationType.MACRO_CELL)
+                    .status(StationStatus.ACTIVE)
+                    .powerConsumption(-100.0)
+                    .build();
 
             mockMvc.perform(post("/api/v1/stations")
                     .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
@@ -374,15 +387,15 @@ class BaseStationIntegrationTest {
     // ========================================
 
     private BaseStationDTO createStationDTO(String name, double lat, double lon) {
-        BaseStationDTO dto = new BaseStationDTO();
-        dto.setStationName(name);
-        dto.setLocation("Test Location");
-        dto.setLatitude(lat);
-        dto.setLongitude(lon);
-        dto.setStationType(StationType.MACRO_CELL);
-        dto.setStatus(StationStatus.ACTIVE);
-        dto.setPowerConsumption(1500.0);
-        return dto;
+        return BaseStationDTO.builder()
+                .stationName(name)
+                .location("Test Location")
+                .latitude(lat)
+                .longitude(lon)
+                .stationType(StationType.MACRO_CELL)
+                .status(StationStatus.ACTIVE)
+                .powerConsumption(1500.0)
+                .build();
     }
 
     private void createAndSaveStation(String name, double lat, double lon) throws Exception {
@@ -390,8 +403,15 @@ class BaseStationIntegrationTest {
     }
 
     private void createAndSaveStation(String name, double lat, double lon, StationStatus status) throws Exception {
-        BaseStationDTO dto = createStationDTO(name, lat, lon);
-        dto.setStatus(status);
+        BaseStationDTO dto = BaseStationDTO.builder()
+                .stationName(name)
+                .location("Test Location")
+                .latitude(lat)
+                .longitude(lon)
+                .stationType(StationType.MACRO_CELL)
+                .status(status)
+                .powerConsumption(1500.0)
+                .build();
         mockMvc.perform(post("/api/v1/stations")
                 .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
                 .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
@@ -399,8 +419,15 @@ class BaseStationIntegrationTest {
     }
 
     private void createAndSaveStation(String name, double lat, double lon, StationType type) throws Exception {
-        BaseStationDTO dto = createStationDTO(name, lat, lon);
-        dto.setStationType(type);
+        BaseStationDTO dto = BaseStationDTO.builder()
+                .stationName(name)
+                .location("Test Location")
+                .latitude(lat)
+                .longitude(lon)
+                .stationType(type)
+                .status(StationStatus.ACTIVE)
+                .powerConsumption(1500.0)
+                .build();
         mockMvc.perform(post("/api/v1/stations")
                 .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
                 .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))

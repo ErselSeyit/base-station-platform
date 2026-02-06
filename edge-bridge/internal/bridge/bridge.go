@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -134,9 +136,15 @@ func (b *Bridge) Start(ctx context.Context) error {
 		// Continue without cloud - will retry later
 	} else {
 		log.Printf("Cloud authentication successful")
+		// Register this edge-bridge with the platform
+		b.registerBridge()
 		// Register this station with the cloud
 		b.registerStation()
 	}
+
+	// Start heartbeat loop
+	b.wg.Add(1)
+	go b.heartbeatLoop()
 
 	// Start adapter manager for multi-protocol metric collection
 	if b.adapterMgr != nil {
@@ -422,4 +430,142 @@ func (b *Bridge) registerStation() {
 
 	b.stationDBID = station.ID
 	log.Printf("Station registered: %s (ID: %d)", station.StationName, station.ID)
+}
+
+// registerBridge registers this edge-bridge instance with the platform.
+func (b *Bridge) registerBridge() {
+	cfg := b.config.Bridge
+
+	// Skip if no bridge ID configured
+	if cfg.BridgeID == "" {
+		log.Printf("No bridge ID configured, skipping edge-bridge registration")
+		return
+	}
+
+	hostname, _ := getHostname()
+
+	reg := &cloud.EdgeBridgeRegistration{
+		BridgeID:    cfg.BridgeID,
+		Name:        cfg.BridgeName,
+		Hostname:    hostname,
+		IPAddress:   getLocalIP(),
+		Version:     cfg.Version,
+		Capabilities: buildCapabilities(b.adapterMgr),
+		Location:    cfg.Location,
+		Latitude:    cfg.Latitude,
+		Longitude:   cfg.Longitude,
+		CallbackURL: cfg.CallbackURL,
+	}
+
+	// Add managed station IDs if we have a station DB ID
+	if b.stationDBID > 0 {
+		reg.ManagedStationIDs = []int64{b.stationDBID}
+	}
+
+	bridge, err := b.cloudClient.RegisterBridge(reg)
+	if err != nil {
+		log.Printf("Warning: Failed to register edge-bridge: %v", err)
+		return
+	}
+
+	log.Printf("Edge-bridge registered: %s (status: %s)", bridge.BridgeID, bridge.Status)
+}
+
+// heartbeatLoop sends periodic heartbeats to the platform.
+func (b *Bridge) heartbeatLoop() {
+	defer b.wg.Done()
+
+	cfg := b.config.Bridge
+	if cfg.BridgeID == "" {
+		log.Printf("No bridge ID configured, skipping heartbeat loop")
+		return
+	}
+
+	// Default to 30 seconds if not configured
+	interval := cfg.HeartbeatInterval
+	if interval == 0 {
+		interval = 30 * time.Second
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-b.ctx.Done():
+			// Notify platform that we're stopping
+			b.notifyBridgeStopping()
+			return
+		case <-ticker.C:
+			if !b.cloudAuth.IsAuthenticated() {
+				continue
+			}
+			resp, err := b.cloudClient.SendHeartbeat(cfg.BridgeID)
+			if err != nil {
+				log.Printf("Heartbeat failed: %v", err)
+				continue
+			}
+			log.Printf("Heartbeat sent (status: %s, bridge: %s)", resp.Status, resp.BridgeStatus)
+		}
+	}
+}
+
+// notifyBridgeStopping notifies the platform that this bridge is stopping.
+func (b *Bridge) notifyBridgeStopping() {
+	cfg := b.config.Bridge
+	if cfg.BridgeID == "" || !b.cloudAuth.IsAuthenticated() {
+		return
+	}
+
+	if err := b.cloudClient.NotifyBridgeStopping(cfg.BridgeID); err != nil {
+		log.Printf("Failed to notify bridge stopping: %v", err)
+	} else {
+		log.Printf("Notified platform of bridge shutdown")
+	}
+}
+
+// getHostname returns the system hostname.
+func getHostname() (string, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "unknown", err
+	}
+	return hostname, nil
+}
+
+// getLocalIP returns the local IP address.
+func getLocalIP() string {
+	// Simple implementation - returns first non-loopback IP
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return ""
+}
+
+// buildCapabilities returns JSON capabilities string.
+func buildCapabilities(adapterMgr *adapter.Manager) string {
+	caps := []string{"command-execution", "metrics-collection"}
+	if adapterMgr != nil {
+		for _, name := range adapterMgr.ListAdapters() {
+			caps = append(caps, "adapter:"+name)
+		}
+	}
+	// Simple JSON array
+	result := "["
+	for i, c := range caps {
+		if i > 0 {
+			result += ","
+		}
+		result += "\"" + c + "\""
+	}
+	result += "]"
+	return result
 }

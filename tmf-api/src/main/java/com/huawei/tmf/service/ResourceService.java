@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Service for TMF639 Resource Inventory Management.
  */
 @Service
+@SuppressWarnings("null") // Spring Data MongoDB operations guarantee non-null returns
 public class ResourceService {
 
     private static final Logger log = LoggerFactory.getLogger(ResourceService.class);

@@ -29,6 +29,7 @@ import reactor.core.publisher.Mono;
  * - Information leakage (Referrer-Policy)
  */
 @Component
+@SuppressWarnings("null") // All header values are non-null constants or computed strings
 public class SecurityHeadersFilter implements GlobalFilter, Ordered {
 
     @Value("${security.headers.hsts.enabled:true}")

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -27,6 +28,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.auth.dto.LoginRequest;
 import com.huawei.auth.model.User;
 import com.huawei.auth.service.LoginAttemptService;
+import com.huawei.auth.service.RefreshTokenService;
 import com.huawei.auth.service.SecurityAuditService;
 import com.huawei.auth.service.UserService;
 import com.huawei.auth.util.JwtUtil;
@@ -39,6 +41,7 @@ import com.huawei.auth.util.JwtUtil;
  */
 @WebMvcTest(AuthController.class)
 @Import(TestSecurityConfig.class)
+@ActiveProfiles("test")
 @DisplayName("AuthController Tests")
 @SuppressWarnings("null")
 class AuthControllerTest {
@@ -60,6 +63,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private SecurityAuditService auditService;
+
+    @MockitoBean
+    private RefreshTokenService refreshTokenService;
 
     private static final String LOGIN_URL = "/api/v1/auth/login";
     private static final String LOGOUT_URL = "/api/v1/auth/logout";

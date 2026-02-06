@@ -15,6 +15,7 @@ import {
 } from '@mui/icons-material'
 import { Box, Grid, LinearProgress, Typography } from '@mui/material'
 import { motion } from 'framer-motion'
+import { memo } from 'react'
 import { CARD_STATUS_STYLES, CSS_VARS, type CardStatus } from '../constants/designSystem'
 import type { HealthStatus, ProcessedMetric } from '../hooks/useDashboardData'
 import type { BaseStation } from '../types'
@@ -296,7 +297,7 @@ interface MetricCardProps {
   format?: (v: number) => string
 }
 
-export const MetricCard = ({ label, fullLabel, value, unit, status, showProgress, progressMax = 100, delay = 0, format }: MetricCardProps) => {
+export const MetricCard = memo(({ label, fullLabel, value, unit, status, showProgress, progressMax = 100, delay = 0, format }: MetricCardProps) => {
   const styles = STATUS_STYLES[status]
 
   return (
@@ -398,7 +399,7 @@ export const MetricCard = ({ label, fullLabel, value, unit, status, showProgress
       )}
     </Box>
   )
-}
+})
 
 // ============================================================================
 // Metric Section Component
@@ -465,7 +466,7 @@ interface StationItemProps {
   delay: number
 }
 
-export const StationItem = ({ station, variant, delay }: StationItemProps) => {
+export const StationItem = memo(({ station, variant, delay }: StationItemProps) => {
   const style = STATION_ITEM_STYLES[variant]
   const Icon = style.Icon
 
@@ -514,7 +515,7 @@ export const StationItem = ({ station, variant, delay }: StationItemProps) => {
       </Box>
     </Box>
   )
-}
+})
 
 // ============================================================================
 // Stations Attention List Component
@@ -525,7 +526,7 @@ interface StationsAttentionListProps {
   maintenanceStations: BaseStation[]
 }
 
-export const StationsAttentionList = ({ offlineStations, maintenanceStations }: StationsAttentionListProps) => {
+export const StationsAttentionList = memo(({ offlineStations, maintenanceStations }: StationsAttentionListProps) => {
   const hasIssues = offlineStations.length > 0 || maintenanceStations.length > 0
 
   if (!hasIssues) {
@@ -552,7 +553,7 @@ export const StationsAttentionList = ({ offlineStations, maintenanceStations }: 
       ))}
     </>
   )
-}
+})
 
 // ============================================================================
 // Infrastructure Card Component
@@ -567,7 +568,7 @@ interface InfraCardProps {
   delay?: number
 }
 
-export const InfraCard = ({ icon: Icon, label, value, status, description, delay = 0 }: InfraCardProps) => {
+export const InfraCard = memo(({ icon: Icon, label, value, status, description, delay = 0 }: InfraCardProps) => {
   const styles = STATUS_STYLES[status]
 
   return (
@@ -627,4 +628,4 @@ export const InfraCard = ({ icon: Icon, label, value, status, description, delay
       </Box>
     </Box>
   )
-}
+})

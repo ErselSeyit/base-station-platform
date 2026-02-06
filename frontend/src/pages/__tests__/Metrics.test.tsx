@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '../../test/test-utils'
 import Metrics from '../Metrics'
 import { metricsApi, stationApi } from '../../services/api'
-import { BaseStation, MetricData, MetricType, StationType, StationStatus } from '../../types'
+import { BaseStation, ManagementProtocol, MetricData, MetricType, StationType, StationStatus } from '../../types'
 
 // Mock ResizeObserver
 globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
@@ -31,6 +31,8 @@ describe('Metrics', () => {
       latitude: 40.7128,
       longitude: -74.006,
       stationType: StationType.MACRO_CELL,
+      ipAddress: '10.100.1.101',
+      managementProtocol: ManagementProtocol.DIRECT,
       status: StationStatus.ACTIVE,
       powerConsumption: 1500,
     },
@@ -41,6 +43,8 @@ describe('Metrics', () => {
       latitude: 34.0522,
       longitude: -118.2437,
       stationType: StationType.SMALL_CELL,
+      ipAddress: '10.100.1.102',
+      managementProtocol: ManagementProtocol.DIRECT,
       status: StationStatus.ACTIVE,
       powerConsumption: 800,
     },

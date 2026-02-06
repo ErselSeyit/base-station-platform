@@ -40,11 +40,13 @@ import {
   GRID_METRIC_CARDS_SX,
   POLLING_INTERVALS,
 } from '../constants/designSystem'
-import { CATEGORY_CONFIG as BASE_CATEGORY_CONFIG, HealthStatus, MetricConfig, METRICS_CONFIG } from '../constants/metricsConfig'
+import { CATEGORY_CONFIG as BASE_CATEGORY_CONFIG, MetricConfig, METRICS_CONFIG } from '../constants/metricsConfig'
 import { metricsApi, stationApi } from '../services/api'
 import type { DailyMetricAggregate } from '../services/api/metrics'
 import { BaseStation, MetricData } from '../types'
 import { ensureArray } from '../utils/arrayUtils'
+import { getWorstHealthStatus } from '../utils/metricEvaluators'
+import { getDateFormat, getErrorMessage } from '../utils/statusHelpers'
 
 interface ProcessedMetric {
   type: string
@@ -248,14 +250,9 @@ const CategorySection = ({ category, metrics, chartData, baseDelay, days }: Cate
 
   if (metrics.length === 0) return null
 
-  // Get worst status in category
-  const statusSet = new Set(metrics.map(m => m.config.getStatus(m.average)))
-  const getWorstStatus = (): HealthStatus => {
-    if (statusSet.has('critical')) return 'critical'
-    if (statusSet.has('warning')) return 'warning'
-    return 'healthy'
-  }
-  const worstStatus: HealthStatus = getWorstStatus()
+  // Get worst status in category using shared utility
+  const statuses = metrics.map(m => m.config.getStatus(m.average))
+  const worstStatus = getWorstHealthStatus(statuses)
   const statusStyles = STATUS_STYLES[worstStatus]
 
   return (
@@ -352,7 +349,7 @@ const CategorySection = ({ category, metrics, chartData, baseDelay, days }: Cate
               dataKey="date"
               tick={{ fontSize: 10, fill: 'var(--mono-600)' }}
               stroke="var(--mono-300)"
-              interval={days <= 7 ? 0 : days <= 30 ? 'preserveStartEnd' : 'preserveStartEnd'}
+              interval={days <= 7 ? 0 : 'preserveStartEnd'}
               tickMargin={5}
             />
             <YAxis tick={{ fontSize: 11, fill: 'var(--mono-600)' }} stroke="var(--mono-300)" />
@@ -449,8 +446,8 @@ export default function Metrics() {
     return [...historical, ...newLiveMetrics]
   }, [historicalMetrics, liveMetrics])
 
-  const stationsList = ensureArray(stations as BaseStation[])
-  const metricsList = ensureArray(metrics as MetricData[])
+  const stationsList = ensureArray<BaseStation>(stations)
+  const metricsList = ensureArray<MetricData>(metrics)
 
   // Filter by station - memoized to prevent recalculation every render
   const filteredMetrics = React.useMemo(
@@ -469,16 +466,7 @@ export default function Metrics() {
       const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0
       const existing = accumulator.get(m.metricType)
 
-      if (!existing) {
-        accumulator.set(m.metricType, {
-          sum: m.value,
-          min: m.value,
-          max: m.value,
-          current: m.value,
-          count: 1,
-          maxTimestamp: ts,
-        })
-      } else {
+      if (existing) {
         // Update in place (local mutation within useMemo is safe)
         existing.sum += m.value
         existing.min = Math.min(existing.min, m.value)
@@ -488,6 +476,15 @@ export default function Metrics() {
           existing.current = m.value
           existing.maxTimestamp = ts
         }
+      } else {
+        accumulator.set(m.metricType, {
+          sum: m.value,
+          min: m.value,
+          max: m.value,
+          current: m.value,
+          count: 1,
+          maxTimestamp: ts,
+        })
       }
     }
 
@@ -522,7 +519,7 @@ export default function Metrics() {
 
   // Chart data from pre-aggregated daily data (efficient - computed server-side)
   // Date format adapts based on time range for readability
-  const dateFormat = days <= 7 ? 'MMM dd' : days <= 30 ? 'MM/dd' : 'M/d'
+  const dateFormat = getDateFormat(days)
   const chartData = React.useMemo(() => {
     const aggregates = ensureArray(dailyAggregates as DailyMetricAggregate[])
 
@@ -552,7 +549,7 @@ export default function Metrics() {
 
   const error = stationsError || historicalError || liveError || dailyError
   if (error) {
-    return <ErrorDisplay title="Failed to load metrics data" message={error.message} />
+    return <ErrorDisplay title="Failed to load metrics data" message={getErrorMessage(error)} />
   }
 
   const categories = selectedCategory === 'all'

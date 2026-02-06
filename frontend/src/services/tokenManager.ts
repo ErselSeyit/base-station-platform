@@ -50,7 +50,7 @@ export function setRefreshInProgress(value: boolean): void {
  * Get the stored auth user from sessionStorage.
  */
 export function getStoredAuthUser(): { username: string; role: string } | null {
-  if (typeof globalThis.window === 'undefined') return null
+  if (globalThis.window === undefined) return null
   const stored = sessionStorage.getItem('authUser')
   if (!stored) return null
   try {
@@ -64,7 +64,7 @@ export function getStoredAuthUser(): { username: string; role: string } | null {
  * Store auth user info in sessionStorage.
  */
 export function setStoredAuthUser(user: { username: string; role: string }): void {
-  if (typeof globalThis.window === 'undefined') return
+  if (globalThis.window === undefined) return
   sessionStorage.setItem('authUser', JSON.stringify(user))
 }
 
@@ -73,7 +73,7 @@ export function setStoredAuthUser(user: { username: string; role: string }): voi
  * Note: HttpOnly cookies are cleared by the backend on logout.
  */
 export function clearStoredTokens(): void {
-  if (typeof globalThis.window === 'undefined') return
+  if (globalThis.window === undefined) return
   sessionStorage.removeItem('authUser')
 }
 

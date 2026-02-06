@@ -21,10 +21,15 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
-@SuppressWarnings({"null", "java:S2637"}) // Spring Data ops and @Value fields are non-null
+@SuppressWarnings({ "null", "java:S2637" }) // Spring Data ops and @Value fields are non-null
 public class DeviceCommandService {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceCommandService.class);
+
+    // Risk level constants
+    private static final String RISK_HIGH = "high";
+    private static final String RISK_MEDIUM = "medium";
+    private static final String RISK_LOW = "low";
 
     private final DeviceCommandRepository repository;
     private final RestClient restClient;
@@ -83,9 +88,9 @@ public class DeviceCommandService {
      */
     @Transactional
     public DeviceCommand createFromAISolution(Long stationId, String diagnosticSessionId,
-                                               String problemCode, String commandType,
-                                               Map<String, String> params, Double confidence,
-                                               String riskLevel) {
+            String problemCode, String commandType,
+            Map<String, String> params, Double confidence,
+            String riskLevel) {
         DeviceCommand command = new DeviceCommand();
         command.setStationId(stationId);
         command.setCommandType(commandType);
@@ -125,8 +130,31 @@ public class DeviceCommandService {
                     cmd.setStatus(CommandStatus.IN_PROGRESS);
                     cmd.setPickedUpAt(Instant.now());
                     log.info("Command {} picked up by edge-bridge", commandId);
-                    return repository.save(cmd);
+                    DeviceCommand saved = repository.save(cmd);
+
+                    // Notify SON that execution has started
+                    if (saved.getSource() == CommandSource.SON && saved.getSonRecommendationId() != null) {
+                        notifySONExecutionStarted(saved.getSonRecommendationId());
+                    }
+
+                    return saved;
                 });
+    }
+
+    /**
+     * Notify monitoring service that SON command execution has started.
+     */
+    private void notifySONExecutionStarted(String sonRecommendationId) {
+        try {
+            restClient.post()
+                    .uri(monitoringServiceUrl + "/api/v1/son/{id}/execute/start", sonRecommendationId)
+                    .retrieve()
+                    .toBodilessEntity();
+
+            log.debug("Notified monitoring service about SON execution start: {}", sonRecommendationId);
+        } catch (Exception e) {
+            log.warn("Failed to notify monitoring service about SON execution start: {}", e.getMessage());
+        }
     }
 
     /**
@@ -134,7 +162,7 @@ public class DeviceCommandService {
      */
     @Transactional
     public Optional<DeviceCommand> recordResult(String commandId, boolean success,
-                                                 String output, Integer returnCode, String error) {
+            String output, Integer returnCode, String error) {
         return repository.findById(commandId)
                 .map(cmd -> {
                     cmd.setStatus(success ? CommandStatus.COMPLETED : CommandStatus.FAILED);
@@ -151,6 +179,12 @@ public class DeviceCommandService {
 
                     // Notify monitoring service about result (for AI learning)
                     notifyMonitoringService(saved);
+
+                    // Notify SON about result if this is a SON-sourced command
+                    if (saved.getSource() == CommandSource.SON && saved.getSonRecommendationId() != null) {
+                        notifySONResult(saved.getSonRecommendationId(), success,
+                                success ? output : error);
+                    }
 
                     return saved;
                 });
@@ -182,7 +216,7 @@ public class DeviceCommandService {
     /**
      * Check if auto-apply is allowed based on confidence and risk.
      */
-    @SuppressWarnings({"java:S2583", "java:S2589"}) // null checks intentional for API flexibility
+    @SuppressWarnings({ "java:S2583", "java:S2589" }) // null checks intentional for API flexibility
     private boolean isAutoApplyAllowed(Double confidence, String riskLevel) {
         // Confidence must meet minimum threshold
         if (confidence == null || confidence < autoApplyMinConfidence) {
@@ -219,8 +253,7 @@ public class DeviceCommandService {
                     "diagnosticSessionId", command.getDiagnosticSessionId(),
                     "problemCode", command.getProblemCode() != null ? command.getProblemCode() : "",
                     "success", command.getSuccess(),
-                    "returnCode", command.getReturnCode() != null ? command.getReturnCode() : 0
-            );
+                    "returnCode", command.getReturnCode() != null ? command.getReturnCode() : 0);
 
             restClient.post()
                     .uri(monitoringServiceUrl + "/api/v1/diagnostics/{sessionId}/command-result",
@@ -233,6 +266,101 @@ public class DeviceCommandService {
             log.debug("Notified monitoring service about command result: {}", command.getId());
         } catch (Exception e) {
             log.warn("Failed to notify monitoring service: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Create a command from SON recommendation.
+     * Called when a SON recommendation is approved.
+     */
+    @Transactional
+    public DeviceCommand createFromSONRecommendation(Long stationId, String sonRecommendationId,
+            String actionType, String actionValue,
+            Double confidence, String createdBy) {
+        DeviceCommand command = new DeviceCommand();
+        command.setStationId(stationId);
+        command.setCommandType(mapSONActionToCommandType(actionType));
+        command.setParams(buildSONParams(actionType, actionValue));
+        command.setSource(CommandSource.SON);
+        command.setSonRecommendationId(sonRecommendationId);
+        command.setConfidence(confidence);
+        command.setRiskLevel(determineSONRiskLevel(actionType));
+        command.setCreatedBy(createdBy);
+        command.setStatus(CommandStatus.PENDING);
+
+        DeviceCommand saved = repository.save(command);
+        log.info("Created SON command {} for station {} (action={}, recommendation={})",
+                saved.getId(), stationId, actionType, sonRecommendationId);
+        return saved;
+    }
+
+    /**
+     * Maps SON action types to device command types.
+     */
+    @SuppressWarnings({ "java:S2589", "java:S2583" }) // null check intentional for API flexibility
+    private String mapSONActionToCommandType(String actionType) {
+        // Map SON actions to device commands
+        return switch (actionType.toUpperCase()) {
+            case "ADJUST_POWER" -> "SET_TX_POWER";
+            case "ADJUST_TILT" -> "SET_ANTENNA_TILT";
+            case "ADJUST_AZIMUTH" -> "SET_ANTENNA_AZIMUTH";
+            case "HANDOVER_PARAMS" -> "SET_HANDOVER_PARAMS";
+            case "NEIGHBOR_ADD" -> "ADD_NEIGHBOR_CELL";
+            case "NEIGHBOR_REMOVE" -> "REMOVE_NEIGHBOR_CELL";
+            case "CELL_ENABLE" -> "ENABLE_CELL";
+            case "CELL_DISABLE" -> "DISABLE_CELL";
+            case "LOAD_BALANCE" -> "SET_LOAD_BALANCE";
+            case "INTERFERENCE_MITIGATION" -> "SET_ICIC_PARAMS";
+            default -> actionType;
+        };
+    }
+
+    /**
+     * Builds command parameters from SON action.
+     */
+    @SuppressWarnings({ "java:S2589", "java:S2583" }) // null checks intentional for API flexibility
+    private Map<String, String> buildSONParams(String actionType, String actionValue) {
+        Map<String, String> params = new java.util.HashMap<>();
+        params.put("actionType", actionType != null ? actionType : "");
+        params.put("value", actionValue != null ? actionValue : "");
+        params.put("source", "SON");
+        return params;
+    }
+
+    /**
+     * Determines risk level for SON action.
+     */
+    @SuppressWarnings({ "java:S2589", "java:S2583" }) // null check intentional for API flexibility
+    private String determineSONRiskLevel(String actionType) {
+        return switch (actionType.toUpperCase()) {
+            case "CELL_DISABLE", "NEIGHBOR_REMOVE" -> RISK_HIGH;
+            case "ADJUST_POWER", "HANDOVER_PARAMS", "LOAD_BALANCE" -> RISK_MEDIUM;
+            case "ADJUST_TILT", "ADJUST_AZIMUTH", "NEIGHBOR_ADD" -> RISK_LOW;
+            default -> RISK_MEDIUM;
+        };
+    }
+
+    /**
+     * Notify monitoring service about SON command result.
+     */
+    @SuppressWarnings({ "java:S2589", "java:S2583" }) // null check intentional for API flexibility
+    public void notifySONResult(String sonRecommendationId, boolean success, String result) {
+        try {
+            var feedback = Map.of(
+                    "recommendationId", sonRecommendationId,
+                    "success", success,
+                    "result", result != null ? result : "");
+
+            restClient.post()
+                    .uri(monitoringServiceUrl + "/api/v1/son/{id}/execute/result", sonRecommendationId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(feedback)
+                    .retrieve()
+                    .toBodilessEntity();
+
+            log.debug("Notified monitoring service about SON result: {}", sonRecommendationId);
+        } catch (Exception e) {
+            log.warn("Failed to notify monitoring service about SON result: {}", e.getMessage());
         }
     }
 

@@ -23,6 +23,7 @@ import { getStationStatusColor } from '../constants/designSystem'
 import { stationApi } from '../services/api'
 import { BaseStation, StationStatus, StationType } from '../types'
 import { ensureArray } from '../utils/arrayUtils'
+import { getErrorMessage } from '../utils/statusHelpers'
 import { showToast } from '../utils/toast'
 
 // Default form data for new stations
@@ -33,7 +34,6 @@ const DEFAULT_FORM_DATA: Partial<BaseStation> = {
   longitude: 0,
   stationType: StationType.MACRO_CELL,
   status: StationStatus.ACTIVE,
-  powerConsumption: 1500,
 } as const
 
 export default function Stations() {
@@ -66,7 +66,7 @@ export default function Stations() {
       showToast.success('Station created successfully')
     },
     onError: (error: Error) => {
-      showToast.error(`Failed to create station: ${error.message}`)
+      showToast.error(`Failed to create station: ${getErrorMessage(error)}`)
     },
   })
 
@@ -79,7 +79,7 @@ export default function Stations() {
       showToast.success('Station updated successfully')
     },
     onError: (error: Error) => {
-      showToast.error(`Failed to update station: ${error.message}`)
+      showToast.error(`Failed to update station: ${getErrorMessage(error)}`)
     },
   })
 
@@ -90,7 +90,7 @@ export default function Stations() {
       showToast.success('Station deleted successfully')
     },
     onError: (error: Error) => {
-      showToast.error(`Failed to delete station: ${error.message}`)
+      showToast.error(`Failed to delete station: ${getErrorMessage(error)}`)
     },
   })
 
@@ -232,7 +232,7 @@ export default function Stations() {
             }}
           >
             <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-              {error ? `Error loading stations: ${error.message}` : 'No stations found. Click "Add Station" to create one.'}
+              {error ? `Error loading stations: ${getErrorMessage(error)}` : 'No stations found. Click "Add Station" to create one.'}
             </Typography>
           </Box>
         ) : (
@@ -273,11 +273,11 @@ export default function Stations() {
                       width: '8px',
                       height: '8px',
                       borderRadius: '50%',
-                      background: getStationStatusColor(station.status),
+                      background: getStationStatusColor(station.status ?? 'OFFLINE'),
                     }}
                   />
                   <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--mono-700)' }}>
-                    {station.status}
+                    {station.status ?? 'OFFLINE'}
                   </Typography>
                 </Box>
               </Box>
@@ -294,9 +294,6 @@ export default function Stations() {
                   <Box className="badge" sx={{ display: 'inline-flex' }}>
                     {station.stationType}
                   </Box>
-                  <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--mono-700)' }}>
-                    {station.powerConsumption?.toFixed(1) || 'N/A'} kW
-                  </Typography>
                 </Box>
               </Box>
 
@@ -384,16 +381,15 @@ export default function Stations() {
                 <Box component="th">Location</Box>
                 <Box component="th" sx={{ width: '140px' }}>Type</Box>
                 <Box component="th" sx={{ width: '120px' }}>Status</Box>
-                <Box component="th" sx={{ width: '100px', textAlign: 'right' }}>Power</Box>
                 <Box component="th" sx={{ width: '120px', textAlign: 'right' }}>Actions</Box>
               </tr>
             </thead>
             <tbody>
               {stations.length === 0 && !isLoading ? (
                 <tr>
-                  <Box component="td" colSpan={7} sx={{ textAlign: 'center', padding: '48px 24px' }}>
+                  <Box component="td" colSpan={6} sx={{ textAlign: 'center', padding: '48px 24px' }}>
                     <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-                      {error ? `Error loading stations: ${error.message}` : 'No stations found. Click "Add Station" to create one.'}
+                      {error ? `Error loading stations: ${getErrorMessage(error)}` : 'No stations found. Click "Add Station" to create one.'}
                     </Typography>
                   </Box>
                 </tr>
@@ -438,18 +434,13 @@ export default function Stations() {
                             width: '6px',
                             height: '6px',
                             borderRadius: '50%',
-                            background: getStationStatusColor(station.status),
+                            background: getStationStatusColor(station.status ?? 'OFFLINE'),
                           }}
                         />
                         <Typography sx={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--mono-700)' }}>
-                          {station.status}
+                          {station.status ?? 'OFFLINE'}
                         </Typography>
                       </Box>
-                    </Box>
-                    <Box component="td" sx={{ textAlign: 'right' }}>
-                      <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--mono-700)' }}>
-                        {station.powerConsumption?.toFixed(1) || 'N/A'} kW
-                      </Typography>
                     </Box>
                     <Box component="td" sx={{ textAlign: 'right' }}>
                       <Box sx={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>

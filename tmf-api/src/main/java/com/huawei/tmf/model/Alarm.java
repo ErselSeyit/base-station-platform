@@ -7,7 +7,6 @@ import org.springframework.data.mongodb.core.index.CompoundIndex;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 /**
  * TMF642 Alarm - represents a network alarm event.

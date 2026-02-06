@@ -39,6 +39,7 @@ import com.huawei.monitoring.model.MetricType;
  * - Event-driven architecture (integrates with notification service via RabbitMQ)
  */
 @Service
+@SuppressWarnings("null") // AI service responses and diagnostic fields are validated by service contracts
 public class AlertingService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertingService.class);
@@ -318,20 +319,46 @@ public class AlertingService {
             return;
         }
 
+        log.info("Initiating AI diagnosis for session {} (alert={})", actualProblemId, alert.getAlertRuleId());
+
         client.diagnoseAsync(alert, actualProblemId)
                 .thenAccept(diagnosis -> {
                     try {
+                        boolean actionable = diagnosis != null && diagnosis.isActionable();
+                        log.info("Diagnosis callback for session {}: actionable={}, action='{}', confidence={}",
+                                actualProblemId, actionable,
+                                diagnosis != null ? diagnosis.getAction() : null,
+                                diagnosis != null ? diagnosis.getConfidence() : null);
                         handleDiagnosisResult(
                                 Objects.requireNonNull(diagnosis), alert, sessionService, actualProblemId);
                     } catch (Exception e) {
                         log.error("Error in handleDiagnosisResult for {}: {}", actualProblemId, e.getMessage(), e);
+                        markSessionFailed(sessionService, actualProblemId, "Handler error: " + e.getMessage());
                     }
                 })
                 .exceptionally(ex -> {
-                    log.error("Diagnostic request failed for alert {}: {}",
-                            alert.getAlertRuleId(), ex.getMessage(), ex);
+                    log.error("Diagnostic request failed for alert {} (session={}): {}",
+                            alert.getAlertRuleId(), actualProblemId, ex.getMessage(), ex);
+                    // Mark session as FAILED to prevent it being stuck in DETECTED state
+                    markSessionFailed(sessionService, actualProblemId, "Diagnosis failed: " + ex.getMessage());
                     return null;
                 });
+    }
+
+    /**
+     * Marks a diagnostic session as failed when the AI service fails to respond.
+     */
+    private void markSessionFailed(@Nullable DiagnosticSessionService sessionService,
+                                    String problemId, String reason) {
+        if (sessionService == null) {
+            return;
+        }
+        try {
+            sessionService.markSessionError(problemId, reason);
+            log.info("Marked session {} as FAILED due to: {}", problemId, reason);
+        } catch (Exception e) {
+            log.warn("Failed to mark session {} as failed: {}", problemId, e.getMessage());
+        }
     }
 
     private String generateProblemId(AlertEvent alert) {

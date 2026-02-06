@@ -312,6 +312,13 @@ type ORANAdapterConfig struct {
 
 // BridgeConfig holds bridge-specific settings.
 type BridgeConfig struct {
+	// Bridge identification (for edge-bridge registration)
+	BridgeID    string `yaml:"bridge_id"`
+	BridgeName  string `yaml:"bridge_name"`
+	Version     string `yaml:"version"`
+	CallbackURL string `yaml:"callback_url"` // Optional callback endpoint
+
+	// Station information
 	StationID        string        `yaml:"station_id"`
 	StationName      string        `yaml:"station_name"`
 	Location         string        `yaml:"location"`
@@ -320,9 +327,12 @@ type BridgeConfig struct {
 	StationType      string        `yaml:"station_type"`
 	PowerConsumption float64       `yaml:"power_consumption"`
 	Description      string        `yaml:"description"`
-	PollInterval     time.Duration `yaml:"poll_interval"`
-	MetricsInterval  time.Duration `yaml:"metrics_interval"`
-	LogLevel         string        `yaml:"log_level"`
+
+	// Operational settings
+	PollInterval      time.Duration `yaml:"poll_interval"`
+	MetricsInterval   time.Duration `yaml:"metrics_interval"`
+	HeartbeatInterval time.Duration `yaml:"heartbeat_interval"` // Default 30s
+	LogLevel          string        `yaml:"log_level"`
 }
 
 // DeviceConfig holds device connection settings.

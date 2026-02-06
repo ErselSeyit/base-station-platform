@@ -16,6 +16,7 @@ import { getStationStatusColor, GRID_AUTO_FIT_SX } from '../constants/designSyst
 import { stationApi } from '../services/api'
 import { BaseStation } from '../types'
 import { ensureArray, partition, avg } from '../utils/arrayUtils'
+import { getErrorMessage } from '../utils/statusHelpers'
 
 // Fix for default marker icons in React-Leaflet - bundle locally instead of CDN
 // The _getIconUrl property needs to be deleted to prevent CDN URL generation
@@ -91,7 +92,7 @@ export default function MapView() {
   }
 
   if (error) {
-    return <ErrorDisplay title="Failed to load map data" message={error.message} />
+    return <ErrorDisplay title="Failed to load map data" message={getErrorMessage(error)} />
   }
 
   return (
@@ -271,7 +272,7 @@ export default function MapView() {
                         width: '6px',
                         height: '6px',
                         borderRadius: '50%',
-                        background: getStationStatusColor(station.status),
+                        background: getStationStatusColor(station.status ?? 'OFFLINE'),
                       }}
                     />
                     <Typography sx={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--mono-700)' }}>
@@ -352,11 +353,11 @@ export default function MapView() {
                     width: '6px',
                     height: '6px',
                     borderRadius: '50%',
-                    background: getStationStatusColor(selectedStation.status),
+                    background: getStationStatusColor(selectedStation.status ?? 'OFFLINE'),
                   }}
                 />
                 <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-950)' }}>
-                  {selectedStation.status}
+                  {selectedStation.status ?? 'OFFLINE'}
                 </Typography>
               </Box>
             </Box>

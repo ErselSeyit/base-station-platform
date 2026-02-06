@@ -21,17 +21,26 @@ import { useQuery } from '@tanstack/react-query'
 import ErrorDisplay from '../components/ErrorDisplay'
 import LoadingSpinner from '../components/LoadingSpinner'
 import MetricsChart from '../components/MetricsChart'
-import { CARD_STATUS_STYLES, CSS_VARS, POLLING_INTERVALS, type CardStatus } from '../constants/designSystem'
+import { CARD_STATUS_STYLES, CSS_VARS, POLLING_INTERVALS } from '../constants/designSystem'
 import { metricsApi, stationApi } from '../services/api'
 import { BaseStation, MetricData, StationStatus } from '../types'
 import { ensureArray, avg, sum } from '../utils/arrayUtils'
+import {
+  getWorstHealthStatus,
+  getPowerStatus,
+  getBatteryStatus,
+  getTempStatus,
+  getFanStatus,
+  getChargingStatusLabel,
+  getCoolingStatusLabel,
+  POWER_THRESHOLDS,
+  type HealthStatus,
+} from '../utils/metricEvaluators'
+import { getErrorMessage } from '../utils/statusHelpers'
 
 // ============================================================================
 // Types
 // ============================================================================
-
-// Use CardStatus from designSystem.ts for consistency
-type HealthStatus = CardStatus
 
 interface PowerMetrics {
   stationId: number
@@ -69,32 +78,11 @@ interface PowerMetrics {
 
 // Use CARD_STATUS_STYLES from designSystem.ts for dark mode compatibility
 
-// Thresholds for status determination
-const THRESHOLDS = {
-  // Power consumption ratio thresholds
-  POWER_HEALTHY_RATIO: 0.7,
-  POWER_WARNING_RATIO: 0.9,
-  DEFAULT_MAX_POWER_KW: 5,
+// Local thresholds (summary-specific, not shared with other components)
+const LOCAL_THRESHOLDS = {
   TOTAL_POWER_WARNING_KW: 20,
-
-  // Battery state of charge thresholds (percentage)
-  BATTERY_HEALTHY_SOC: 50,
-  BATTERY_WARNING_SOC: 20,
   BATTERY_LOW_WARNING_SOC: 30,
-  BATTERY_FULL_SOC: 95,      // For "Full" charging status
-  BATTERY_CHARGING_SOC: 50,  // For "Charging" status
-
-  // Temperature thresholds (Celsius)
-  TEMP_HEALTHY_MAX: 65,
-  TEMP_WARNING_MAX: 80,
   TEMP_SUMMARY_WARNING: 70,
-
-  // Fan speed thresholds (RPM)
-  FAN_HEALTHY_MIN: 2000,
-  FAN_HEALTHY_MAX: 5000,
-  FAN_WARNING_MIN: 1000,
-  FAN_HIGH_SPEED: 3000,   // For "High" cooling status
-  FAN_ACTIVE_SPEED: 1500, // For "Active" cooling status
 } as const
 
 // Cost calculation constants
@@ -117,43 +105,6 @@ const DEFAULT_METRICS = {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-function getPowerStatus(consumption: number, maxPower: number = THRESHOLDS.DEFAULT_MAX_POWER_KW): HealthStatus {
-  const ratio = consumption / maxPower
-  if (ratio <= THRESHOLDS.POWER_HEALTHY_RATIO) return 'healthy'
-  if (ratio <= THRESHOLDS.POWER_WARNING_RATIO) return 'warning'
-  return 'critical'
-}
-
-function getBatteryStatus(soc: number): HealthStatus {
-  if (soc >= THRESHOLDS.BATTERY_HEALTHY_SOC) return 'healthy'
-  if (soc >= THRESHOLDS.BATTERY_WARNING_SOC) return 'warning'
-  return 'critical'
-}
-
-function getTempStatus(temp: number): HealthStatus {
-  if (temp <= THRESHOLDS.TEMP_HEALTHY_MAX) return 'healthy'
-  if (temp <= THRESHOLDS.TEMP_WARNING_MAX) return 'warning'
-  return 'critical'
-}
-
-function getFanStatus(speed: number): HealthStatus {
-  if (speed >= THRESHOLDS.FAN_HEALTHY_MIN && speed <= THRESHOLDS.FAN_HEALTHY_MAX) return 'healthy'
-  if (speed >= THRESHOLDS.FAN_WARNING_MIN) return 'warning'
-  return 'critical'
-}
-
-function getChargingStatusLabel(avgBattery: number): string {
-  if (avgBattery >= THRESHOLDS.BATTERY_FULL_SOC) return 'Full'
-  if (avgBattery >= THRESHOLDS.BATTERY_CHARGING_SOC) return 'Charging'
-  return 'Low'
-}
-
-function getCoolingStatusLabel(avgFanSpeed: number): string {
-  if (avgFanSpeed >= THRESHOLDS.FAN_HIGH_SPEED) return 'High'
-  if (avgFanSpeed >= THRESHOLDS.FAN_ACTIVE_SPEED) return 'Active'
-  return 'Idle'
-}
 
 function processStationMetrics(
   stations: BaseStation[],
@@ -185,9 +136,9 @@ function processStationMetrics(
         stationId: station.id,
         stationName: station.stationName,
         location: station.location,
-        status: station.status,
+        status: station.status ?? StationStatus.OFFLINE,
         power: {
-          consumption: powerConsumption !== undefined ? powerConsumption / 1000 : station.powerConsumption / 1000,
+          consumption: (powerConsumption ?? station.powerConsumption ?? 0) / 1000,
           voltage: DEFAULT_METRICS.VOLTAGE_V,
           current: DEFAULT_METRICS.CURRENT_A,
         },
@@ -391,8 +342,8 @@ function SummaryCard({ title, icon: Icon, color, stats, status }: Readonly<Summa
       </Box>
 
       <Grid container spacing={2}>
-        {stats.map((stat, idx) => (
-          <Grid item xs={6} key={idx}>
+        {stats.map((stat) => (
+          <Grid item xs={6} key={stat.label}>
             <Typography sx={{ fontSize: '0.75rem', color: 'var(--mono-500)', mb: 0.5 }}>
               {stat.label}
             </Typography>
@@ -416,12 +367,7 @@ function StationPowerRow({ station }: Readonly<StationPowerRowProps>) {
   const fanStatus = getFanStatus(station.environment.fanSpeed)
   const batteryStatus = getBatteryStatus(station.battery.soc)
 
-  const overallStatus: HealthStatus =
-    powerStatus === 'critical' || tempStatus === 'critical' || batteryStatus === 'critical'
-      ? 'critical'
-      : powerStatus === 'warning' || tempStatus === 'warning' || batteryStatus === 'warning'
-      ? 'warning'
-      : 'healthy'
+  const overallStatus = getWorstHealthStatus([powerStatus, tempStatus, batteryStatus])
 
   const styles = CARD_STATUS_STYLES[overallStatus]
 
@@ -590,7 +536,7 @@ export default function PowerDashboard() {
 
   const error = stationsError || metricsError
   if (error) {
-    return <ErrorDisplay title="Failed to load power data" message={error.message} />
+    return <ErrorDisplay title="Failed to load power data" message={getErrorMessage(error)} />
   }
 
   return (
@@ -631,7 +577,7 @@ export default function PowerDashboard() {
             title="Power Consumption"
             icon={PowerIcon}
             color={CSS_VARS.colorPurple500}
-            status={summary.totalPower > THRESHOLDS.TOTAL_POWER_WARNING_KW ? 'warning' : 'healthy'}
+            status={summary.totalPower > LOCAL_THRESHOLDS.TOTAL_POWER_WARNING_KW ? 'warning' : 'healthy'}
             stats={[
               { label: 'Total Power', value: `${summary.totalPower.toFixed(1)} kW` },
               { label: 'Active Sites', value: summary.activeCount },
@@ -645,11 +591,11 @@ export default function PowerDashboard() {
             title="Thermal Status"
             icon={TempIcon}
             color={CSS_VARS.colorAmber500}
-            status={summary.avgTemp > THRESHOLDS.TEMP_SUMMARY_WARNING ? 'warning' : 'healthy'}
+            status={summary.avgTemp > LOCAL_THRESHOLDS.TEMP_SUMMARY_WARNING ? 'warning' : 'healthy'}
             stats={[
               { label: 'Avg Temperature', value: `${summary.avgTemp.toFixed(1)}°C` },
               { label: 'Critical Sites', value: summary.criticalCount },
-              { label: 'Max Threshold', value: `${THRESHOLDS.TEMP_WARNING_MAX}°C` },
+              { label: 'Max Threshold', value: `${POWER_THRESHOLDS.TEMP_WARNING_MAX}°C` },
               { label: 'Cooling Status', value: summary.coolingStatus },
             ]}
           />
@@ -659,7 +605,7 @@ export default function PowerDashboard() {
             title="Battery Backup"
             icon={BatteryIcon}
             color={CSS_VARS.statusActive}
-            status={summary.avgBattery < THRESHOLDS.BATTERY_LOW_WARNING_SOC ? 'warning' : 'healthy'}
+            status={summary.avgBattery < LOCAL_THRESHOLDS.BATTERY_LOW_WARNING_SOC ? 'warning' : 'healthy'}
             stats={[
               { label: 'Avg Charge', value: `${summary.avgBattery.toFixed(0)}%` },
               { label: 'Sites on Battery', value: summary.sitesOnBattery },
@@ -677,7 +623,7 @@ export default function PowerDashboard() {
             label="Total Power Draw"
             value={summary.totalPower}
             unit="kW"
-            status={summary.totalPower > THRESHOLDS.TOTAL_POWER_WARNING_KW ? 'warning' : 'healthy'}
+            status={summary.totalPower > LOCAL_THRESHOLDS.TOTAL_POWER_WARNING_KW ? 'warning' : 'healthy'}
             icon={PowerIcon}
             subtitle="All active sites"
           />

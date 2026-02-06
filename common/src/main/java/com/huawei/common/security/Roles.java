@@ -70,17 +70,17 @@ public final class Roles {
     }
 
     /**
-     * Check if a role string represents an admin role.
+     * Check if a role string represents an admin role (case-insensitive).
      */
     public static boolean isAdmin(String role) {
-        return ROLE_ADMIN.equals(role) || ADMIN.equals(role);
+        return ROLE_ADMIN.equalsIgnoreCase(role) || ADMIN.equalsIgnoreCase(role);
     }
 
     /**
-     * Check if a role string represents an operator or higher.
+     * Check if a role string represents an operator or higher (case-insensitive).
      */
     public static boolean isOperatorOrHigher(String role) {
-        return isAdmin(role) || ROLE_OPERATOR.equals(role) || OPERATOR.equals(role);
+        return isAdmin(role) || ROLE_OPERATOR.equalsIgnoreCase(role) || OPERATOR.equalsIgnoreCase(role);
     }
 
     /**
