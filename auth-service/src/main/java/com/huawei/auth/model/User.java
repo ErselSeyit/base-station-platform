@@ -1,5 +1,7 @@
 package com.huawei.auth.model;
 
+import com.huawei.common.constants.TimeConstants;
+import com.huawei.common.security.Roles;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -93,5 +95,85 @@ public class User {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    // ========================================================================
+    // Domain Behavior Methods
+    // ========================================================================
+
+    /**
+     * Checks if the user can log in (account is enabled).
+     *
+     * @return true if the user account is active and can authenticate
+     */
+    public boolean canLogin() {
+        return this.enabled;
+    }
+
+    /**
+     * Disables the user account, preventing login.
+     */
+    public void disable() {
+        this.enabled = false;
+    }
+
+    /**
+     * Enables the user account, allowing login.
+     */
+    public void enable() {
+        this.enabled = true;
+    }
+
+    /**
+     * Checks if the user has the ADMIN role.
+     *
+     * @return true if the user is an administrator
+     */
+    public boolean isAdmin() {
+        return Roles.isAdmin(this.role);
+    }
+
+    /**
+     * Checks if the user has the OPERATOR role.
+     *
+     * @return true if the user is an operator
+     */
+    public boolean isOperator() {
+        return Roles.OPERATOR.equalsIgnoreCase(this.role);
+    }
+
+    /**
+     * Checks if the user has a specific role.
+     *
+     * @param roleName the role to check (case-insensitive)
+     * @return true if the user has the specified role
+     */
+    public boolean hasRole(String roleName) {
+        if (roleName == null || this.role == null) {
+            return false;
+        }
+        return this.role.equalsIgnoreCase(roleName);
+    }
+
+    /**
+     * Checks if this is a service account (used for machine-to-machine auth).
+     *
+     * @return true if this is a service account
+     */
+    public boolean isServiceAccount() {
+        return "SERVICE".equalsIgnoreCase(this.role)
+                || (this.username != null && this.username.startsWith("svc-"));
+    }
+
+    /**
+     * Checks if the account was created recently (within the last 24 hours).
+     *
+     * @return true if the account is new
+     */
+    public boolean isNewAccount() {
+        if (this.createdAt == null) {
+            return false;
+        }
+        return this.createdAt.isAfter(Instant.now().minusSeconds(TimeConstants.SECONDS_PER_DAY));
     }
 }

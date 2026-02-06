@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.DisplayName;
@@ -20,10 +21,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.notification.config.TestSecurityConfig;
+import com.huawei.notification.dto.NotificationRequest;
 import com.huawei.notification.exception.NotificationException;
 import com.huawei.notification.model.Notification;
 import com.huawei.notification.model.NotificationStatus;
@@ -43,6 +47,9 @@ class NotificationControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @MockitoBean
     private NotificationService notificationService;
 
@@ -54,14 +61,19 @@ class NotificationControllerTest {
         String message = "High CPU usage detected";
         NotificationType type = NotificationType.ALERT;
 
+        NotificationRequest request = new NotificationRequest();
+        request.setStationId(stationId);
+        request.setMessage(message);
+        request.setType(type);
+
         Notification notification = createNotification(1L, stationId, message, type, NotificationStatus.PENDING);
         when(notificationService.createNotification(stationId, message, type)).thenReturn(notification);
 
         // When & Then
+        String requestJson = Objects.requireNonNull(objectMapper.writeValueAsString(request));
         mockMvc.perform(post("/api/v1/notifications")
-                .param("stationId", stationId.toString())
-                .param("message", message)
-                .param("type", type.toString()))
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content(requestJson))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.stationId").value(stationId))

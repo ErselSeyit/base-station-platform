@@ -25,12 +25,21 @@ class JwtValidatorTokenCasesTest {
     @BeforeEach
     void setUp() {
         secretKey = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
-        validator = new JwtValidator(SECRET, false);
+        validator = new JwtValidator(SECRET);
     }
 
     private String generateToken(String subject, Date expiration, SecretKey signingKey) {
         return Jwts.builder()
                 .subject(subject)
+                .expiration(expiration)
+                .signWith(signingKey)
+                .compact();
+    }
+
+    private String generateTokenWithRole(String subject, String role, Date expiration, SecretKey signingKey) {
+        return Jwts.builder()
+                .subject(subject)
+                .claim("role", role)
                 .expiration(expiration)
                 .signWith(signingKey)
                 .compact();
@@ -50,6 +59,18 @@ class JwtValidatorTokenCasesTest {
     }
 
     @Test
+    @DisplayName("Valid token with role should expose role claim")
+    void validTokenWithRole_ExposesRole() {
+        Date future = new Date(System.currentTimeMillis() + 60_000);
+        String token = generateTokenWithRole("admin", "ROLE_ADMIN", future, secretKey);
+
+        JwtValidator.ValidationResult result = validator.validateToken(token);
+        assertThat(result.isValid()).isTrue();
+        assertThat(result.getUsername()).isEqualTo("admin");
+        assertThat(result.getRole()).isEqualTo("ROLE_ADMIN");
+    }
+
+    @Test
     @DisplayName("Expired token should be rejected")
     void expiredToken_ReturnsInvalid() {
         Date past = new Date(System.currentTimeMillis() - 60_000); // 1 minute ago
@@ -57,18 +78,56 @@ class JwtValidatorTokenCasesTest {
 
         JwtValidator.ValidationResult result = validator.validateToken(token);
         assertThat(result.isValid()).isFalse();
-        assertThat(result.getErrorMessage()).contains("expired");
+        assertThat(result.getErrorMessage()).containsIgnoringCase("expired");
     }
 
     @Test
     @DisplayName("Token signed with different secret should fail signature check")
     void invalidSignature_ReturnsInvalid() {
-        SecretKey otherKey = Keys.hmacShaKeyFor("anotherDifferentSecretKeyThatIsAlsoLongEnoughForHS256".getBytes(StandardCharsets.UTF_8));
+        SecretKey otherKey = Keys.hmacShaKeyFor(
+                "anotherDifferentSecretKeyThatIsAlsoLongEnoughForHS256".getBytes(StandardCharsets.UTF_8));
         Date future = new Date(System.currentTimeMillis() + 60_000);
         String token = generateToken("user1", future, otherKey);
 
         JwtValidator.ValidationResult result = validator.validateToken(token);
         assertThat(result.isValid()).isFalse();
-        assertThat(result.getErrorMessage()).contains("signature");
+        assertThat(result.getErrorMessage()).containsIgnoringCase("signature");
+    }
+
+    @Test
+    @DisplayName("Token without subject should fail validation")
+    void tokenWithoutSubject_ReturnsInvalid() {
+        Date future = new Date(System.currentTimeMillis() + 60_000);
+        String token = Jwts.builder()
+                .expiration(future)
+                .signWith(secretKey)
+                .compact();
+
+        JwtValidator.ValidationResult result = validator.validateToken(token);
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getErrorMessage()).containsIgnoringCase("subject");
+    }
+
+    @Test
+    @DisplayName("getIssuedAt returns 0 for token without iat claim")
+    void tokenWithoutIssuedAt_ReturnsZero() {
+        Date future = new Date(System.currentTimeMillis() + 60_000);
+        String token = generateToken("user1", future, secretKey);
+
+        JwtValidator.ValidationResult result = validator.validateToken(token);
+        assertThat(result.isValid()).isTrue();
+        // No iat claim in this token, should return 0
+        assertThat(result.getIssuedAt()).isZero();
+    }
+
+    @Test
+    @DisplayName("getTokenId returns null for token without jti claim")
+    void tokenWithoutJti_ReturnsNull() {
+        Date future = new Date(System.currentTimeMillis() + 60_000);
+        String token = generateToken("user1", future, secretKey);
+
+        JwtValidator.ValidationResult result = validator.validateToken(token);
+        assertThat(result.isValid()).isTrue();
+        assertThat(result.getTokenId()).isNull();
     }
 }

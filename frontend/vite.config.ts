@@ -6,12 +6,22 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    strictPort: true,
     proxy: {
       '/api/v1': {
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/api/reports': {
+        target: 'http://localhost:9091',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/reports/, '/reports'),
+      },
     },
+  },
+  preview: {
+    port: 3000,
+    strictPort: true,
   },
   build: {
     outDir: 'dist',

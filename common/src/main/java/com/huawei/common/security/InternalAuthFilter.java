@@ -1,5 +1,7 @@
 package com.huawei.common.security;
 
+import com.huawei.common.constants.HttpHeaders;
+import com.huawei.common.constants.SecurityConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,13 +43,10 @@ import java.util.HexFormat;
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@ConditionalOnProperty(name = "security.internal.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "security.internal.enabled", havingValue = "true", matchIfMissing = true)
 public class InternalAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(InternalAuthFilter.class);
-    private static final String HEADER_INTERNAL_AUTH = "X-Internal-Auth";
-    private static final long MAX_TIMESTAMP_AGE_MS = 30_000; // 30 seconds
-    private static final String HMAC_ALGORITHM = "HmacSHA256";
 
     @Value("${security.internal.secret:}")
     private String internalSecret;
@@ -86,7 +85,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
         }
 
         // Extract and validate auth header
-        String authHeader = request.getHeader(HEADER_INTERNAL_AUTH);
+        String authHeader = request.getHeader(HttpHeaders.HEADER_INTERNAL_AUTH);
         if (authHeader == null || authHeader.isBlank()) {
             log.warn("Missing X-Internal-Auth header from {}", request.getRemoteAddr());
             response.sendError(HttpServletResponse.SC_FORBIDDEN,
@@ -127,7 +126,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
             long timestamp = Long.parseLong(payloadParts[2]);
             long age = System.currentTimeMillis() - timestamp;
 
-            if (age > MAX_TIMESTAMP_AGE_MS) {
+            if (age > SecurityConstants.MAX_TIMESTAMP_AGE_MS) {
                 log.warn("Expired internal auth token (age: {}ms)", age);
                 response.sendError(HttpServletResponse.SC_FORBIDDEN,
                     "Internal auth token expired (max age: 30s)");
@@ -152,10 +151,10 @@ public class InternalAuthFilter extends OncePerRequestFilter {
 
     private String computeHmac(String data, String secret) {
         try {
-            Mac hmac = Mac.getInstance(HMAC_ALGORITHM);
+            Mac hmac = Mac.getInstance(SecurityConstants.HMAC_ALGORITHM);
             SecretKeySpec secretKey = new SecretKeySpec(
                 secret.getBytes(StandardCharsets.UTF_8),
-                HMAC_ALGORITHM
+                SecurityConstants.HMAC_ALGORITHM
             );
             hmac.init(secretKey);
             byte[] hash = hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));

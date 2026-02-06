@@ -4,6 +4,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.huawei.common.util.RequestUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -112,7 +114,7 @@ public abstract class BaseGlobalExceptionHandler {
      * Generates a unique 8-character error ID for tracking.
      */
     protected String generateErrorId() {
-        return UUID.randomUUID().toString().substring(0, 8);
+        return UUID.randomUUID().toString().substring(0, RequestUtils.REQUEST_ID_LENGTH);
     }
 
     /**

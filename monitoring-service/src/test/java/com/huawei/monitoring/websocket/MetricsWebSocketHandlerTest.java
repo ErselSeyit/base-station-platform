@@ -20,6 +20,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.lang.NonNull;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
@@ -33,6 +34,7 @@ import com.huawei.monitoring.model.MetricType;
  * Tests WebSocket connection management and message broadcasting.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("test")
 @DisplayName("MetricsWebSocketHandler Tests")
 @DisabledIf("skipInDemoOrNoDocker")
 class MetricsWebSocketHandlerTest {

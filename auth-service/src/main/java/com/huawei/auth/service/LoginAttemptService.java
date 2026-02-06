@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -15,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * - Tracks failed login attempts per username/IP
  * - Implements exponential backoff
  * - Auto-unlocks after lockout period
+ * - Exempts service accounts from rate limiting
  *
  * <p>For production, consider using Redis for distributed caching.
  */
@@ -23,12 +25,61 @@ public class LoginAttemptService {
 
     private static final Logger log = LoggerFactory.getLogger(LoginAttemptService.class);
 
-    private static final int MAX_ATTEMPTS = 5;
-    private static final long INITIAL_LOCKOUT_SECONDS = 60; // 1 minute
-    private static final long MAX_LOCKOUT_SECONDS = 3600; // 1 hour
-    private static final double BACKOFF_MULTIPLIER = 2.0;
+    private final int maxAttempts;
+    private final long initialLockoutSeconds;
+    private final long maxLockoutSeconds;
+    private final double backoffMultiplier;
+    private final long cleanupThresholdSeconds;
 
     private final Map<String, AttemptInfo> attempts = new ConcurrentHashMap<>();
+    private final Set<String> serviceAccounts;
+
+    /**
+     * Constructor with configurable parameters.
+     *
+     * @param serviceAccountsConfig comma-separated list of service account usernames
+     * @param maxAttempts maximum login attempts before lockout
+     * @param initialLockoutSeconds initial lockout duration in seconds
+     * @param maxLockoutSeconds maximum lockout duration in seconds
+     * @param backoffMultiplier multiplier for exponential backoff
+     * @param cleanupThresholdSeconds threshold for cleaning up old entries
+     */
+    public LoginAttemptService(
+            @org.springframework.beans.factory.annotation.Value("${auth.service-accounts:}") String serviceAccountsConfig,
+            @org.springframework.beans.factory.annotation.Value("${auth.login-attempts.max-attempts:5}") int maxAttempts,
+            @org.springframework.beans.factory.annotation.Value("${auth.login-attempts.initial-lockout-seconds:60}") long initialLockoutSeconds,
+            @org.springframework.beans.factory.annotation.Value("${auth.login-attempts.max-lockout-seconds:3600}") long maxLockoutSeconds,
+            @org.springframework.beans.factory.annotation.Value("${auth.login-attempts.backoff-multiplier:2.0}") double backoffMultiplier,
+            @org.springframework.beans.factory.annotation.Value("${auth.login-attempts.cleanup-threshold-seconds:86400}") long cleanupThresholdSeconds) {
+
+        this.maxAttempts = maxAttempts;
+        this.initialLockoutSeconds = initialLockoutSeconds;
+        this.maxLockoutSeconds = maxLockoutSeconds;
+        this.backoffMultiplier = backoffMultiplier;
+        this.cleanupThresholdSeconds = cleanupThresholdSeconds;
+        // Parse service accounts from config, default to empty if not set
+        if (serviceAccountsConfig != null && !serviceAccountsConfig.isBlank()) {
+            this.serviceAccounts = java.util.Arrays.stream(serviceAccountsConfig.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(java.util.stream.Collectors.toSet());
+            log.info("Configured service accounts exempt from rate limiting: {}", this.serviceAccounts);
+        } else {
+            this.serviceAccounts = Set.of();
+            log.info("No service accounts configured for rate limit exemption");
+        }
+    }
+
+    /**
+     * Checks if the given username is a service account.
+     *
+     * @param username the username to check
+     * @return true if it's a service account
+     */
+    private boolean isServiceAccount(String username) {
+        return username != null && serviceAccounts.stream()
+            .anyMatch(sa -> username.trim().equalsIgnoreCase(sa));
+    }
 
     /**
      * Records a failed login attempt.
@@ -38,21 +89,21 @@ public class LoginAttemptService {
     public void recordFailedAttempt(String key) {
         attempts.compute(key, (k, info) -> {
             if (info == null) {
-                return new AttemptInfo(1, Instant.now(), INITIAL_LOCKOUT_SECONDS);
+                return new AttemptInfo(1, Instant.now(), initialLockoutSeconds);
             }
 
             // Reset if lockout has expired
             if (isLockoutExpired(info)) {
-                return new AttemptInfo(1, Instant.now(), INITIAL_LOCKOUT_SECONDS);
+                return new AttemptInfo(1, Instant.now(), initialLockoutSeconds);
             }
 
             int newCount = info.failedAttempts + 1;
             long newLockoutDuration = Math.min(
-                (long) (info.lockoutDurationSeconds * BACKOFF_MULTIPLIER),
-                MAX_LOCKOUT_SECONDS
+                (long) (info.lockoutDurationSeconds * backoffMultiplier),
+                maxLockoutSeconds
             );
 
-            if (newCount >= MAX_ATTEMPTS) {
+            if (newCount >= maxAttempts) {
                 log.warn("Account locked due to {} failed attempts: {}", newCount, key);
             }
 
@@ -77,21 +128,20 @@ public class LoginAttemptService {
      * @return true if blocked, false otherwise
      */
     public boolean isBlocked(String key) {
+        // Extract username from key (format: "username:ip")
+        String username = key.contains(":") ? key.split(":")[0] : key;
+
+        // Service accounts are exempt from rate limiting
+        if (isServiceAccount(username)) {
+            return false;
+        }
+
         AttemptInfo info = attempts.get(key);
-        if (info == null) {
+        if (info == null || info.failedAttempts < maxAttempts) {
             return false;
         }
-
-        if (info.failedAttempts < MAX_ATTEMPTS) {
-            return false;
-        }
-
-        if (isLockoutExpired(info)) {
-            // Lockout expired, allow retry but keep some history
-            return false;
-        }
-
-        return true;
+        // Blocked if max attempts reached and lockout not yet expired
+        return !isLockoutExpired(info);
     }
 
     /**
@@ -102,7 +152,7 @@ public class LoginAttemptService {
      */
     public long getRemainingLockoutSeconds(String key) {
         AttemptInfo info = attempts.get(key);
-        if (info == null || info.failedAttempts < MAX_ATTEMPTS) {
+        if (info == null || info.failedAttempts < maxAttempts) {
             return 0;
         }
 
@@ -120,18 +170,18 @@ public class LoginAttemptService {
     public int getRemainingAttempts(String key) {
         AttemptInfo info = attempts.get(key);
         if (info == null) {
-            return MAX_ATTEMPTS;
+            return maxAttempts;
         }
 
         if (isLockoutExpired(info)) {
-            return MAX_ATTEMPTS;
+            return maxAttempts;
         }
 
-        return Math.max(0, MAX_ATTEMPTS - info.failedAttempts);
+        return Math.max(0, maxAttempts - info.failedAttempts);
     }
 
     private boolean isLockoutExpired(AttemptInfo info) {
-        if (info.failedAttempts < MAX_ATTEMPTS) {
+        if (info.failedAttempts < maxAttempts) {
             return false;
         }
         long elapsedSeconds = Instant.now().getEpochSecond() - info.lastAttempt.getEpochSecond();
@@ -145,8 +195,8 @@ public class LoginAttemptService {
         attempts.entrySet().removeIf(entry -> {
             AttemptInfo info = entry.getValue();
             long elapsedSeconds = Instant.now().getEpochSecond() - info.lastAttempt.getEpochSecond();
-            // Remove entries older than 24 hours
-            return elapsedSeconds > 86400;
+            // Remove entries older than cleanup threshold
+            return elapsedSeconds > cleanupThresholdSeconds;
         });
     }
 

@@ -6,6 +6,9 @@ import com.huawei.monitoring.validation.ValidMetricValue;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
+
+import org.springframework.lang.Nullable;
 
 @ValidMetricUnit
 @ValidMetricValue
@@ -34,98 +37,98 @@ public class MetricDataDTO {
     }
 
     // Getters and Setters
+    @Nullable
     public String getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(@Nullable String id) {
         this.id = id;
     }
 
+    @Nullable
     public Long getStationId() {
         return stationId;
     }
 
-    public void setStationId(Long stationId) {
+    public void setStationId(@Nullable Long stationId) {
         this.stationId = stationId;
     }
 
+    @Nullable
     public String getStationName() {
         return stationName;
     }
 
-    public void setStationName(String stationName) {
+    public void setStationName(@Nullable String stationName) {
         this.stationName = stationName;
     }
 
+    @Nullable
     public MetricType getMetricType() {
         return metricType;
     }
 
-    public void setMetricType(MetricType metricType) {
+    public void setMetricType(@Nullable MetricType metricType) {
         this.metricType = metricType;
     }
 
+    @Nullable
     public Double getValue() {
         return value;
     }
 
-    public void setValue(Double value) {
+    public void setValue(@Nullable Double value) {
         this.value = value;
     }
 
+    @Nullable
     public String getUnit() {
         return unit;
     }
 
-    public void setUnit(String unit) {
+    public void setUnit(@Nullable String unit) {
         this.unit = unit;
     }
 
+    @Nullable
     public LocalDateTime getTimestamp() {
         return timestamp;
     }
 
-    public void setTimestamp(LocalDateTime timestamp) {
+    public void setTimestamp(@Nullable LocalDateTime timestamp) {
         this.timestamp = timestamp;
     }
 
+    @Nullable
     public String getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(@Nullable String status) {
         this.status = status;
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(@Nullable Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
         MetricDataDTO that = (MetricDataDTO) o;
 
-        if (id != null ? !id.equals(that.id) : that.id != null) return false;
-        if (stationId != null ? !stationId.equals(that.stationId) : that.stationId != null) return false;
-        if (stationName != null ? !stationName.equals(that.stationName) : that.stationName != null) return false;
-        if (metricType != that.metricType) return false;
-        if (value != null ? !value.equals(that.value) : that.value != null) return false;
-        if (unit != null ? !unit.equals(that.unit) : that.unit != null) return false;
-        if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null) return false;
-        return status != null ? status.equals(that.status) : that.status == null;
+        return Objects.equals(id, that.id)
+                && Objects.equals(stationId, that.stationId)
+                && Objects.equals(stationName, that.stationName)
+                && metricType == that.metricType
+                && Objects.equals(value, that.value)
+                && Objects.equals(unit, that.unit)
+                && Objects.equals(timestamp, that.timestamp)
+                && Objects.equals(status, that.status);
     }
 
     @Override
     public int hashCode() {
-        int result = id != null ? id.hashCode() : 0;
-        result = 31 * result + (stationId != null ? stationId.hashCode() : 0);
-        result = 31 * result + (stationName != null ? stationName.hashCode() : 0);
-        result = 31 * result + (metricType != null ? metricType.hashCode() : 0);
-        result = 31 * result + (value != null ? value.hashCode() : 0);
-        result = 31 * result + (unit != null ? unit.hashCode() : 0);
-        result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);
-        result = 31 * result + (status != null ? status.hashCode() : 0);
-        return result;
+        return Objects.hash(id, stationId, stationName, metricType, value, unit, timestamp, status);
     }
 
     @Override
@@ -142,4 +145,3 @@ public class MetricDataDTO {
                 '}';
     }
 }
-

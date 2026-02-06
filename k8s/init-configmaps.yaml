@@ -33,20 +33,21 @@ data:
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Admin user (password: admin)
+    -- Admin user (placeholder - DataLoader sets real password from K8s secret)
+    -- Invalid bcrypt hash prevents login until DataLoader runs
     INSERT INTO users (username, password_hash, role, enabled)
     VALUES (
         'admin',
-        '$2a$10$MdnzbYWc5/PVAWi4EBQNm.IHRyPvbDYC8A970.6Jf/yRoq7SQJXpG',
+        '$INVALID$DataLoaderWillSetRealPassword$PlaceholderHash$',
         'ROLE_ADMIN',
         true
     ) ON CONFLICT (username) DO NOTHING;
 
-    -- Regular user (password: user)
+    -- Regular user (placeholder - DataLoader sets real password from K8s secret)
     INSERT INTO users (username, password_hash, role, enabled)
     VALUES (
         'user',
-        '$2a$10$2tqN0AqG7/szcAjnzQNxoOeqrVtp/eiVJiaW5TdDA62b3BHE91j7S',
+        '$INVALID$DataLoaderWillSetRealPassword$PlaceholderHash$',
         'ROLE_USER',
         true
     ) ON CONFLICT (username) DO NOTHING;

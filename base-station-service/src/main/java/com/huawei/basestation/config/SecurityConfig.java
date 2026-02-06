@@ -1,5 +1,10 @@
 package com.huawei.basestation.config;
 
+import com.huawei.common.constants.HttpHeaders;
+import com.huawei.common.security.Roles;
+
+import static com.huawei.common.constants.PublicEndpoints.*;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -42,18 +47,19 @@ import jakarta.servlet.http.HttpServletResponse;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
-    private static final String HEADER_USER_NAME = "X-User-Name";
-    private static final String HEADER_USER_ROLE = "X-User-Role";
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())  // CSRF disabled - stateless API with JWT
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Permit health and actuator endpoints
-                .requestMatchers("/actuator/**").permitAll()
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                // Permit only health check publicly, secure other actuator endpoints
+                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD).permitAll()
+                .requestMatchers("/actuator/**").hasRole(Roles.ADMIN)
+                .requestMatchers(SWAGGER_UI_WILDCARD, API_DOCS_WILDCARD).permitAll()
+                // Station endpoints - read for all authenticated, modify for operators+ and services
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/stations/**").hasAnyRole(Roles.ADMIN, Roles.OPERATOR, Roles.USER, Roles.SERVICE)
+                .requestMatchers("/api/v1/stations/**").hasAnyRole(Roles.ADMIN, Roles.OPERATOR, Roles.SERVICE)
                 // All other requests require authentication
                 .anyRequest().authenticated()
             )
@@ -69,8 +75,8 @@ public class SecurityConfig {
             protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
                     @NonNull FilterChain filterChain) throws ServletException, IOException {
                 
-                String username = request.getHeader(HEADER_USER_NAME);
-                String role = request.getHeader(HEADER_USER_ROLE);
+                String username = request.getHeader(HttpHeaders.HEADER_USER_NAME);
+                String role = request.getHeader(HttpHeaders.HEADER_USER_ROLE);
                 
                 if (username != null && !username.isBlank()) {
                     // Create authorities from role header
@@ -78,8 +84,8 @@ public class SecurityConfig {
                     if (role != null && !role.isBlank()) {
                         // Normalize role to ROLE_ prefix for Spring Security
                         String normalizedRole = role.toUpperCase();
-                        if (!normalizedRole.startsWith("ROLE_")) {
-                            normalizedRole = "ROLE_" + normalizedRole;
+                        if (!normalizedRole.startsWith(Roles.ROLE_PREFIX)) {
+                            normalizedRole = Roles.ROLE_PREFIX + normalizedRole;
                         }
                         authorities = List.of(new SimpleGrantedAuthority(normalizedRole));
                     } else {

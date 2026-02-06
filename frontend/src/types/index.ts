@@ -10,6 +10,12 @@ export enum StationStatus {
   INACTIVE = 'INACTIVE',
   MAINTENANCE = 'MAINTENANCE',
   OFFLINE = 'OFFLINE',
+  ERROR = 'ERROR',
+}
+
+export enum ManagementProtocol {
+  DIRECT = 'DIRECT',
+  EDGE_BRIDGE = 'EDGE_BRIDGE',
 }
 
 export enum MetricType {
@@ -21,6 +27,16 @@ export enum MetricType {
   UPTIME = 'UPTIME',
   CONNECTION_COUNT = 'CONNECTION_COUNT',
   DATA_THROUGHPUT = 'DATA_THROUGHPUT',
+  FAN_SPEED = 'FAN_SPEED',
+  // 5G NR Metrics
+  DL_THROUGHPUT_NR3500 = 'DL_THROUGHPUT_NR3500',
+  UL_THROUGHPUT_NR3500 = 'UL_THROUGHPUT_NR3500',
+  RSRP_NR3500 = 'RSRP_NR3500',
+  SINR_NR3500 = 'SINR_NR3500',
+  DL_THROUGHPUT_NR700 = 'DL_THROUGHPUT_NR700',
+  UL_THROUGHPUT_NR700 = 'UL_THROUGHPUT_NR700',
+  LATENCY_PING = 'LATENCY_PING',
+  TX_IMBALANCE = 'TX_IMBALANCE',
 }
 
 export enum NotificationType {
@@ -36,9 +52,14 @@ export interface BaseStation {
   latitude: number
   longitude: number
   stationType: StationType
-  status: StationStatus
-  powerConsumption: number
+  status?: StationStatus // Derived from metrics/heartbeats
+  ipAddress: string // Required for connectivity
+  port?: number // Optional, defaults to protocol-specific port
+  managementProtocol: ManagementProtocol
+  powerConsumption?: number // Read from metrics
   description?: string
+  lastContactAt?: string
+  edgeBridgeId?: number
   createdAt?: string
   updatedAt?: string
 }
@@ -60,7 +81,7 @@ export interface Notification {
   message: string
   type: NotificationType
   severity?: string
-  status?: 'UNREAD' | 'READ'
+  status?: 'UNREAD' | 'READ' | 'PENDING'
   createdAt?: string
   readAt?: string
 }

@@ -1,3 +1,4 @@
+# Grafana datasource provisioning file (Prometheus data source)
 apiVersion: 1
 
 datasources:

@@ -99,3 +99,39 @@ backups/
 # AI tool local files
 .claude/
 
+# REST client files
+*.rest
+*.http
+
+# Generated reports and notes (not part of codebase)
+Best_practices.md
+TECHNICAL_REPORT.md
+HUAWEI_SSV_DATA_ANALYSIS.md
+plan.md
+
+# Build artifacts
+device-protocol-c/build/
+edge-bridge/build/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Excel files
+*.xlsx
+*.xlsm
+
+# Screenshots and images
+*.jpg
+*.jpeg
+*.png
+
+# IDE config
+pyrightconfig.json
+
+# Testing performance artifacts
+testing/performance/
+
+
+# Markdown files
+*.md

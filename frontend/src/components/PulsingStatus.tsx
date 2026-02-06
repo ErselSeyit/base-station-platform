@@ -27,11 +27,23 @@ interface PulsingStatusProps {
   color: string
   size?: number
   animate?: boolean
+  /** Accessible label for screen readers */
+  label?: string
 }
 
-export default function PulsingStatus({ color, size = 12, animate = true }: PulsingStatusProps) {
+/** Animation delays for ripple effects */
+const RIPPLE_DELAYS = [0, 1] as const
+
+export default function PulsingStatus({
+  color,
+  size = 12,
+  animate = true,
+  label = 'Status indicator',
+}: Readonly<PulsingStatusProps>) {
   return (
     <Box
+      role="status"
+      aria-label={label}
       sx={{
         position: 'relative',
         width: size,
@@ -55,32 +67,21 @@ export default function PulsingStatus({ color, size = 12, animate = true }: Puls
       />
 
       {/* Ripple effect */}
-      {animate && (
-        <>
+      {animate &&
+        RIPPLE_DELAYS.map((delay) => (
           <Box
+            key={delay}
             sx={{
               position: 'absolute',
               width: size,
               height: size,
               borderRadius: '50%',
               border: `2px solid ${color}`,
-              animation: `${rippleAnimation} 2s ease-out infinite`,
+              animation: `${rippleAnimation} 2s ease-out infinite ${delay}s`,
               zIndex: 1,
             }}
           />
-          <Box
-            sx={{
-              position: 'absolute',
-              width: size,
-              height: size,
-              borderRadius: '50%',
-              border: `2px solid ${color}`,
-              animation: `${rippleAnimation} 2s ease-out infinite 1s`,
-              zIndex: 1,
-            }}
-          />
-        </>
-      )}
+        ))}
     </Box>
   )
 }

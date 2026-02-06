@@ -67,12 +67,12 @@ export function DashboardSkeleton() {
   )
 }
 
-export function CardSkeleton({ count = 1 }: { count?: number }) {
+export function CardSkeleton({ count = 1 }: Readonly<{ count?: number }>) {
   return (
     <>
-      {Array.from({ length: count }).map((_, i) => (
+      {Array.from({ length: count }, (_, i) => `skeleton-${i}`).map((id) => (
         <Skeleton
-          key={i}
+          key={id}
           variant="rectangular"
           height={200}
           sx={{

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '../../test/test-utils'
 import Dashboard from '../Dashboard'
 import { stationApi, notificationsApi, metricsApi } from '../../services/api'
-import { BaseStation, StationStatus, StationType } from '../../types'
+import { BaseStation, ManagementProtocol, StationStatus, StationType } from '../../types'
 import { mockAxiosResponse } from '../../test/mockHelpers'
 
 // Mock the API
@@ -32,6 +32,8 @@ describe('Dashboard', () => {
       latitude: 40.7128,
       longitude: -74.006,
       stationType: StationType.MACRO_CELL,
+      ipAddress: '10.100.1.101',
+      managementProtocol: ManagementProtocol.DIRECT,
       status: StationStatus.ACTIVE,
       powerConsumption: 1500,
       description: 'Test station 1',
@@ -43,6 +45,8 @@ describe('Dashboard', () => {
       latitude: 40.758,
       longitude: -73.9855,
       stationType: StationType.SMALL_CELL,
+      ipAddress: '10.100.1.102',
+      managementProtocol: ManagementProtocol.DIRECT,
       status: StationStatus.MAINTENANCE,
       powerConsumption: 800,
       description: 'Test station 2',
@@ -54,6 +58,8 @@ describe('Dashboard', () => {
       latitude: 40.6892,
       longitude: -74.0445,
       stationType: StationType.MACRO_CELL,
+      ipAddress: '10.100.1.103',
+      managementProtocol: ManagementProtocol.DIRECT,
       status: StationStatus.OFFLINE,
       powerConsumption: 0,
       description: 'Test station 3',

@@ -18,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.huawei.notification.exception.NotificationNotFoundException;
 import com.huawei.notification.model.Notification;
 import com.huawei.notification.model.NotificationStatus;
 import com.huawei.notification.model.NotificationType;
@@ -111,6 +112,6 @@ class NotificationServiceTest {
     void sendNotification_throwsWhenNotFound() {
         when(repository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class, () -> service.sendNotification(1L));
+        assertThrows(NotificationNotFoundException.class, () -> service.sendNotification(1L));
     }
 }

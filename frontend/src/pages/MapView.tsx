@@ -7,36 +7,26 @@ import 'leaflet/dist/leaflet.css'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import { useNavigate } from 'react-router-dom'
+import ErrorDisplay from '../components/ErrorDisplay'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { getStationStatusColor, GRID_AUTO_FIT_SX } from '../constants/designSystem'
 import { stationApi } from '../services/api'
 import { BaseStation } from '../types'
+import { ensureArray, partition, avg } from '../utils/arrayUtils'
+import { getErrorMessage } from '../utils/statusHelpers'
 
 // Fix for default marker icons in React-Leaflet - bundle locally instead of CDN
 // The _getIconUrl property needs to be deleted to prevent CDN URL generation
-// Type assertion is necessary as _getIconUrl is not in the TypeScript definition
-delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl
+// @ts-expect-error _getIconUrl exists at runtime but is not in TypeScript definition
+delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
 })
-
-// Helper function to get status color CSS variable
-function getStatusColor(status: string): string {
-  switch (status) {
-    case 'ACTIVE':
-      return 'var(--status-active)'
-    case 'MAINTENANCE':
-      return 'var(--status-maintenance)'
-    case 'OFFLINE':
-      return 'var(--status-offline)'
-    default:
-      return 'var(--status-offline)'
-  }
-}
 
 // World bounds to prevent panning outside valid coordinates
 const worldBounds = L.latLngBounds(
@@ -70,7 +60,7 @@ function MapController({ stations }: { stations: BaseStation[] }) {
 export default function MapView() {
   const navigate = useNavigate()
   const [selectedStation, setSelectedStation] = useState<BaseStation | null>(null)
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['stations'],
     queryFn: async () => {
       const response = await stationApi.getAll()
@@ -78,31 +68,31 @@ export default function MapView() {
     },
   })
 
-  const stations = Array.isArray(data) ? data : []
+  const stations = ensureArray(data as BaseStation[])
 
-  // Filter out stations with invalid coordinates
-  const validStations = stations.filter((s: BaseStation) =>
-    s.latitude >= -90 && s.latitude <= 90 &&
-    s.longitude >= -180 && s.longitude <= 180 &&
-    !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)
-  )
-
-  const invalidStations = stations.filter((s: BaseStation) =>
-    !(s.latitude >= -90 && s.latitude <= 90 &&
+  // Memoize partition and center calculations - expensive with large datasets
+  const { validStations, invalidStations, centerLat, centerLng } = useMemo(() => {
+    const isValidCoordinates = (s: BaseStation): boolean =>
+      s.latitude >= -90 && s.latitude <= 90 &&
       s.longitude >= -180 && s.longitude <= 180 &&
-      !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude))
-  )
+      !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)
 
-  // Calculate center point (average of valid stations)
-  const centerLat = validStations.length > 0
-    ? validStations.reduce((sum: number, s: BaseStation) => sum + s.latitude, 0) / validStations.length
-    : 41.0064 // Default to Istanbul if no valid stations
-  const centerLng = validStations.length > 0
-    ? validStations.reduce((sum: number, s: BaseStation) => sum + s.longitude, 0) / validStations.length
-    : 28.9759 // Default to Istanbul if no valid stations
+    const { pass, fail } = partition(stations, isValidCoordinates)
+
+    return {
+      validStations: pass,
+      invalidStations: fail,
+      centerLat: avg(pass, s => s.latitude, 41.0064), // Default to Istanbul
+      centerLng: avg(pass, s => s.longitude, 28.9759),
+    }
+  }, [stations])
 
   if (isLoading) {
     return <LoadingSpinner />
+  }
+
+  if (error) {
+    return <ErrorDisplay title="Failed to load map data" message={getErrorMessage(error)} />
   }
 
   return (
@@ -150,7 +140,7 @@ export default function MapView() {
           <Alert
             severity="warning"
             sx={{
-              background: 'var(--mono-50)',
+              background: 'var(--surface-elevated)',
               border: '1px solid var(--surface-border)',
               borderLeft: '3px solid var(--status-maintenance)',
               borderRadius: '8px',
@@ -198,6 +188,7 @@ export default function MapView() {
                 <Button
                   size="small"
                   variant="outlined"
+                  aria-label={`Edit coordinates for ${s.stationName}`}
                   startIcon={<EditIcon />}
                   onClick={() => navigate(`/stations/${s.id}`)}
                   sx={{
@@ -207,8 +198,8 @@ export default function MapView() {
                     textTransform: 'none',
                     fontSize: '0.8125rem',
                     '&:hover': {
-                      borderColor: 'var(--mono-300)',
-                      background: 'var(--mono-50)',
+                      borderColor: 'var(--mono-400)',
+                      background: 'var(--surface-hover)',
                     },
                   }}
                 >
@@ -236,7 +227,7 @@ export default function MapView() {
           transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           '&:hover': {
             boxShadow: 'var(--shadow-md)',
-            borderColor: 'var(--mono-300)',
+            borderColor: 'var(--mono-400)',
           },
         }}
       >
@@ -281,7 +272,7 @@ export default function MapView() {
                         width: '6px',
                         height: '6px',
                         borderRadius: '50%',
-                        background: getStatusColor(station.status),
+                        background: getStationStatusColor(station.status ?? 'OFFLINE'),
                       }}
                     />
                     <Typography sx={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--mono-700)' }}>
@@ -320,14 +311,14 @@ export default function MapView() {
             transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
             '&:hover': {
               boxShadow: 'var(--shadow-md)',
-              borderColor: 'var(--mono-300)',
+              borderColor: 'var(--mono-400)',
             },
           }}
         >
           <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--mono-950)', marginBottom: '16px' }}>
             Selected Station
           </Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          <Box sx={GRID_AUTO_FIT_SX}>
             <Box>
               <Typography sx={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--mono-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
                 Name
@@ -362,11 +353,11 @@ export default function MapView() {
                     width: '6px',
                     height: '6px',
                     borderRadius: '50%',
-                    background: getStatusColor(selectedStation.status),
+                    background: getStationStatusColor(selectedStation.status ?? 'OFFLINE'),
                   }}
                 />
                 <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-950)' }}>
-                  {selectedStation.status}
+                  {selectedStation.status ?? 'OFFLINE'}
                 </Typography>
               </Box>
             </Box>

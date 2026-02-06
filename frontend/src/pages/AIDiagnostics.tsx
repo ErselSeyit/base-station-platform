@@ -1,18 +1,17 @@
 import {
   Psychology as AIIcon,
-  CheckCircle as CheckIcon,
-  Error as ErrorIcon,
   Warning as WarningIcon,
-  AutoFixHigh as AutoFixIcon,
   Timeline as TimelineIcon,
-  Speed as SpeedIcon,
-  Memory as MemoryIcon,
-  Thermostat as TempIcon,
-  SignalCellularAlt as SignalIcon,
   Refresh as RefreshIcon,
+  RateReview as FeedbackIcon,
+  School as LearnIcon,
+  CheckCircle as CheckIcon,
+  AutoFixHigh as AutoFixIcon,
+  ClearAll as ClearIcon,
 } from '@mui/icons-material'
 import {
   Box,
+  Button,
   Card,
   Chip,
   Grid,
@@ -27,246 +26,157 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import ErrorDisplay from '../components/ErrorDisplay'
+import FeedbackDialog from '../components/FeedbackDialog'
+import { diagnosticsApi, DiagnosticSession } from '../services/api'
+import { CSS_VARS, getConfidenceColor, POLLING_INTERVALS } from '../constants/designSystem'
+import { formatTimestamp, getErrorMessage } from '../utils/statusHelpers'
+import {
+  DiagnosticLog,
+  DiagnosticEvent,
+  StatCard,
+  StatusChip,
+  SeverityChip,
+  getProblemIcon,
+} from '../components/DiagnosticComponents'
 
-// Types
-interface DiagnosticEvent {
-  id: string
-  timestamp: string
-  station_id: number
-  station_name: string
-  problem_type: string
-  problem_code: string
-  category: string
-  severity: string
-  problem_description: string
-  metric_value: number
-  threshold: number
-  ai_action: string
-  ai_commands: string[]
-  ai_confidence: number
-  remediation_type: string
-  status: string
-  resolution_time?: string | null
-  notes: string
-  root_cause: string
-}
+// Progress bar scaling constants
+const PROGRESS_SCALE = {
+  PATTERNS_PER_10_PERCENT: 10,   // Each pattern = 10% progress
+  FEEDBACK_PER_5_PERCENT: 5,    // Each feedback = 5% progress
+  MAX_PERCENT: 100,
+} as const
 
-interface DiagnosticStats {
-  total_checks: number
-  problems_detected: number
-  problems_diagnosed: number
-  problems_resolved: number
-  failed_diagnoses: number
-}
+// Threshold for pattern success classification
+const SUCCESS_RATE_THRESHOLD_PERCENT = 70
 
-interface DiagnosticLog {
-  generated_at: string
-  stats: DiagnosticStats
-  events: DiagnosticEvent[]
-}
+// Placeholder value indicating missing metric data (set by backend)
+const MISSING_METRIC_PLACEHOLDER = -1
 
-// Default empty state
-const defaultDiagnosticLog: DiagnosticLog = {
-  generated_at: new Date().toISOString(),
-  stats: {
-    total_checks: 0,
-    problems_detected: 0,
-    problems_diagnosed: 0,
-    problems_resolved: 0,
-    failed_diagnoses: 0,
-  },
-  events: []
-}
+/**
+ * Transform sessions to DiagnosticLog format.
+ * Extracts metric values from metricsSnapshot for display.
+ */
+function transformSessionsToLog(sessions: DiagnosticSession[]): DiagnosticLog {
+  const events: DiagnosticEvent[] = sessions.map((session) => {
+    // Extract metric value and threshold from metricsSnapshot
+    // metricsSnapshot format: { "CPU_USAGE": 95, "threshold": 75 }
+    // Backend uses -1.0 as placeholder for missing values
+    const snapshot = session.metricsSnapshot || {}
+    const metricKeys = Object.keys(snapshot).filter(k => k !== 'threshold')
+    const rawMetricValue = metricKeys.length > 0 ? snapshot[metricKeys[0]] : null
+    // Convert null, undefined, or placeholder to 0 for display (shown as "N/A" in UI)
+    const metricValue = rawMetricValue != null && rawMetricValue !== MISSING_METRIC_PLACEHOLDER
+      ? rawMetricValue
+      : 0
+    const threshold = snapshot.threshold ?? 0
 
-// Stat Card Component - responsive for all screen sizes
-function StatCard({ title, value, subtitle, icon, color }: {
-  title: string
-  value: number | string
-  subtitle: string
-  icon: React.ReactNode
-  color: string
-}) {
-  return (
-    <Card
-      sx={{
-        p: { xs: 1.5, sm: 2, md: 2.5, lg: 3 },
-        height: '100%',
-        background: 'var(--surface-elevated)',
-        border: '1px solid var(--surface-border)',
-        borderRadius: { xs: '10px', sm: '12px', lg: '16px' },
-        transition: 'all 0.2s ease',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-        },
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
-        <Box sx={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-          <Typography
-            variant="overline"
-            sx={{
-              color: 'var(--mono-500)',
-              fontSize: { xs: '0.625rem', sm: '0.6875rem', lg: '0.75rem' },
-              fontWeight: 600,
-              lineHeight: 1.4,
-              display: 'block',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {title}
-          </Typography>
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 700,
-              color: color,
-              fontSize: { xs: '1.25rem', sm: '1.5rem', md: '1.75rem', lg: '2rem' },
-              letterSpacing: '-0.02em',
-              mt: 0.5,
-              lineHeight: 1.1,
-            }}
-          >
-            {value}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              color: 'var(--mono-500)',
-              mt: 0.5,
-              fontSize: { xs: '0.6875rem', sm: '0.75rem', lg: '0.8125rem' },
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {subtitle}
-          </Typography>
-        </Box>
-        <Box
-          sx={{
-            p: { xs: 0.75, sm: 1, lg: 1.5 },
-            borderRadius: { xs: '6px', sm: '8px', lg: '12px' },
-            background: `${color}15`,
-            color: color,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            '& svg': {
-              fontSize: { xs: 16, sm: 18, md: 20, lg: 24 },
-            },
-          }}
-        >
-          {icon}
-        </Box>
-      </Box>
-    </Card>
-  )
-}
+    return {
+      id: session.id,
+      timestamp: session.createdAt,
+      station_id: session.stationId,
+      station_name: session.stationName || `Station ${session.stationId}`,
+      problem_type: session.problemCode.split('_')[0],
+      problem_code: session.problemCode,
+      category: session.category || 'SYSTEM',
+      severity: session.severity,
+      problem_description: session.message,
+      metric_value: metricValue,
+      threshold: threshold,
+      ai_action: session.aiSolution?.action || 'Analyzing...',
+      ai_commands: session.aiSolution?.commands || [],
+      ai_confidence: session.aiSolution?.confidence || 0,
+      remediation_type: session.aiSolution?.riskLevel || 'unknown',
+      status: session.status,
+      resolution_time: session.resolvedAt,
+      notes: '',
+      root_cause: session.aiSolution?.reasoning || '',
+    }
+  })
 
-// Problem Type Icon - with colors that work in dark mode
-function getProblemIcon(type: string) {
-  switch (type) {
-    case 'TEMPERATURE':
-      return <TempIcon sx={{ color: '#ef4444', fontSize: 20 }} />
-    case 'CPU_USAGE':
-      return <SpeedIcon sx={{ color: '#f59e0b', fontSize: 20 }} />
-    case 'MEMORY_USAGE':
-      return <MemoryIcon sx={{ color: '#f59e0b', fontSize: 20 }} />
-    case 'SIGNAL_STRENGTH':
-      return <SignalIcon sx={{ color: '#3b82f6', fontSize: 20 }} />
-    default:
-      return <WarningIcon sx={{ color: 'var(--mono-500)', fontSize: 20 }} />
+  return {
+    generated_at: new Date().toISOString(),
+    stats: {
+      total_checks: sessions.length,
+      problems_detected: sessions.length,
+      problems_diagnosed: sessions.filter(s => s.aiSolution).length,
+      problems_resolved: sessions.filter(s => s.status === 'RESOLVED').length,
+      failed_diagnoses: sessions.filter(s => s.status === 'FAILED').length,
+    },
+    events,
   }
-}
-
-// Status Chip - with dark mode support
-function StatusChip({ status }: { status: string }) {
-  const configs: Record<string, { color: string; bg: string; darkBg: string; icon: React.ReactElement }> = {
-    RESOLVED: { color: 'var(--status-active)', bg: 'rgba(22, 163, 74, 0.15)', darkBg: 'rgba(22, 163, 74, 0.25)', icon: <CheckIcon sx={{ fontSize: 14 }} /> },
-    DIAGNOSED: { color: 'var(--status-maintenance)', bg: 'rgba(234, 88, 12, 0.15)', darkBg: 'rgba(234, 88, 12, 0.25)', icon: <AutoFixIcon sx={{ fontSize: 14 }} /> },
-    DETECTED: { color: 'var(--status-offline)', bg: 'rgba(220, 38, 38, 0.15)', darkBg: 'rgba(220, 38, 38, 0.25)', icon: <ErrorIcon sx={{ fontSize: 14 }} /> },
-    FAILED: { color: 'var(--mono-500)', bg: 'var(--mono-100)', darkBg: 'var(--mono-200)', icon: <ErrorIcon sx={{ fontSize: 14 }} /> },
-  }
-  const config = configs[status] || configs.FAILED
-
-  return (
-    <Chip
-      icon={config.icon}
-      label={status}
-      size="small"
-      sx={{
-        backgroundColor: config.bg,
-        color: config.color,
-        fontWeight: 600,
-        fontSize: '0.75rem',
-        border: `1px solid ${config.color}30`,
-        '& .MuiChip-icon': { color: `${config.color} !important` },
-      }}
-    />
-  )
-}
-
-// Severity Chip - with dark mode support
-function SeverityChip({ severity }: { severity: string }) {
-  const configs: Record<string, { color: string; bg: string }> = {
-    CRITICAL: { color: 'var(--status-offline)', bg: 'rgba(220, 38, 38, 0.15)' },
-    WARNING: { color: 'var(--status-maintenance)', bg: 'rgba(234, 88, 12, 0.15)' },
-    INFO: { color: 'var(--mono-600)', bg: 'var(--mono-100)' },
-  }
-  const config = configs[severity] || configs.INFO
-
-  return (
-    <Chip
-      label={severity}
-      size="small"
-      sx={{
-        backgroundColor: config.bg,
-        color: config.color,
-        fontWeight: 600,
-        fontSize: '0.7rem',
-        border: `1px solid ${config.color}30`,
-      }}
-    />
-  )
 }
 
 export default function AIDiagnostics() {
-  const [diagnosticData, setDiagnosticData] = useState<DiagnosticLog>(defaultDiagnosticLog)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
+  const [selectedSession, setSelectedSession] = useState<DiagnosticSession | null>(null)
+  // Filter to hide old sessions from display (data remains in DB for AI learning)
+  const [clearAfter, setClearAfter] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
-  // Fetch diagnostic data from the JSON file
-  const fetchDiagnosticData = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const response = await fetch('/ai-diagnose-log.json')
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.status}`)
-      }
-      const data: DiagnosticLog = await response.json()
-      setDiagnosticData(data)
-    } catch (err) {
-      console.error('Error fetching diagnostic data:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load diagnostic data')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  // Fetch all diagnostic sessions with React Query
+  const { data: sessions = [], isLoading, error: sessionsError, refetch } = useQuery({
+    queryKey: ['diagnostic-sessions'],
+    queryFn: async () => {
+      const response = await diagnosticsApi.getAll()
+      return response.data
+    },
+    refetchInterval: POLLING_INTERVALS.NORMAL,
+    staleTime: 30_000, // Cache for 30s to prevent refetch on navigation
+  })
 
-  // Initial fetch
-  useEffect(() => {
-    fetchDiagnosticData()
-  }, [fetchDiagnosticData])
+  // Filter sessions for display (hide old ones if cleared, data stays in DB for AI)
+  const displayedSessions = clearAfter
+    ? sessions.filter(s => new Date(s.createdAt) > new Date(clearAfter))
+    : sessions
+
+  // Transform sessions to log format
+  const diagnosticData = transformSessionsToLog(displayedSessions)
+  const error = sessionsError ? getErrorMessage(sessionsError) : null
+
+  // Fetch pending confirmations from the learning system
+  const { data: pendingSessions = [], error: pendingError } = useQuery({
+    queryKey: ['diagnostic-pending'],
+    queryFn: async () => {
+      const response = await diagnosticsApi.getPending()
+      return response.data
+    },
+    refetchInterval: POLLING_INTERVALS.NORMAL,
+    staleTime: 30_000,
+  })
+
+  // Fetch learning stats (less critical, longer cache)
+  const { data: learningStats, error: learningError } = useQuery({
+    queryKey: ['learning-stats'],
+    queryFn: async () => {
+      const response = await diagnosticsApi.getLearningStats()
+      return response.data
+    },
+    refetchInterval: POLLING_INTERVALS.SLOW,
+    staleTime: 60_000, // Cache for 60s - stats don't need real-time updates
+  })
+
+  const handleOpenFeedback = (session: DiagnosticSession) => {
+    setSelectedSession(session)
+    setFeedbackDialogOpen(true)
+  }
+
+  const handleFeedbackSubmit = () => {
+    queryClient.invalidateQueries({ queryKey: ['diagnostic-sessions'] })
+    queryClient.invalidateQueries({ queryKey: ['diagnostic-pending'] })
+    queryClient.invalidateQueries({ queryKey: ['learning-stats'] })
+  }
 
   // Refresh handler
   const handleRefresh = () => {
-    fetchDiagnosticData()
+    refetch()
+  }
+
+  // Clear view handler - hides old sessions from display (data stays in DB for AI learning)
+  const handleClearView = () => {
+    setClearAfter(new Date().toISOString())
   }
 
   const stats = diagnosticData.stats
@@ -275,6 +185,11 @@ export default function AIDiagnostics() {
   const resolutionRate = stats.problems_detected > 0
     ? ((stats.problems_resolved / stats.problems_detected) * 100).toFixed(1)
     : '0'
+
+  const queryError = pendingError || learningError
+  if (queryError) {
+    return <ErrorDisplay title="Failed to load diagnostics data" message={queryError.message} />
+  }
 
   return (
     <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, maxWidth: '1400px', margin: '0 auto' }}>
@@ -285,7 +200,7 @@ export default function AIDiagnostics() {
             sx={{
               p: { xs: 1, sm: 1.5 },
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: CSS_VARS.gradientAi,
               color: 'white',
             }}
           >
@@ -308,18 +223,48 @@ export default function AIDiagnostics() {
             </Typography>
           </Box>
         </Box>
-        <Tooltip title="Refresh data">
-          <IconButton
-            onClick={handleRefresh}
-            sx={{
-              background: 'var(--surface-elevated)',
-              border: '1px solid var(--surface-border)',
-              '&:hover': { background: 'var(--mono-100)' },
-            }}
-          >
-            <RefreshIcon sx={{ animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
-          </IconButton>
-        </Tooltip>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Tooltip title="Clear view (data stays in DB for AI learning)">
+            <IconButton
+              onClick={handleClearView}
+              sx={{
+                width: 40,
+                height: 40,
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--mono-400)',
+                borderRadius: '10px',
+                color: 'var(--mono-700)',
+                '&:hover': {
+                  background: 'var(--surface-hover)',
+                  borderColor: 'var(--mono-400)',
+                  color: 'var(--mono-900)',
+                },
+              }}
+            >
+              <ClearIcon sx={{ fontSize: 20, color: 'inherit' }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Refresh diagnostics">
+            <IconButton
+              onClick={handleRefresh}
+              sx={{
+                width: 40,
+                height: 40,
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--mono-400)',
+                borderRadius: '10px',
+                color: 'var(--mono-700)',
+                '&:hover': {
+                  background: 'var(--surface-hover)',
+                  borderColor: 'var(--mono-400)',
+                  color: 'var(--mono-900)',
+                },
+              }}
+            >
+              <RefreshIcon sx={{ fontSize: 20, animation: isLoading ? 'spin 1s linear infinite' : 'none', color: 'inherit' }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
 
       {/* Error Display */}
@@ -328,12 +273,12 @@ export default function AIDiagnostics() {
           sx={{
             p: 2,
             mb: 3,
-            backgroundColor: '#fee2e2',
-            border: '1px solid #fca5a5',
+            backgroundColor: CSS_VARS.statusErrorBg,
+            border: `1px solid ${CSS_VARS.statusErrorBorder}`,
             borderRadius: '12px',
           }}
         >
-          <Typography sx={{ color: '#dc2626', fontWeight: 500 }}>
+          <Typography sx={{ color: CSS_VARS.statusOffline, fontWeight: 500 }}>
             {error}
           </Typography>
         </Card>
@@ -347,7 +292,8 @@ export default function AIDiagnostics() {
             value={stats.total_checks}
             subtitle="Monitoring cycles"
             icon={<TimelineIcon />}
-            color="#3b82f6"
+            color={CSS_VARS.colorBlue500}
+            bg={CSS_VARS.colorBlueBg}
           />
         </Grid>
         <Grid item xs={6} sm={6} md={6} lg={3}>
@@ -356,7 +302,8 @@ export default function AIDiagnostics() {
             value={stats.problems_detected}
             subtitle="Issues found"
             icon={<WarningIcon />}
-            color="#f59e0b"
+            color={CSS_VARS.colorAmber500}
+            bg={CSS_VARS.colorAmberBg}
           />
         </Grid>
         <Grid item xs={6} sm={6} md={6} lg={3}>
@@ -365,7 +312,8 @@ export default function AIDiagnostics() {
             value={stats.problems_resolved}
             subtitle="Auto-fixed issues"
             icon={<CheckIcon />}
-            color="#10b981"
+            color={CSS_VARS.colorEmerald500}
+            bg={CSS_VARS.colorEmeraldBg}
           />
         </Grid>
         <Grid item xs={6} sm={6} md={6} lg={3}>
@@ -374,116 +322,119 @@ export default function AIDiagnostics() {
             value={`${resolutionRate}%`}
             subtitle="Success rate"
             icon={<AutoFixIcon />}
-            color="#8b5cf6"
+            color={CSS_VARS.colorPurple500}
+            bg={CSS_VARS.colorPurpleBg}
           />
         </Grid>
       </Grid>
 
-      {/* AI Confidence Gauge */}
-      <Card
-        sx={{
-          p: 3,
-          mb: 4,
-          background: 'var(--surface-elevated)',
-          border: '1px solid var(--surface-border)',
-          borderRadius: '16px',
-        }}
-      >
-        <Typography
-          variant="h6"
-          sx={{ fontWeight: 600, mb: 3, color: 'var(--mono-950)' }}
+      {/* AI Confidence Gauge - only show when we have learning stats */}
+      {learningStats && learningStats.totalFeedback > 0 && (
+        <Card
+          sx={{
+            p: 3,
+            mb: 4,
+            background: 'var(--surface-elevated)',
+            border: '1px solid var(--mono-400)',
+            borderRadius: '16px',
+          }}
         >
-          AI System Performance
-        </Typography>
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={4}>
-            <Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
-                  Average Confidence
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
-                  78%
-                </Typography>
-              </Box>
-              <LinearProgress
-                variant="determinate"
-                value={78}
-                sx={{
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: 'var(--mono-200)',
-                  '& .MuiLinearProgress-bar': {
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 600, mb: 3, color: 'var(--mono-950)' }}
+          >
+            AI System Performance
+          </Typography>
+          <Grid container spacing={4}>
+            <Grid item xs={12} md={4}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
+                    Success Rate
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                    {learningStats.successRate.toFixed(1)}%
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={learningStats.successRate}
+                  sx={{
+                    height: 8,
                     borderRadius: 4,
-                    background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-                  },
-                }}
-              />
-            </Box>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
-                  Diagnosis Accuracy
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
-                  91%
-                </Typography>
+                    backgroundColor: CSS_VARS.mono200,
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: CSS_VARS.gradientAi,
+                    },
+                  }}
+                />
               </Box>
-              <LinearProgress
-                variant="determinate"
-                value={91}
-                sx={{
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: 'var(--mono-200)',
-                  '& .MuiLinearProgress-bar': {
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
+                    Patterns Learned
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                    {learningStats.topPatterns?.length || 0}
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min((learningStats.topPatterns?.length || 0) * PROGRESS_SCALE.PATTERNS_PER_10_PERCENT, PROGRESS_SCALE.MAX_PERCENT)}
+                  sx={{
+                    height: 8,
                     borderRadius: 4,
-                    background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
-                  },
-                }}
-              />
-            </Box>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
-                  Response Time
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
-                  1.2s avg
-                </Typography>
+                    backgroundColor: CSS_VARS.mono200,
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: CSS_VARS.gradientSuccess,
+                    },
+                  }}
+                />
               </Box>
-              <LinearProgress
-                variant="determinate"
-                value={85}
-                sx={{
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: 'var(--mono-200)',
-                  '& .MuiLinearProgress-bar': {
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: 'var(--mono-600)' }}>
+                    Total Feedback
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                    {learningStats.totalFeedback}
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(learningStats.totalFeedback * PROGRESS_SCALE.FEEDBACK_PER_5_PERCENT, PROGRESS_SCALE.MAX_PERCENT)}
+                  sx={{
+                    height: 8,
                     borderRadius: 4,
-                    background: 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)',
-                  },
-                }}
-              />
-            </Box>
+                    backgroundColor: CSS_VARS.mono200,
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: CSS_VARS.gradientAmber,
+                    },
+                  }}
+                />
+              </Box>
+            </Grid>
           </Grid>
-        </Grid>
-      </Card>
+        </Card>
+      )}
 
       {/* Recent Events Section */}
       <Card
         sx={{
           background: 'var(--surface-elevated)',
-          border: '1px solid var(--surface-border)',
+          border: '1px solid var(--mono-400)',
           borderRadius: '16px',
           overflow: 'hidden',
         }}
       >
-        <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid var(--surface-border)' }}>
+        <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid var(--mono-400)' }}>
           <Typography
             variant="h6"
             sx={{ fontWeight: 600, color: 'var(--mono-950)', fontSize: { xs: '1rem', sm: '1.25rem' } }}
@@ -509,12 +460,12 @@ export default function AIDiagnostics() {
                   sx={{
                     p: 2,
                     background: 'var(--surface-base)',
-                    border: '1px solid var(--surface-border)',
+                    border: '1px solid var(--mono-400)',
                     borderRadius: '12px',
                     transition: 'all 0.2s ease',
                     '&:hover': {
                       boxShadow: 'var(--shadow-sm)',
-                      borderColor: 'var(--mono-300)',
+                      borderColor: 'var(--mono-400)',
                     },
                   }}
                 >
@@ -527,7 +478,7 @@ export default function AIDiagnostics() {
                           {event.station_name}
                         </Typography>
                         <Typography sx={{ color: 'var(--mono-500)', fontSize: '0.75rem' }}>
-                          {new Date(event.timestamp).toLocaleString()}
+                          {formatTimestamp(event.timestamp)}
                         </Typography>
                       </Box>
                     </Box>
@@ -541,7 +492,7 @@ export default function AIDiagnostics() {
                       label={event.problem_type.replace('_', ' ')}
                       size="small"
                       sx={{
-                        backgroundColor: 'var(--mono-100)',
+                        backgroundColor: 'var(--surface-subtle)',
                         color: 'var(--mono-700)',
                         fontWeight: 500,
                         fontSize: '0.7rem',
@@ -550,12 +501,12 @@ export default function AIDiagnostics() {
                   </Box>
 
                   {/* Metrics */}
-                  <Box sx={{ mb: 2, p: 1.5, background: 'var(--mono-50)', borderRadius: '8px' }}>
+                  <Box sx={{ mb: 2, p: 1.5, background: 'var(--surface-elevated)', borderRadius: '8px' }}>
                     <Typography sx={{ color: 'var(--mono-600)', fontSize: '0.75rem', mb: 0.5 }}>
                       Metric Value
                     </Typography>
                     <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--mono-950)', fontWeight: 600 }}>
-                      {event.metric_value.toFixed(1)} / {event.threshold} threshold
+                      {event.metric_value > 0 ? `${event.metric_value.toFixed(1)} / ${event.threshold} threshold` : 'N/A'}
                     </Typography>
                   </Box>
 
@@ -588,7 +539,7 @@ export default function AIDiagnostics() {
                         backgroundColor: 'var(--mono-200)',
                         '& .MuiLinearProgress-bar': {
                           borderRadius: 3,
-                          backgroundColor: event.ai_confidence > 0.8 ? '#10b981' : event.ai_confidence > 0.6 ? '#f59e0b' : '#ef4444',
+                          backgroundColor: getConfidenceColor(event.ai_confidence),
                         },
                       }}
                     />
@@ -603,13 +554,13 @@ export default function AIDiagnostics() {
         <TableContainer sx={{ display: { xs: 'none', md: 'block' } }}>
           <Table>
             <TableHead>
-              <TableRow sx={{ backgroundColor: 'var(--mono-50)' }}>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Station</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Problem</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Severity</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>AI Action</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Confidence</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)' }}>Status</TableCell>
+              <TableRow sx={{ backgroundColor: 'var(--surface-subtle)' }}>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Station</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Problem</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Severity</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>AI Action</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Confidence</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -617,8 +568,9 @@ export default function AIDiagnostics() {
                 <TableRow
                   key={event.id}
                   sx={{
-                    '&:hover': { backgroundColor: 'var(--mono-50)' },
+                    '&:hover': { backgroundColor: 'var(--surface-hover)' },
                     transition: 'background-color 0.15s ease',
+                    '& td': { borderBottom: '1px solid var(--mono-400)', verticalAlign: 'top' },
                   }}
                 >
                   <TableCell>
@@ -629,7 +581,7 @@ export default function AIDiagnostics() {
                           {event.station_name}
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
-                          {new Date(event.timestamp).toLocaleTimeString()}
+                          {formatTimestamp(event.timestamp)}
                         </Typography>
                       </Box>
                     </Box>
@@ -639,7 +591,7 @@ export default function AIDiagnostics() {
                       {event.problem_type.replace('_', ' ')}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
-                      {event.metric_value.toFixed(1)} / {event.threshold}
+                      {event.metric_value > 0 ? `${event.metric_value.toFixed(1)} / ${event.threshold}` : 'N/A'}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -674,7 +626,7 @@ export default function AIDiagnostics() {
                           backgroundColor: 'var(--mono-200)',
                           '& .MuiLinearProgress-bar': {
                             borderRadius: 3,
-                            backgroundColor: event.ai_confidence > 0.8 ? '#10b981' : event.ai_confidence > 0.6 ? '#f59e0b' : '#ef4444',
+                            backgroundColor: getConfidenceColor(event.ai_confidence),
                           },
                         }}
                       />
@@ -693,13 +645,216 @@ export default function AIDiagnostics() {
         </TableContainer>
       </Card>
 
-      {/* CSS for spin animation */}
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      {/* Pending Confirmations Section */}
+      {pendingSessions.length > 0 && (
+        <Card
+          sx={{
+            mt: 4,
+            background: CSS_VARS.colorVioletBg,
+            border: `1px solid ${CSS_VARS.colorVioletBorder}`,
+            borderRadius: '16px',
+            overflow: 'hidden',
+          }}
+        >
+          <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: `1px solid ${CSS_VARS.mono400}` }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box
+                sx={{
+                  p: 1,
+                  borderRadius: '10px',
+                  background: CSS_VARS.gradientAi,
+                  color: 'white',
+                }}
+              >
+                <FeedbackIcon sx={{ fontSize: 20 }} />
+              </Box>
+              <Box>
+                <Typography
+                  variant="h6"
+                  sx={{ fontWeight: 600, color: 'var(--mono-950)', fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                >
+                  Pending Confirmations
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)', fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+                  Help the AI learn by confirming if solutions worked
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {pendingSessions.map((session) => (
+                <Box
+                  key={session.id}
+                  sx={{
+                    p: 2,
+                    background: 'var(--surface-base)',
+                    border: '1px solid var(--mono-400)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 2,
+                  }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 200 }}>
+                    <Typography sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                      {session.problemCode.replaceAll('_', ' ')}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'var(--mono-500)', mt: 0.5 }}>
+                      {session.stationName} - {session.message}
+                    </Typography>
+                    {session.aiSolution && (
+                      <Typography variant="body2" sx={{ color: 'var(--mono-600)', mt: 1, fontStyle: 'italic' }}>
+                        AI Action: {session.aiSolution.action}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Button
+                    variant="contained"
+                    startIcon={<FeedbackIcon />}
+                    onClick={() => handleOpenFeedback(session)}
+                    sx={{
+                      background: CSS_VARS.gradientAi,
+                      color: 'white',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 3,
+                      '&:hover': {
+                        background: CSS_VARS.gradientAiHover,
+                      },
+                    }}
+                  >
+                    Confirm Solution
+                  </Button>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        </Card>
+      )}
+
+      {/* Learning Stats Section */}
+      {learningStats && learningStats.totalFeedback > 0 && (
+        <Card
+          sx={{
+            mt: 4,
+            background: 'var(--surface-elevated)',
+            border: '1px solid var(--mono-400)',
+            borderRadius: '16px',
+            p: { xs: 2, sm: 3 },
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+            <Box
+              sx={{
+                p: 1,
+                borderRadius: '10px',
+                background: CSS_VARS.gradientSuccess,
+                color: 'white',
+              }}
+            >
+              <LearnIcon sx={{ fontSize: 20 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
+                AI Learning Progress
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                The AI improves based on your feedback
+              </Typography>
+            </Box>
+          </Box>
+
+          <Grid container spacing={3}>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--mono-950)' }}>
+                  {learningStats.totalFeedback}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Total Feedback
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--status-active)' }}>
+                  {learningStats.resolved}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Successful
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--status-offline)' }}>
+                  {learningStats.failed}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Failed
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Tooltip title="Solutions auto-applied due to high AI confidence (95%+)">
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: CSS_VARS.colorPurple500, cursor: 'help' }}>
+                    {learningStats.autoApplied || 0}
+                  </Typography>
+                </Tooltip>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Auto-Applied
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={2.4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--color-violet-500)' }}>
+                  {learningStats.successRate.toFixed(1)}%
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+                  Success Rate
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+
+          {learningStats.topPatterns && learningStats.topPatterns.length > 0 && (
+            <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid var(--mono-400)' }}>
+              <Typography variant="subtitle2" sx={{ color: 'var(--mono-600)', mb: 2 }}>
+                Top Learned Patterns
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {learningStats.topPatterns.map((pattern) => (
+                  <Chip
+                    key={pattern.problemCode}
+                    label={`${pattern.problemCode.replaceAll('_', ' ')} (${pattern.successRate.toFixed(0)}%)`}
+                    size="small"
+                    sx={{
+                      backgroundColor: pattern.successRate >= SUCCESS_RATE_THRESHOLD_PERCENT ? CSS_VARS.colorEmeraldBg : CSS_VARS.colorAmberBg,
+                      color: pattern.successRate >= SUCCESS_RATE_THRESHOLD_PERCENT ? CSS_VARS.colorEmerald600 : CSS_VARS.colorAmber600,
+                      fontWeight: 600,
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Card>
+      )}
+
+      {/* Feedback Dialog */}
+      <FeedbackDialog
+        open={feedbackDialogOpen}
+        session={selectedSession}
+        onClose={() => setFeedbackDialogOpen(false)}
+        onSubmit={handleFeedbackSubmit}
+      />
+
     </Box>
   )
 }

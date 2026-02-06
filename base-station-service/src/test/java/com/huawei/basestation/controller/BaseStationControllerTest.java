@@ -58,13 +58,12 @@ class BaseStationControllerTest {
         // Verify dependencies are not null
         assertNotNull(objectMapper, "ObjectMapper should be autowired and not null");
         assertNotNull(MediaType.APPLICATION_JSON, "MediaType.APPLICATION_JSON constant should not be null");
-        
+
         BaseStationDTO dto = createTestDTO();
         assertNotNull(dto, "Test DTO should not be null");
-        
-        BaseStationDTO created = createTestDTO();
+
+        BaseStationDTO created = createTestDTOWithId(1L);
         assertNotNull(created, "Created DTO should not be null");
-        created.setId(1L);
 
         // Use any() matcher to match any BaseStationDTO instance (type-safe)
         // The created DTO is verified as non-null above
@@ -73,7 +72,7 @@ class BaseStationControllerTest {
 
         String jsonContent = serializeToJson(dto);
         assertNotNull(jsonContent, "JSON content should not be null after serialization");
-        
+
         MediaType contentType = getApplicationJsonMediaType();
         assertNotNull(contentType, "Content type should not be null");
 
@@ -87,8 +86,7 @@ class BaseStationControllerTest {
 
     @Test
     void getStationById_returnsStationWhenFound() throws Exception {
-        BaseStationDTO dto = createTestDTO();
-        dto.setId(1L);
+        BaseStationDTO dto = createTestDTOWithId(1L);
 
         when(service.getStationById(1L)).thenReturn(Optional.of(dto));
 
@@ -108,11 +106,16 @@ class BaseStationControllerTest {
 
     @Test
     void getAllStations_returnsAllStations() throws Exception {
-        BaseStationDTO dto1 = createTestDTO();
-        dto1.setId(1L);
-        BaseStationDTO dto2 = createTestDTO();
-        dto2.setId(2L);
-        dto2.setStationName("BS-002");
+        BaseStationDTO dto1 = createTestDTOWithId(1L);
+        BaseStationDTO dto2 = BaseStationDTO.builder()
+                .id(2L)
+                .stationName("BS-002")
+                .location("Downtown")
+                .latitude(40.7128)
+                .longitude(-74.0060)
+                .stationType(StationType.MACRO_CELL)
+                .status(StationStatus.ACTIVE)
+                .build();
 
         when(service.getAllStations()).thenReturn(List.of(dto1, dto2));
 
@@ -127,22 +130,28 @@ class BaseStationControllerTest {
         // Verify dependencies are not null
         assertNotNull(objectMapper, "ObjectMapper should be autowired and not null");
         assertNotNull(MediaType.APPLICATION_JSON, "MediaType.APPLICATION_JSON constant should not be null");
-        
-        BaseStationDTO dto = createTestDTO();
+
+        BaseStationDTO dto = BaseStationDTO.builder()
+                .id(1L)
+                .stationName("BS-001-Updated")
+                .location("Downtown")
+                .latitude(40.7128)
+                .longitude(-74.0060)
+                .stationType(StationType.MACRO_CELL)
+                .status(StationStatus.ACTIVE)
+                .build();
         assertNotNull(dto, "Test DTO should not be null");
-        dto.setId(1L);
-        dto.setStationName("BS-001-Updated");
 
         // Use any() matcher to match any BaseStationDTO instance (type-safe)
         when(service.updateStation(eq(1L), any(BaseStationDTO.class)))
                 .thenReturn(dto);
-        
+
         // Verify the mock return value is not null
         assertNotNull(dto, "Mock service should return a non-null updated DTO");
 
         String jsonContent = serializeToJson(dto);
         assertNotNull(jsonContent, "JSON content should not be null after serialization");
-        
+
         MediaType contentType = getApplicationJsonMediaType();
         assertNotNull(contentType, "Content type should not be null");
 
@@ -160,19 +169,31 @@ class BaseStationControllerTest {
     }
 
     private BaseStationDTO createTestDTO() {
-        BaseStationDTO dto = new BaseStationDTO();
-        dto.setStationName("BS-001");
-        dto.setLocation("Downtown");
-        dto.setLatitude(40.7128);
-        dto.setLongitude(-74.0060);
-        dto.setStationType(StationType.MACRO_CELL);
-        dto.setStatus(StationStatus.ACTIVE);
-        return dto;
+        return BaseStationDTO.builder()
+                .stationName("BS-001")
+                .location("Downtown")
+                .latitude(40.7128)
+                .longitude(-74.0060)
+                .stationType(StationType.MACRO_CELL)
+                .status(StationStatus.ACTIVE)
+                .build();
+    }
+
+    private BaseStationDTO createTestDTOWithId(Long id) {
+        return BaseStationDTO.builder()
+                .id(id)
+                .stationName("BS-001")
+                .location("Downtown")
+                .latitude(40.7128)
+                .longitude(-74.0060)
+                .stationType(StationType.MACRO_CELL)
+                .status(StationStatus.ACTIVE)
+                .build();
     }
 
     /**
      * Safely serializes an object to JSON string with null checks and exception handling.
-     * 
+     *
      * @param object the object to serialize
      * @return JSON string representation
      * @throws IllegalStateException if objectMapper is null or serialization fails
@@ -180,9 +201,6 @@ class BaseStationControllerTest {
     private String serializeToJson(Object object) {
         if (objectMapper == null) {
             throw new IllegalStateException("ObjectMapper is null - cannot serialize object to JSON");
-        }
-        if (object == null) {
-            throw new IllegalArgumentException("Cannot serialize null object to JSON");
         }
         try {
             String json = objectMapper.writeValueAsString(object);
@@ -197,7 +215,7 @@ class BaseStationControllerTest {
 
     /**
      * Safely retrieves APPLICATION_JSON MediaType with null check.
-     * 
+     *
      * @return MediaType.APPLICATION_JSON
      * @throws IllegalStateException if MediaType.APPLICATION_JSON is null
      */

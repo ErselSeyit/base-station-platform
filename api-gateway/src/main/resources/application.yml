@@ -45,6 +45,28 @@ spring:
                 redis-rate-limiter.replenishRate: 50
                 redis-rate-limiter.burstCapacity: 100
                 redis-rate-limiter.requestedTokens: 1
+        - id: son-service
+          uri: ${ROUTE_MONITORING_URL:http://monitoring-service:8082}
+          predicates:
+            - Path=/api/v1/son,/api/v1/son/**
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                redis-rate-limiter.requestedTokens: 1
+        - id: diagnostics-service
+          uri: ${ROUTE_MONITORING_URL:http://monitoring-service:8082}
+          predicates:
+            - Path=/api/v1/diagnostics,/api/v1/diagnostics/**
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 30
+                redis-rate-limiter.burstCapacity: 60
+                redis-rate-limiter.requestedTokens: 1
         - id: notification-service
           uri: ${ROUTE_NOTIFICATION_URL:http://notification-service:8083}
           predicates:
@@ -66,6 +88,17 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 10
                 redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+        - id: reports-service
+          uri: ${ROUTE_AI_DIAGNOSTIC_URL:http://ai-diagnostic:9091}
+          predicates:
+            - Path=/api/reports/**
+          filters:
+            - RewritePath=/api/reports/(?<segment>.*), /reports/${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
                 redis-rate-limiter.requestedTokens: 1
 
 server:
@@ -104,4 +137,24 @@ cors:
 
 jwt:
   secret: ${JWT_SECRET:}
-  simulate-validation: false
+
+security:
+  internal:
+    secret: ${SECURITY_INTERNAL_SECRET:}
+  headers:
+    # HSTS - only enable with HTTPS in production
+    hsts:
+      enabled: ${SECURITY_HSTS_ENABLED:false}
+      max-age: ${SECURITY_HSTS_MAX_AGE:31536000}
+    # Content Security Policy
+    csp:
+      enabled: ${SECURITY_CSP_ENABLED:true}
+    # X-Frame-Options (DENY, SAMEORIGIN)
+    frame-options: ${SECURITY_FRAME_OPTIONS:DENY}
+  actuator:
+    # Allowed IPs for actuator endpoints (comma-separated, supports CIDR)
+    allowed-ips: ${SECURITY_ACTUATOR_IPS:127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+  https:
+    # Enable HTTPS enforcement in production
+    enforce: ${SECURITY_HTTPS_ENFORCE:false}
+    port: ${SECURITY_HTTPS_PORT:443}

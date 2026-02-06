@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -114,6 +115,6 @@ class MonitoringServiceTest {
         List<MetricDataDTO> result = service.getMetricsAboveThreshold(MetricType.CPU_USAGE, 70.0);
 
         assertEquals(1, result.size());
-        assertTrue(result.get(0).getValue() > 70.0);
+        assertTrue(Objects.requireNonNull(result.get(0).getValue()) > 70.0);
     }
 }

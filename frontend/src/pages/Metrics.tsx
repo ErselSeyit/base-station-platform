@@ -1,315 +1,568 @@
 import {
+  CheckCircle as HealthyIcon,
+  Error as CriticalIcon,
+  Warning as WarningIcon,
+  Speed as PerformanceIcon,
+  FiveG as FiveGIcon,
+  NetworkCheck as NetworkIcon,
+  TrendingUp as QualityIcon,
+  InfoOutlined as InfoIcon,
+} from '@mui/icons-material'
+import {
   Box,
   FormControl,
   InputLabel,
   MenuItem,
   Select,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { format, subDays } from 'date-fns'
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
 } from 'recharts'
+import ErrorDisplay from '../components/ErrorDisplay'
 import LoadingSpinner from '../components/LoadingSpinner'
+import {
+  CARD_STATUS_STYLES,
+  CSS_VARS,
+  FILTER_FORM_CONTROL_SX,
+  SELECT_MENU_PROPS,
+  GRID_METRIC_CARDS_SX,
+  POLLING_INTERVALS,
+} from '../constants/designSystem'
+import { CATEGORY_CONFIG as BASE_CATEGORY_CONFIG, MetricConfig, METRICS_CONFIG } from '../constants/metricsConfig'
 import { metricsApi, stationApi } from '../services/api'
-import { BaseStation, MetricData, MetricType } from '../types'
+import type { DailyMetricAggregate } from '../services/api/metrics'
+import { BaseStation, MetricData } from '../types'
+import { ensureArray } from '../utils/arrayUtils'
+import { getWorstHealthStatus } from '../utils/metricEvaluators'
+import { getDateFormat, getErrorMessage } from '../utils/statusHelpers'
+
+interface ProcessedMetric {
+  type: string
+  average: number
+  min: number
+  max: number
+  current: number
+  count: number
+  config: MetricConfig
+}
 
 interface ChartDataPoint {
   date: string
-  CPU_USAGE?: number
-  MEMORY_USAGE?: number
-  POWER_CONSUMPTION?: number
-  TEMPERATURE?: number
-  SIGNAL_STRENGTH?: number
-  UPTIME?: number
-  CONNECTION_COUNT?: number
-  DATA_THROUGHPUT?: number
+  [key: string]: number | string | undefined
 }
 
-interface MetricAccumulator {
-  date: string
-  sums: Record<string, number>
-  counts: Record<string, number>
+// Unit conversion constants
+const UNIT_CONVERSION = {
+  WATTS_TO_KILOWATTS: 1000,
+} as const
+
+// ============================================================================
+// Constants
+// ============================================================================
+// Extend CARD_STATUS_STYLES with icons for this page
+const STATUS_STYLES = {
+  healthy: { ...CARD_STATUS_STYLES.healthy, Icon: HealthyIcon },
+  warning: { ...CARD_STATUS_STYLES.warning, Icon: WarningIcon },
+  critical: { ...CARD_STATUS_STYLES.critical, Icon: CriticalIcon },
+} as const
+
+// Extend base category config with icons
+const CATEGORY_CONFIG = {
+  system: { ...BASE_CATEGORY_CONFIG.system, Icon: PerformanceIcon },
+  '5g-n78': { ...BASE_CATEGORY_CONFIG['5g-n78'], Icon: FiveGIcon },
+  '5g-n28': { ...BASE_CATEGORY_CONFIG['5g-n28'], Icon: NetworkIcon },
+  quality: { ...BASE_CATEGORY_CONFIG.quality, Icon: QualityIcon },
 }
 
-const METRIC_CONFIGS = {
-  CPU_USAGE: { color: 'var(--status-active)', unit: '%', domain: [0, 100] as [number, number] },
-  MEMORY_USAGE: { color: 'var(--status-maintenance)', unit: '%', domain: [0, 100] as [number, number] },
-  TEMPERATURE: { color: 'var(--status-offline)', unit: '°C', domain: [0, 100] as [number, number] },
-  POWER_CONSUMPTION: { color: 'var(--status-info)', unit: ' kW', domain: [0, 'auto'] as [number, string] },
-  SIGNAL_STRENGTH: { color: 'var(--status-active)', unit: ' dBm', domain: [-100, -40] as [number, number] },
-  UPTIME: { color: 'var(--status-maintenance)', unit: '%', domain: [0, 100] as [number, number] },
-  CONNECTION_COUNT: { color: 'var(--status-info)', unit: '', domain: [0, 'auto'] as [number, string] },
-  DATA_THROUGHPUT: { color: 'var(--status-active)', unit: ' Mbps', domain: [0, 'auto'] as [number, string] },
-}
+// ============================================================================
+// Components
+// ============================================================================
 
-interface MetricCardProps {
-  label: string
-  value: string
-  unit: string
-  color: string
+interface DetailedMetricCardProps {
+  metric: ProcessedMetric
   delay: number
 }
 
-const MetricCard = ({ label, value, unit, color, delay }: MetricCardProps) => {
+const DetailedMetricCard = ({ metric, delay }: DetailedMetricCardProps) => {
+  const { config, average, min, max, current, count } = metric
+  const status = config.getStatus(average)
+  const styles = STATUS_STYLES[status as keyof typeof STATUS_STYLES]
+  const StatusIcon = styles.Icon
+
   return (
     <Box
       component={motion.div}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ delay, duration: 0.3 }}
       sx={{
-        padding: '20px',
         background: 'var(--surface-base)',
         border: '1px solid var(--surface-border)',
-        borderLeft: `3px solid ${color}`,
-        borderRadius: '12px',
-        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+        borderRadius: '14px',
+        overflow: 'hidden',
+        transition: 'all 0.2s ease',
         '&:hover': {
-          boxShadow: 'var(--shadow-md)',
-          borderColor: 'var(--mono-300)',
+          borderColor: styles.border,
+          boxShadow: `0 8px 24px ${styles.shadow}`,
         },
       }}
     >
-      <Typography
-        sx={{
-          fontSize: '0.75rem',
-          fontWeight: 500,
-          color: 'var(--mono-500)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          marginBottom: '8px',
-        }}
-      >
-        {label}
-      </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-        <Typography
+      {/* Status bar */}
+      <Box sx={{ height: '4px', background: styles.color }} />
+
+      <Box sx={{ padding: '20px' }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: '16px' }}>
+          <Box sx={{ flex: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', mb: '4px' }}>
+              <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: 'var(--mono-950)' }}>
+                {config.label}
+              </Typography>
+              <Tooltip title={config.description} arrow placement="top">
+                <InfoIcon sx={{ fontSize: 16, color: 'var(--mono-400)', cursor: 'help' }} />
+              </Tooltip>
+            </Box>
+            <Typography sx={{ fontSize: '0.75rem', color: 'var(--mono-500)' }}>
+              {config.fullLabel}
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              background: styles.bgSubtle,
+            }}
+          >
+            <StatusIcon sx={{ fontSize: 14, color: styles.color }} />
+            <Typography sx={{ fontSize: '0.6875rem', fontWeight: 700, color: styles.color, textTransform: 'uppercase' }}>
+              {styles.label}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Current Value */}
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '6px', mb: '16px' }}>
+          <Typography
+            sx={{
+              fontSize: '2.25rem',
+              fontWeight: 800,
+              fontFamily: "'JetBrains Mono', monospace",
+              color: 'var(--mono-950)',
+              lineHeight: 1,
+            }}
+          >
+            {config.format(current)}
+          </Typography>
+          <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: 'var(--mono-400)' }}>
+            {config.unit}
+          </Typography>
+        </Box>
+
+        {/* Stats Grid */}
+        <Box
           sx={{
-            fontSize: '1.75rem',
-            fontWeight: 600,
-            fontVariantNumeric: 'tabular-nums',
-            fontFamily: "'JetBrains Mono', monospace",
-            color: 'var(--mono-950)',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '12px',
+            padding: '12px',
+            background: 'var(--surface-elevated)',
+            borderRadius: '8px',
+            mb: '16px',
           }}
         >
-          {value}
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: '0.875rem',
-            fontWeight: 500,
-            color: 'var(--mono-500)',
-          }}
-        >
-          {unit}
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, color: 'var(--mono-400)', textTransform: 'uppercase', mb: '2px' }}>
+              Min
+            </Typography>
+            <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: 'var(--mono-700)' }}>
+              {config.format(min)}
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: 'center', borderLeft: '1px solid var(--mono-200)', borderRight: '1px solid var(--mono-200)' }}>
+            <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, color: 'var(--mono-400)', textTransform: 'uppercase', mb: '2px' }}>
+              Avg
+            </Typography>
+            <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: 'var(--mono-950)' }}>
+              {config.format(average)}
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, color: 'var(--mono-400)', textTransform: 'uppercase', mb: '2px' }}>
+              Max
+            </Typography>
+            <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: 'var(--mono-700)' }}>
+              {config.format(max)}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Thresholds */}
+        <Box sx={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: CSS_VARS.statusActive }} />
+            <Typography sx={{ fontSize: '0.6875rem', color: 'var(--mono-500)' }}>{config.thresholds.good}</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: CSS_VARS.statusMaintenance }} />
+            <Typography sx={{ fontSize: '0.6875rem', color: 'var(--mono-500)' }}>{config.thresholds.warn}</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: CSS_VARS.statusOffline }} />
+            <Typography sx={{ fontSize: '0.6875rem', color: 'var(--mono-500)' }}>{config.thresholds.critical}</Typography>
+          </Box>
+        </Box>
+
+        {/* Sample count */}
+        <Typography sx={{ fontSize: '0.6875rem', color: 'var(--mono-400)', mt: '12px' }}>
+          Based on {count.toLocaleString()} samples
         </Typography>
       </Box>
     </Box>
   )
 }
 
-interface ChartCardProps {
-  title: string
-  subtitle: string
-  data: ChartDataPoint[]
-  metricKey: keyof Omit<ChartDataPoint, 'date'>
-  color: string
-  unit: string
-  domain: [number, number | string]
-  delay: number
+interface CategorySectionProps {
+  category: keyof typeof CATEGORY_CONFIG
+  metrics: ProcessedMetric[]
+  chartData: ChartDataPoint[]
+  baseDelay: number
+  days: number
 }
 
-const ChartCard = ({ title, subtitle, data, metricKey, color, unit, domain, delay }: ChartCardProps) => {
+const CategorySection = ({ category, metrics, chartData, baseDelay, days }: CategorySectionProps) => {
+  const config = CATEGORY_CONFIG[category]
+  const Icon = config.Icon
+
+  if (metrics.length === 0) return null
+
+  // Get worst status in category using shared utility
+  const statuses = metrics.map(m => m.config.getStatus(m.average))
+  const worstStatus = getWorstHealthStatus(statuses)
+  const statusStyles = STATUS_STYLES[worstStatus]
+
   return (
     <Box
       component={motion.div}
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      sx={{
-        background: 'var(--surface-base)',
-        border: '1px solid var(--surface-border)',
-        borderRadius: '12px',
-        padding: '24px',
-        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-        '&:hover': {
-          boxShadow: 'var(--shadow-md)',
-          borderColor: 'var(--mono-300)',
-        },
-      }}
+      transition={{ delay: baseDelay, duration: 0.4 }}
+      sx={{ marginBottom: '40px' }}
     >
-      <Typography
-        sx={{
-          fontSize: '0.875rem',
-          fontWeight: 600,
-          color: 'var(--mono-950)',
-          marginBottom: '4px',
-          letterSpacing: '-0.01em',
-        }}
-      >
-        {title}
-      </Typography>
-      <Typography
-        sx={{
-          fontSize: '0.75rem',
-          color: 'var(--mono-500)',
-          marginBottom: '20px',
-        }}
-      >
-        {subtitle}
-      </Typography>
-      <ResponsiveContainer width="100%" height={250}>
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--mono-200)" />
-          <XAxis
-            dataKey="date"
-            tick={{ fontSize: 11, fill: 'var(--mono-600)' }}
-            stroke="var(--mono-300)"
-          />
-          <YAxis
-            domain={domain}
-            tickFormatter={(v) => `${typeof v === 'number' ? v.toFixed(0) : v}${unit}`}
-            tick={{ fontSize: 11, fill: 'var(--mono-600)' }}
-            stroke="var(--mono-300)"
-          />
-          <Tooltip
-            formatter={(value: number) => `${value.toFixed(2)}${unit}`}
-            labelStyle={{ fontWeight: 600, color: 'var(--mono-950)' }}
-            contentStyle={{
-              background: 'var(--surface-base)',
-              border: '1px solid var(--surface-border)',
-              borderRadius: '8px',
-              fontSize: '0.8125rem',
-              color: 'var(--mono-950)',
+      {/* Section Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              borderRadius: '12px',
+              background: 'var(--surface-subtle)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-            itemStyle={{ color: 'var(--mono-700)' }}
-          />
-          <Line
-            type="monotone"
-            dataKey={metricKey}
-            stroke={color}
-            strokeWidth={2}
-            dot={false}
-            connectNulls
-          />
-        </LineChart>
-      </ResponsiveContainer>
+          >
+            <Icon sx={{ fontSize: 24, color: 'var(--mono-600)' }} />
+          </Box>
+          <Box>
+            <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--mono-950)', letterSpacing: '-0.01em' }}>
+              {config.title}
+            </Typography>
+            <Typography sx={{ fontSize: '0.8125rem', color: 'var(--mono-500)' }}>
+              {config.subtitle}
+            </Typography>
+          </Box>
+        </Box>
+        <Box
+          sx={{
+            padding: '6px 14px',
+            borderRadius: '100px',
+            background: statusStyles.bg,
+            border: `1px solid ${statusStyles.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: statusStyles.color }} />
+          <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: statusStyles.color }}>
+            {statusStyles.label}
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Metrics Grid */}
+      <Box
+        sx={{ ...GRID_METRIC_CARDS_SX, marginBottom: '24px' }}
+      >
+        {metrics.map((metric, idx) => (
+          <DetailedMetricCard key={metric.type} metric={metric} delay={baseDelay + 0.05 + idx * 0.03} />
+        ))}
+      </Box>
+
+      {/* Chart */}
+      <Box
+        component={motion.div}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: baseDelay + 0.2, duration: 0.35 }}
+        sx={{
+          background: 'var(--surface-base)',
+          border: '1px solid var(--surface-border)',
+          borderRadius: '14px',
+          padding: '24px',
+        }}
+      >
+        <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--mono-950)', mb: '4px' }}>
+          {config.title} Trends
+        </Typography>
+        <Typography sx={{ fontSize: '0.75rem', color: 'var(--mono-500)', mb: '20px' }}>
+          Historical data visualization
+        </Typography>
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+            <defs>
+              {metrics.map(m => (
+                <linearGradient key={m.type} id={`gradient-${m.type}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={m.config.color} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={m.config.color} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--mono-200)" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 10, fill: 'var(--mono-600)' }}
+              stroke="var(--mono-300)"
+              interval={days <= 7 ? 0 : 'preserveStartEnd'}
+              tickMargin={5}
+            />
+            <YAxis tick={{ fontSize: 11, fill: 'var(--mono-600)' }} stroke="var(--mono-300)" />
+            <RechartsTooltip
+              contentStyle={{
+                background: 'var(--surface-base)',
+                border: '1px solid var(--surface-border)',
+                borderRadius: '8px',
+                fontSize: '0.8125rem',
+              }}
+            />
+            {metrics.map(m => (
+              <Area
+                key={m.type}
+                type="monotone"
+                dataKey={m.type}
+                stroke={m.config.color}
+                strokeWidth={2}
+                fill={`url(#gradient-${m.type})`}
+                connectNulls
+              />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+      </Box>
     </Box>
   )
 }
 
+// ============================================================================
+// Main Component
+// ============================================================================
 export default function Metrics() {
   const [selectedStation, setSelectedStation] = useState<number | 'all'>('all')
-  const [metricType, setMetricType] = useState<MetricType | 'all'>('all')
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [days, setDays] = useState(7)
 
-  const { data: stations } = useQuery({
+  const { data: stations, error: stationsError } = useQuery({
     queryKey: ['stations'],
     queryFn: async () => {
       const response = await stationApi.getAll()
       return response.data
     },
   })
-  const { data: metrics, isLoading } = useQuery({
-    queryKey: ['metrics', days],
+
+  const { data: historicalMetrics, isLoading: isLoadingHistorical, error: historicalError } = useQuery({
+    queryKey: ['metrics-historical', days],
     queryFn: async () => {
       const response = await metricsApi.getAll({
         startTime: subDays(new Date(), days).toISOString(),
+        endTime: new Date().toISOString(),
+        limit: 10000,
+        sort: 'asc',
       })
       return response.data
     },
-    refetchInterval: 30000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 
-  const stationsList = Array.isArray(stations) ? stations : []
-  const metricsList = Array.isArray(metrics) ? metrics : []
+  const { data: liveMetrics, error: liveError } = useQuery({
+    queryKey: ['metrics-live'],
+    queryFn: async () => {
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000)
+      const response = await metricsApi.getAll({
+        startTime: twoMinutesAgo.toISOString(),
+        limit: 500,
+      })
+      return response.data
+    },
+    refetchInterval: POLLING_INTERVALS.NORMAL,
+  })
 
-  // Filter metrics
-  let filteredMetrics = metricsList
-  if (selectedStation !== 'all') {
-    filteredMetrics = filteredMetrics.filter((m: MetricData) => m.stationId === selectedStation)
-  }
-  if (metricType !== 'all') {
-    filteredMetrics = filteredMetrics.filter((m: MetricData) => m.metricType === metricType)
-  }
+  // Fetch pre-aggregated daily data for charts (efficient - no client-side aggregation needed)
+  const { data: dailyAggregates, error: dailyError } = useQuery({
+    queryKey: ['metrics-daily', days],
+    queryFn: async () => {
+      const response = await metricsApi.getDailyAggregates({
+        startTime: subDays(new Date(), days).toISOString(),
+        endTime: new Date().toISOString(),
+      })
+      return response.data
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  })
 
-  // Group by date for chart
-  const chartDataAccumulator = filteredMetrics.reduce((acc: Record<string, MetricAccumulator>, metric: MetricData) => {
-    if (!metric.timestamp) return acc
-    const date = format(new Date(metric.timestamp), 'MMM dd')
+  // Merge historical + live (immutable)
+  const metrics = React.useMemo(() => {
+    const historical = ensureArray(historicalMetrics as MetricData[])
+    const live = ensureArray(liveMetrics as MetricData[])
+    const existingIds = new Set(historical.map((m) => m.id))
+    const newLiveMetrics = live.filter((m) => !existingIds.has(m.id))
+    return [...historical, ...newLiveMetrics]
+  }, [historicalMetrics, liveMetrics])
 
-    if (!acc[date]) {
-      acc[date] = { date, sums: {}, counts: {} }
-    }
+  const stationsList = ensureArray<BaseStation>(stations)
+  const metricsList = ensureArray<MetricData>(metrics)
 
-    const metricType = metric.metricType
-    acc[date].sums[metricType] = (acc[date].sums[metricType] || 0) + metric.value
-    acc[date].counts[metricType] = (acc[date].counts[metricType] || 0) + 1
+  // Filter by station - memoized to prevent recalculation every render
+  const filteredMetrics = React.useMemo(
+    () => selectedStation === 'all'
+      ? metricsList
+      : metricsList.filter((m) => m.stationId === selectedStation),
+    [metricsList, selectedStation]
+  )
 
-    return acc
-  }, {})
+  // Process metrics into detailed format
+  // Uses Map for O(1) lookups and local mutation for efficiency
+  const processedMetrics = React.useMemo(() => {
+    const accumulator = new Map<string, { sum: number; min: number; max: number; current: number; count: number; maxTimestamp: number }>()
 
-  // Convert to averages
-  const accumulatorValues: MetricAccumulator[] = Object.values(chartDataAccumulator)
-  const chartData: ChartDataPoint[] = accumulatorValues.map((item) => {
-    const point: ChartDataPoint = { date: item.date }
-    Object.keys(item.sums).forEach((metricType) => {
-      const key = metricType as keyof Omit<ChartDataPoint, 'date'>
-      let avgValue = item.sums[metricType] / item.counts[metricType]
-      if (metricType === 'POWER_CONSUMPTION') {
-        avgValue = avgValue / 1000
+    for (const m of filteredMetrics) {
+      const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0
+      const existing = accumulator.get(m.metricType)
+
+      if (existing) {
+        // Update in place (local mutation within useMemo is safe)
+        existing.sum += m.value
+        existing.min = Math.min(existing.min, m.value)
+        existing.max = Math.max(existing.max, m.value)
+        existing.count += 1
+        if (ts > existing.maxTimestamp) {
+          existing.current = m.value
+          existing.maxTimestamp = ts
+        }
+      } else {
+        accumulator.set(m.metricType, {
+          sum: m.value,
+          min: m.value,
+          max: m.value,
+          current: m.value,
+          count: 1,
+          maxTimestamp: ts,
+        })
       }
-      ;(point as unknown as Record<string, number>)[key] = avgValue
-    })
-    return point
-  })
-
-  // Calculate overall averages
-  const averages = filteredMetrics.reduce((acc: Record<string, { sum: number; count: number }>, metric: MetricData) => {
-    if (!acc[metric.metricType]) {
-      acc[metric.metricType] = { sum: 0, count: 0 }
     }
-    acc[metric.metricType].sum += metric.value
-    acc[metric.metricType].count += 1
-    return acc
-  }, {})
 
-  const averageData = Object.entries(averages).map(([type, data]) => {
-    const avgData = data as { sum: number; count: number }
-    let avgValue = avgData.sum / avgData.count
-    if (type === 'POWER_CONSUMPTION') {
-      avgValue = avgValue / 1000
-    }
-    const config = METRIC_CONFIGS[type as keyof typeof METRIC_CONFIGS]
-    return {
-      type,
-      average: avgValue.toFixed(2),
-      config,
-    }
-  })
+    return Array.from(accumulator.entries())
+      .filter(([type]) => METRICS_CONFIG[type])
+      .map(([type, data]) => ({
+        type,
+        average: data.sum / data.count,
+        min: data.min,
+        max: data.max,
+        current: data.current,
+        count: data.count,
+        config: METRICS_CONFIG[type],
+      }))
+  }, [filteredMetrics])
 
-  if (isLoading) {
+  // Group by category
+  const metricsByCategory = React.useMemo(() => {
+    const groups: Record<string, ProcessedMetric[]> = {
+      system: [],
+      '5g-n78': [],
+      '5g-n28': [],
+      quality: [],
+    }
+    for (const m of processedMetrics) {
+      if (groups[m.config.category]) {
+        groups[m.config.category].push(m)
+      }
+    }
+    return groups
+  }, [processedMetrics])
+
+  // Chart data from pre-aggregated daily data (efficient - computed server-side)
+  // Date format adapts based on time range for readability
+  const dateFormat = getDateFormat(days)
+  const chartData = React.useMemo(() => {
+    const aggregates = ensureArray(dailyAggregates as DailyMetricAggregate[])
+
+    return aggregates
+      .filter((d): d is DailyMetricAggregate => d !== null && d.date !== null)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((daily) => {
+        const date = new Date(daily.date)
+        const point: ChartDataPoint = { date: format(date, dateFormat) }
+
+        if (daily.averages) {
+          for (const [type, avg] of Object.entries(daily.averages)) {
+            let value = avg
+            if (type === 'POWER_CONSUMPTION') {
+              value = avg / UNIT_CONVERSION.WATTS_TO_KILOWATTS
+            }
+            point[type] = value
+          }
+        }
+        return point
+      })
+  }, [dailyAggregates, days, dateFormat])
+
+  if (isLoadingHistorical) {
     return <LoadingSpinner />
   }
 
+  const error = stationsError || historicalError || liveError || dailyError
+  if (error) {
+    return <ErrorDisplay title="Failed to load metrics data" message={getErrorMessage(error)} />
+  }
+
+  const categories = selectedCategory === 'all'
+    ? (['system', '5g-n78', '5g-n28', 'quality'] as const)
+    : [selectedCategory as keyof typeof CATEGORY_CONFIG]
+
   return (
-    <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
+    <Box sx={{ maxWidth: '1600px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
       {/* Header */}
       <Box
         component={motion.div}
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
         sx={{ marginBottom: '32px' }}
       >
         <Typography
@@ -324,14 +577,8 @@ export default function Metrics() {
         >
           Metrics
         </Typography>
-        <Typography
-          sx={{
-            fontSize: '0.875rem',
-            color: 'var(--mono-500)',
-            letterSpacing: '0.01em',
-          }}
-        >
-          Performance analytics and data visualization · {filteredMetrics.length.toLocaleString()} data points
+        <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-500)' }}>
+          Detailed performance analytics with thresholds and trends · {filteredMetrics.length.toLocaleString()} data points
         </Typography>
       </Box>
 
@@ -340,187 +587,47 @@ export default function Metrics() {
         component={motion.div}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        sx={{
-          display: 'flex',
-          gap: '16px',
-          marginBottom: '24px',
-          flexWrap: 'wrap',
-        }}
+        transition={{ delay: 0.05, duration: 0.35 }}
+        sx={{ display: 'flex', gap: '16px', marginBottom: '32px', flexWrap: 'wrap' }}
       >
-        <FormControl
-          size="small"
-          sx={{
-            flex: '1 1 200px',
-            '& .MuiOutlinedInput-root': {
-              background: 'var(--surface-base)',
-              borderRadius: '8px',
-              color: 'var(--mono-950)',
-              '& fieldset': {
-                borderColor: 'var(--surface-border)',
-              },
-              '&:hover fieldset': {
-                borderColor: 'var(--mono-300)',
-              },
-            },
-            '& .MuiInputLabel-root': {
-              color: 'var(--mono-600)',
-              '&.Mui-focused': {
-                color: 'var(--mono-950)',
-              },
-            },
-            '& .MuiSelect-icon': {
-              color: 'var(--mono-600)',
-            },
-          }}
-        >
+        <FormControl size="small" sx={FILTER_FORM_CONTROL_SX}>
           <InputLabel>Station</InputLabel>
           <Select
             value={selectedStation}
             onChange={(e) => setSelectedStation(e.target.value as number | 'all')}
             label="Station"
-            MenuProps={{
-              PaperProps: {
-                sx: {
-                  background: 'var(--surface-base)',
-                  border: '1px solid var(--surface-border)',
-                  '& .MuiMenuItem-root': {
-                    color: 'var(--mono-950)',
-                    '&:hover': {
-                      background: 'var(--mono-100)',
-                    },
-                    '&.Mui-selected': {
-                      background: 'var(--mono-100)',
-                      '&:hover': {
-                        background: 'var(--mono-200)',
-                      },
-                    },
-                  },
-                },
-              },
-            }}
+            MenuProps={SELECT_MENU_PROPS}
           >
             <MenuItem value="all">All Stations</MenuItem>
             {stationsList.map((station: BaseStation) => (
-              <MenuItem key={station.id} value={station.id}>
-                {station.stationName}
-              </MenuItem>
+              <MenuItem key={station.id} value={station.id}>{station.stationName}</MenuItem>
             ))}
           </Select>
         </FormControl>
 
-        <FormControl
-          size="small"
-          sx={{
-            flex: '1 1 200px',
-            '& .MuiOutlinedInput-root': {
-              background: 'var(--surface-base)',
-              borderRadius: '8px',
-              color: 'var(--mono-950)',
-              '& fieldset': {
-                borderColor: 'var(--surface-border)',
-              },
-              '&:hover fieldset': {
-                borderColor: 'var(--mono-300)',
-              },
-            },
-            '& .MuiInputLabel-root': {
-              color: 'var(--mono-600)',
-              '&.Mui-focused': {
-                color: 'var(--mono-950)',
-              },
-            },
-            '& .MuiSelect-icon': {
-              color: 'var(--mono-600)',
-            },
-          }}
-        >
-          <InputLabel>Metric Type</InputLabel>
+        <FormControl size="small" sx={FILTER_FORM_CONTROL_SX}>
+          <InputLabel>Category</InputLabel>
           <Select
-            value={metricType}
-            onChange={(e) => setMetricType(e.target.value as MetricType | 'all')}
-            label="Metric Type"
-            MenuProps={{
-              PaperProps: {
-                sx: {
-                  background: 'var(--surface-base)',
-                  border: '1px solid var(--surface-border)',
-                  '& .MuiMenuItem-root': {
-                    color: 'var(--mono-950)',
-                    '&:hover': {
-                      background: 'var(--mono-100)',
-                    },
-                    '&.Mui-selected': {
-                      background: 'var(--mono-100)',
-                      '&:hover': {
-                        background: 'var(--mono-200)',
-                      },
-                    },
-                  },
-                },
-              },
-            }}
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            label="Category"
+            MenuProps={SELECT_MENU_PROPS}
           >
-            <MenuItem value="all">All Metrics</MenuItem>
-            {Object.values(MetricType).map((type) => (
-              <MenuItem key={type} value={type}>
-                {type.replace('_', ' ')}
-              </MenuItem>
-            ))}
+            <MenuItem value="all">All Categories</MenuItem>
+            <MenuItem value="system">System Performance</MenuItem>
+            <MenuItem value="5g-n78">5G NR n78 (3.5 GHz)</MenuItem>
+            <MenuItem value="5g-n28">5G NR n28 (700 MHz)</MenuItem>
+            <MenuItem value="quality">Network Quality</MenuItem>
           </Select>
         </FormControl>
 
-        <FormControl
-          size="small"
-          sx={{
-            flex: '1 1 200px',
-            '& .MuiOutlinedInput-root': {
-              background: 'var(--surface-base)',
-              borderRadius: '8px',
-              color: 'var(--mono-950)',
-              '& fieldset': {
-                borderColor: 'var(--surface-border)',
-              },
-              '&:hover fieldset': {
-                borderColor: 'var(--mono-300)',
-              },
-            },
-            '& .MuiInputLabel-root': {
-              color: 'var(--mono-600)',
-              '&.Mui-focused': {
-                color: 'var(--mono-950)',
-              },
-            },
-            '& .MuiSelect-icon': {
-              color: 'var(--mono-600)',
-              },
-          }}
-        >
+        <FormControl size="small" sx={FILTER_FORM_CONTROL_SX}>
           <InputLabel>Time Range</InputLabel>
           <Select
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
             label="Time Range"
-            MenuProps={{
-              PaperProps: {
-                sx: {
-                  background: 'var(--surface-base)',
-                  border: '1px solid var(--surface-border)',
-                  '& .MuiMenuItem-root': {
-                    color: 'var(--mono-950)',
-                    '&:hover': {
-                      background: 'var(--mono-100)',
-                    },
-                    '&.Mui-selected': {
-                      background: 'var(--mono-100)',
-                      '&:hover': {
-                        background: 'var(--mono-200)',
-                      },
-                    },
-                  },
-                },
-              },
-            }}
+            MenuProps={SELECT_MENU_PROPS}
           >
             <MenuItem value={1}>Last 24 Hours</MenuItem>
             <MenuItem value={7}>Last 7 Days</MenuItem>
@@ -530,121 +637,25 @@ export default function Metrics() {
         </FormControl>
       </Box>
 
-      {/* Average Values Grid */}
-      {averageData.length > 0 && (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: '16px',
-            marginBottom: '24px',
-          }}
-        >
-          {averageData.map((item, idx) => (
-            <MetricCard
-              key={item.type}
-              label={item.type.replace('_', ' ')}
-              value={item.average}
-              unit={item.config?.unit || ''}
-              color={item.config?.color || '#737373'}
-              delay={0.1 + idx * 0.03}
-            />
-          ))}
+      {/* Category Sections */}
+      {categories.map((category, idx) => (
+        <CategorySection
+          key={category}
+          category={category}
+          metrics={metricsByCategory[category] || []}
+          chartData={chartData}
+          baseDelay={0.1 + idx * 0.1}
+          days={days}
+        />
+      ))}
+
+      {processedMetrics.length === 0 && (
+        <Box sx={{ textAlign: 'center', padding: '60px 20px' }}>
+          <Typography sx={{ fontSize: '1rem', color: 'var(--mono-500)' }}>
+            No metrics data available for the selected filters
+          </Typography>
         </Box>
       )}
-
-      {/* Charts Grid */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(400px, 1fr))' },
-          gap: '16px',
-        }}
-      >
-        {/* Performance Metrics */}
-        {(metricType === 'all' || metricType === 'CPU_USAGE' || metricType === 'MEMORY_USAGE' || metricType === 'UPTIME') && (
-          <ChartCard
-            title="System Performance"
-            subtitle="CPU, Memory, and Uptime"
-            data={chartData}
-            metricKey="CPU_USAGE"
-            color={METRIC_CONFIGS.CPU_USAGE.color}
-            unit={METRIC_CONFIGS.CPU_USAGE.unit}
-            domain={METRIC_CONFIGS.CPU_USAGE.domain}
-            delay={0.2}
-          />
-        )}
-
-        {/* Temperature */}
-        {(metricType === 'all' || metricType === 'TEMPERATURE') && (
-          <ChartCard
-            title="Temperature"
-            subtitle="Equipment temperature monitoring"
-            data={chartData}
-            metricKey="TEMPERATURE"
-            color={METRIC_CONFIGS.TEMPERATURE.color}
-            unit={METRIC_CONFIGS.TEMPERATURE.unit}
-            domain={METRIC_CONFIGS.TEMPERATURE.domain}
-            delay={0.25}
-          />
-        )}
-
-        {/* Power Consumption */}
-        {(metricType === 'all' || metricType === 'POWER_CONSUMPTION') && (
-          <ChartCard
-            title="Power Consumption"
-            subtitle="Energy usage over time"
-            data={chartData}
-            metricKey="POWER_CONSUMPTION"
-            color={METRIC_CONFIGS.POWER_CONSUMPTION.color}
-            unit={METRIC_CONFIGS.POWER_CONSUMPTION.unit}
-            domain={METRIC_CONFIGS.POWER_CONSUMPTION.domain}
-            delay={0.3}
-          />
-        )}
-
-        {/* Signal Strength */}
-        {(metricType === 'all' || metricType === 'SIGNAL_STRENGTH') && (
-          <ChartCard
-            title="Signal Strength"
-            subtitle="Radio signal quality"
-            data={chartData}
-            metricKey="SIGNAL_STRENGTH"
-            color={METRIC_CONFIGS.SIGNAL_STRENGTH.color}
-            unit={METRIC_CONFIGS.SIGNAL_STRENGTH.unit}
-            domain={METRIC_CONFIGS.SIGNAL_STRENGTH.domain}
-            delay={0.35}
-          />
-        )}
-
-        {/* Connection Count */}
-        {(metricType === 'all' || metricType === 'CONNECTION_COUNT') && (
-          <ChartCard
-            title="Active Connections"
-            subtitle="Connected devices"
-            data={chartData}
-            metricKey="CONNECTION_COUNT"
-            color={METRIC_CONFIGS.CONNECTION_COUNT.color}
-            unit={METRIC_CONFIGS.CONNECTION_COUNT.unit}
-            domain={METRIC_CONFIGS.CONNECTION_COUNT.domain}
-            delay={0.4}
-          />
-        )}
-
-        {/* Data Throughput */}
-        {(metricType === 'all' || metricType === 'DATA_THROUGHPUT') && (
-          <ChartCard
-            title="Data Throughput"
-            subtitle="Network bandwidth usage"
-            data={chartData}
-            metricKey="DATA_THROUGHPUT"
-            color={METRIC_CONFIGS.DATA_THROUGHPUT.color}
-            unit={METRIC_CONFIGS.DATA_THROUGHPUT.unit}
-            domain={METRIC_CONFIGS.DATA_THROUGHPUT.domain}
-            delay={0.45}
-          />
-        )}
-      </Box>
     </Box>
   )
 }

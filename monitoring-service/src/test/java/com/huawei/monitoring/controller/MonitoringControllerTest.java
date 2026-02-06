@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -37,6 +38,7 @@ import com.huawei.monitoring.service.MonitoringService;
  */
 @WebMvcTest(MonitoringController.class)
 @Import(TestSecurityConfig.class)
+@ActiveProfiles("test")
 @DisplayName("MonitoringController Tests")
 @SuppressWarnings("null") // Mockito matchers and test data return null placeholders
 class MonitoringControllerTest {
@@ -96,7 +98,9 @@ class MonitoringControllerTest {
                 createMetricDTO(1L, MetricType.CPU_USAGE, 75.5),
                 createMetricDTO(2L, MetricType.MEMORY_USAGE, 60.0)
         );
-        when(monitoringService.getMetricsByTimeRange(any(LocalDateTime.class), any(LocalDateTime.class)))
+        // Controller calls getMetricsByTimeRangeWithLimit with default limit=1000 and sortAsc=false
+        when(monitoringService.getMetricsByTimeRangeWithLimit(
+                any(LocalDateTime.class), any(LocalDateTime.class), any(Integer.class), any(Boolean.class)))
                 .thenReturn(metrics);
 
         // When & Then
@@ -107,7 +111,8 @@ class MonitoringControllerTest {
                 .andExpect(jsonPath("$[0].stationId").value(1L))
                 .andExpect(jsonPath("$[1].stationId").value(2L));
 
-        verify(monitoringService).getMetricsByTimeRange(any(LocalDateTime.class), any(LocalDateTime.class));
+        verify(monitoringService).getMetricsByTimeRangeWithLimit(
+                any(LocalDateTime.class), any(LocalDateTime.class), any(Integer.class), any(Boolean.class));
     }
 
     @Test

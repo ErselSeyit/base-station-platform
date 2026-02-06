@@ -1,4 +1,35 @@
+# ============================================================================
+# Base Station Platform - Application Services
+# ============================================================================
+#
+# SECRETS MANAGEMENT:
+# -------------------
+# Secrets are NOT stored in this file (that would be insecure).
+#
+# To create secrets:
+#   1. Copy .env.example to .env and fill in your values
+#   2. Run: ./create-secrets.sh
+#
+# Or use SealedSecrets for GitOps:
+#   kubeseal --format=yaml < secret.yaml > sealed-secret.yaml
+#
+# Required secrets (create before deploying):
+#   - auth-credentials     (admin-username, admin-password, operator-*)
+#   - edge-bridge-secret   (username, password)
+#   - jwt-secret           (secret)
+#   - security-internal-secret (secret)
+#   - postgres-secrets     (username, password)
+#   - mongodb-secret       (username, password)
+#   - rabbitmq-secret      (username, password)
+#   - grafana-secret       (admin-password)
+#
+# ============================================================================
+
 ---
+# ============================================================================
+# Application Services
+# ============================================================================
+
 # Auth Service
 apiVersion: apps/v1
 kind: Deployment
@@ -45,6 +76,24 @@ spec:
             secretKeyRef:
               name: security-internal-secret
               key: secret
+        # Auth user configuration (DataLoader creates/updates users on startup)
+        - name: AUTH_ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: admin-username
+        - name: AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: admin-password
+        - name: AUTH_BRIDGE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: operator-username
+        - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+          value: "update"
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -409,6 +458,26 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9091
+        env:
+        # Cloud integration for bidirectional AI problem-solving
+        - name: CLOUD_URL
+          value: "http://api-gateway:8080"
+        - name: CLOUD_USER
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: admin-username
+        - name: CLOUD_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: admin-password
+        - name: MONITORING_SERVICE_URL
+          value: "http://monitoring-service:8082"
+        - name: SON_ANALYSIS_INTERVAL
+          value: "300"
+        - name: DIAGNOSTIC_REQUIRE_AUTH
+          value: "false"
         livenessProbe:
           httpGet:
             path: /health
@@ -589,3 +658,123 @@ spec:
   - port: 80
     targetPort: 80
     nodePort: 30000
+---
+# Edge Bridge (for MIPS device integration)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-bridge
+  namespace: basestation-platform
+  labels:
+    component: edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-bridge
+  template:
+    metadata:
+      labels:
+        app: edge-bridge
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: edge-bridge
+        image: base-station-platform-edge-bridge:1.0.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: STATION_ID
+          value: "BS-001"
+        - name: CLOUD_BASE_URL
+          value: http://api-gateway:8080
+        - name: BRIDGE_USERNAME
+          value: operator
+        - name: BRIDGE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: edge-bridge-secret
+              key: password
+        - name: DEVICE_HOST
+          value: device-simulator
+        - name: DEVICE_PORT
+          value: "9999"
+        resources:
+          limits:
+            cpu: "250m"
+            memory: 64Mi
+            ephemeral-storage: "256Mi"
+          requests:
+            cpu: "100m"
+            memory: 32Mi
+            ephemeral-storage: "128Mi"
+---
+# Device Simulator (for testing edge-bridge without real hardware)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: device-simulator
+  namespace: basestation-platform
+  labels:
+    component: edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: device-simulator
+  template:
+    metadata:
+      labels:
+        app: device-simulator
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: device-simulator
+        image: base-station-platform-device-simulator:1.0.0
+        imagePullPolicy: IfNotPresent
+        # Use virtual_station.py for HTTP/REST API metrics
+        command: ["python", "virtual_station.py"]
+        ports:
+        - containerPort: 8090
+        env:
+        - name: STATION_ID
+          value: "MIPS-BS-001"
+        - name: STATION_NAME
+          value: "Virtual-5G-Station-001"
+        - name: API_GATEWAY_URL
+          value: "http://api-gateway:8080"
+        - name: AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auth-credentials
+              key: admin-password
+        resources:
+          limits:
+            cpu: "100m"
+            memory: 256Mi
+            ephemeral-storage: "128Mi"
+          requests:
+            cpu: "50m"
+            memory: 128Mi
+            ephemeral-storage: "64Mi"
+        livenessProbe:
+          tcpSocket:
+            port: 8090
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          tcpSocket:
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: device-simulator
+  namespace: basestation-platform
+spec:
+  selector:
+    app: device-simulator
+  ports:
+  - port: 9999
+    targetPort: 9999

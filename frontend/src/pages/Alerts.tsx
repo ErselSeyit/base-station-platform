@@ -12,15 +12,62 @@ import {
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
+import { useMemo } from 'react'
+import ErrorDisplay from '../components/ErrorDisplay'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { notificationsApi } from '../services/api'
 import { Notification, NotificationType } from '../types'
-import { formatTimestamp } from '../utils/statusHelpers'
+import { ensureArray } from '../utils/arrayUtils'
+import { formatTimestamp, getErrorMessage } from '../utils/statusHelpers'
+import { showToast } from '../utils/toast'
+import { POLLING_INTERVALS } from '../constants/designSystem'
 
-const SEVERITY_COLORS = {
-  ALERT: 'var(--status-offline)',
-  WARNING: 'var(--status-maintenance)',
-  INFO: 'var(--status-info)',
+const SEVERITY_STYLES = {
+  ALERT: { color: 'var(--status-offline)', shadow: 'var(--status-error-shadow)' },
+  WARNING: { color: 'var(--status-maintenance)', shadow: 'var(--status-warning-shadow)' },
+  INFO: { color: 'var(--status-info)', shadow: 'var(--status-info-shadow)' },
+}
+
+// Shared styles for stat boxes
+const STAT_BOX_LABEL_SX = {
+  fontSize: '0.75rem',
+  fontWeight: 500,
+  color: 'var(--mono-500)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  marginBottom: '6px',
+} as const
+
+const STAT_BOX_VALUE_SX = {
+  fontSize: '1.5rem',
+  fontWeight: 600,
+  fontVariantNumeric: 'tabular-nums',
+  fontFamily: "'JetBrains Mono', monospace",
+  color: 'var(--mono-950)',
+} as const
+
+interface StatBoxProps {
+  label: string
+  value: number
+  borderColor: string
+}
+
+function StatBox({ label, value, borderColor }: Readonly<StatBoxProps>) {
+  return (
+    <Box
+      sx={{
+        flex: 1,
+        padding: '16px 20px',
+        background: 'var(--surface-base)',
+        border: '1px solid var(--surface-border)',
+        borderRadius: '12px',
+        borderLeft: `3px solid ${borderColor}`,
+      }}
+    >
+      <Typography sx={STAT_BOX_LABEL_SX}>{label}</Typography>
+      <Typography sx={STAT_BOX_VALUE_SX}>{value}</Typography>
+    </Box>
+  )
 }
 
 interface AlertRowProps {
@@ -29,9 +76,11 @@ interface AlertRowProps {
   onMarkAsRead: (id: number) => void
 }
 
-const AlertRow = ({ notification, delay, onMarkAsRead }: AlertRowProps) => {
-  const severityColor = SEVERITY_COLORS[notification.type as keyof typeof SEVERITY_COLORS] || SEVERITY_COLORS.INFO
+const AlertRow = ({ notification, delay, onMarkAsRead }: Readonly<AlertRowProps>) => {
+  const severityStyle = SEVERITY_STYLES[notification.type as keyof typeof SEVERITY_STYLES] || SEVERITY_STYLES.INFO
+  const severityColor = severityStyle.color
   const isUnread = notification.status === 'UNREAD'
+  const notificationId = notification.id
 
   const getIcon = (type: NotificationType) => {
     switch (type) {
@@ -57,9 +106,9 @@ const AlertRow = ({ notification, delay, onMarkAsRead }: AlertRowProps) => {
         padding: '20px 24px',
         borderBottom: '1px solid var(--surface-border)',
         transition: 'background 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-        background: isUnread ? 'var(--mono-50)' : 'transparent',
+        background: isUnread ? 'var(--surface-elevated)' : 'transparent',
         '&:hover': {
-          background: 'var(--mono-100)',
+          background: 'var(--surface-hover)',
         },
         '&:last-child': {
           borderBottom: 'none',
@@ -108,7 +157,7 @@ const AlertRow = ({ notification, delay, onMarkAsRead }: AlertRowProps) => {
                   height: '6px',
                   borderRadius: '50%',
                   background: severityColor,
-                  boxShadow: `0 0 0 2px ${severityColor}20`,
+                  boxShadow: `0 0 0 2px ${severityStyle.shadow}`,
                 }}
               />
             )}
@@ -150,11 +199,11 @@ const AlertRow = ({ notification, delay, onMarkAsRead }: AlertRowProps) => {
         </Box>
 
         {/* Action */}
-        {isUnread && notification.id !== undefined && (
+        {isUnread && notificationId !== undefined && (
           <Tooltip title="Mark as read">
             <IconButton
               size="small"
-              onClick={() => onMarkAsRead(notification.id!)}
+              onClick={() => onMarkAsRead(notificationId)}
               sx={{
                 width: '32px',
                 height: '32px',
@@ -177,13 +226,13 @@ const AlertRow = ({ notification, delay, onMarkAsRead }: AlertRowProps) => {
 
 export default function Alerts() {
   const queryClient = useQueryClient()
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
       const response = await notificationsApi.getAll()
       return response.data
     },
-    refetchInterval: 30000,
+    refetchInterval: POLLING_INTERVALS.NORMAL,
   })
 
   const markAsReadMutation = useMutation({
@@ -191,19 +240,38 @@ export default function Alerts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
+    onError: (err: Error) => {
+      // Refresh to show current state even on error
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      showToast.error(`Failed to mark notification as read: ${err.message}`)
+    },
   })
+
+  const notifications = ensureArray(data as Notification[])
+
+  // Calculate all counts in a single iteration (useMemo must be before early returns)
+  const { unreadCount, alertCount, warningCount } = useMemo(() => {
+    let unread = 0
+    let alerts = 0
+    let warnings = 0
+    for (const n of notifications) {
+      if (n.status === 'UNREAD') unread++
+      if (n.type === NotificationType.ALERT) alerts++
+      if (n.type === NotificationType.WARNING) warnings++
+    }
+    return { unreadCount: unread, alertCount: alerts, warningCount: warnings }
+  }, [notifications])
+
+  const handleMarkAsRead = (id: number) => {
+    markAsReadMutation.mutate(id)
+  }
 
   if (isLoading) {
     return <LoadingSpinner />
   }
 
-  const notifications = Array.isArray(data) ? data : []
-  const unreadCount = notifications.filter((n: Notification) => n.status === 'UNREAD').length
-  const alertCount = notifications.filter((n: Notification) => n.type === NotificationType.ALERT).length
-  const warningCount = notifications.filter((n: Notification) => n.type === NotificationType.WARNING).length
-
-  const handleMarkAsRead = (id: number) => {
-    markAsReadMutation.mutate(id)
+  if (error) {
+    return <ErrorDisplay title="Failed to load alerts" message={getErrorMessage(error)} />
   }
 
   return (
@@ -252,110 +320,9 @@ export default function Alerts() {
           marginBottom: '24px',
         }}
       >
-        <Box
-          sx={{
-            flex: 1,
-            padding: { xs: '12px 16px', sm: '16px 20px' },
-            background: 'var(--surface-base)',
-            border: '1px solid var(--surface-border)',
-            borderRadius: '12px',
-            borderLeft: `3px solid ${SEVERITY_COLORS.ALERT}`,
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              color: 'var(--mono-500)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '6px',
-            }}
-          >
-            Critical
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: '1.5rem',
-              fontWeight: 600,
-              fontVariantNumeric: 'tabular-nums',
-              fontFamily: "'JetBrains Mono', monospace",
-              color: 'var(--mono-950)',
-            }}
-          >
-            {alertCount}
-          </Typography>
-        </Box>
-
-        <Box
-          sx={{
-            flex: 1,
-            padding: '16px 20px',
-            background: 'var(--surface-base)',
-            border: '1px solid var(--surface-border)',
-            borderRadius: '12px',
-            borderLeft: `3px solid ${SEVERITY_COLORS.WARNING}`,
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              color: 'var(--mono-500)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '6px',
-            }}
-          >
-            Warnings
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: '1.5rem',
-              fontWeight: 600,
-              fontVariantNumeric: 'tabular-nums',
-              fontFamily: "'JetBrains Mono', monospace",
-              color: 'var(--mono-950)',
-            }}
-          >
-            {warningCount}
-          </Typography>
-        </Box>
-
-        <Box
-          sx={{
-            flex: 1,
-            padding: '16px 20px',
-            background: 'var(--surface-base)',
-            border: '1px solid var(--surface-border)',
-            borderRadius: '12px',
-            borderLeft: `3px solid ${SEVERITY_COLORS.INFO}`,
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              color: 'var(--mono-500)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '6px',
-            }}
-          >
-            Unread
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: '1.5rem',
-              fontWeight: 600,
-              fontVariantNumeric: 'tabular-nums',
-              fontFamily: "'JetBrains Mono', monospace",
-              color: 'var(--mono-950)',
-            }}
-          >
-            {unreadCount}
-          </Typography>
-        </Box>
+        <StatBox label="Critical" value={alertCount} borderColor={SEVERITY_STYLES.ALERT.color} />
+        <StatBox label="Warnings" value={warningCount} borderColor={SEVERITY_STYLES.WARNING.color} />
+        <StatBox label="Unread" value={unreadCount} borderColor={SEVERITY_STYLES.INFO.color} />
       </Box>
 
       {/* Alerts List */}

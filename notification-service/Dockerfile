@@ -7,6 +7,7 @@ COPY monitoring-service/pom.xml ./monitoring-service/
 COPY notification-service/pom.xml ./notification-service/
 COPY api-gateway/pom.xml ./api-gateway/
 COPY auth-service/pom.xml ./auth-service/
+COPY tmf-api/pom.xml ./tmf-api/
 RUN mvn dependency:go-offline -B
 COPY common/src ./common/src
 COPY notification-service ./notification-service

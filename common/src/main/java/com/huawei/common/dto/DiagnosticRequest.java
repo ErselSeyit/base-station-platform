@@ -1,11 +1,15 @@
 package com.huawei.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.huawei.common.constants.DiagnosticConstants;
 
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+
+import org.springframework.lang.Nullable;
 
 /**
  * Request DTO for AI diagnostic service.
@@ -41,22 +45,23 @@ public class DiagnosticRequest {
     private String rawLogs;
 
     public DiagnosticRequest() {
-        this.id = "PRB-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 4);
+        this.id = DiagnosticConstants.PROBLEM_ID_PREFIX + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, DiagnosticConstants.PROBLEM_ID_SUFFIX_LENGTH);
         this.timestamp = Instant.now().toString();
         this.metrics = new HashMap<>();
         this.rawLogs = "";
     }
 
     private DiagnosticRequest(Builder builder) {
-        this.id = builder.id != null ? builder.id : "PRB-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 4);
-        this.timestamp = builder.timestamp != null ? builder.timestamp : Instant.now().toString();
+        this.id = Objects.requireNonNullElseGet(builder.id,
+                () -> DiagnosticConstants.PROBLEM_ID_PREFIX + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, DiagnosticConstants.PROBLEM_ID_SUFFIX_LENGTH));
+        this.timestamp = Objects.requireNonNullElseGet(builder.timestamp, () -> Instant.now().toString());
         this.stationId = builder.stationId;
         this.category = builder.category;
         this.severity = builder.severity;
         this.code = builder.code;
         this.message = builder.message;
-        this.metrics = builder.metrics != null ? builder.metrics : new HashMap<>();
-        this.rawLogs = builder.rawLogs != null ? builder.rawLogs : "";
+        this.metrics = Objects.requireNonNullElseGet(builder.metrics, HashMap::new);
+        this.rawLogs = Objects.requireNonNullElse(builder.rawLogs, "");
     }
 
     public static Builder builder() {
@@ -67,26 +72,47 @@ public class DiagnosticRequest {
      * Create a DiagnosticRequest from an AlertEvent.
      */
     public static DiagnosticRequest fromAlertEvent(AlertEvent alert) {
-        String category = mapMetricTypeToCategory(alert.getMetricType());
-        String code = mapMetricTypeToCode(alert.getMetricType());
+        return fromAlertEvent(alert, null);
+    }
+
+    /**
+     * Create a DiagnosticRequest from an AlertEvent with explicit problem ID.
+     * Using explicit ID ensures the request matches the diagnostic session.
+     */
+    public static DiagnosticRequest fromAlertEvent(AlertEvent alert, @Nullable String problemId) {
+        String metricType = Objects.requireNonNull(
+                Objects.requireNonNullElse(alert.getMetricType(), "UNKNOWN"));
+        String severity = Objects.requireNonNull(
+                Objects.requireNonNullElse(alert.getSeverity(), "warning"));
+
+        String category = mapMetricTypeToCategory(metricType);
+        String code = mapMetricTypeToCode(metricType);
+        String metricKey = metricType.toLowerCase();
 
         Map<String, Object> metrics = new HashMap<>();
-        metrics.put(alert.getMetricType().toLowerCase(), alert.getMetricValue());
+        metrics.put(metricKey, alert.getMetricValue());
         metrics.put("threshold", alert.getThreshold());
 
-        return DiagnosticRequest.builder()
-                .stationId(alert.getStationName() != null ? alert.getStationName() : "STATION-" + alert.getStationId())
+        String message = Objects.requireNonNullElse(alert.getMessage(), "Alert triggered");
+        String alertRuleName = Objects.requireNonNullElse(alert.getAlertRuleName(), "Unknown rule");
+
+        Builder builder = DiagnosticRequest.builder()
+                .stationId(Objects.requireNonNullElseGet(alert.getStationName(), () -> "STATION-" + alert.getStationId()))
                 .category(category)
-                .severity(alert.getSeverity().toLowerCase())
+                .severity(severity.toLowerCase())
                 .code(code)
-                .message(alert.getMessage())
+                .message(message)
                 .metrics(metrics)
-                .rawLogs("Alert triggered: " + alert.getAlertRuleName() + " - " + alert.getMessage())
-                .build();
+                .rawLogs("Alert triggered: " + alertRuleName + " - " + message);
+
+        if (problemId != null) {
+            builder.id(problemId);
+        }
+
+        return builder.build();
     }
 
     private static String mapMetricTypeToCategory(String metricType) {
-        if (metricType == null) return "software";
         return switch (metricType.toUpperCase()) {
             case "CPU_USAGE", "MEMORY_USAGE", "TEMPERATURE" -> "hardware";
             case "SIGNAL_STRENGTH", "LATENCY", "PACKET_LOSS" -> "network";
@@ -96,7 +122,6 @@ public class DiagnosticRequest {
     }
 
     private static String mapMetricTypeToCode(String metricType) {
-        if (metricType == null) return "UNKNOWN_ISSUE";
         return switch (metricType.toUpperCase()) {
             case "CPU_USAGE" -> "CPU_OVERHEAT";
             case "MEMORY_USAGE" -> "MEMORY_PRESSURE";
@@ -109,57 +134,57 @@ public class DiagnosticRequest {
     }
 
     public static class Builder {
-        private String id;
-        private String timestamp;
-        private String stationId;
-        private String category;
-        private String severity;
-        private String code;
-        private String message;
-        private Map<String, Object> metrics;
-        private String rawLogs;
+        @Nullable private String id;
+        @Nullable private String timestamp;
+        @Nullable private String stationId;
+        @Nullable private String category;
+        @Nullable private String severity;
+        @Nullable private String code;
+        @Nullable private String message;
+        @Nullable private Map<String, Object> metrics;
+        @Nullable private String rawLogs;
 
-        public Builder id(String id) {
+        public Builder id(@Nullable String id) {
             this.id = id;
             return this;
         }
 
-        public Builder timestamp(String timestamp) {
+        public Builder timestamp(@Nullable String timestamp) {
             this.timestamp = timestamp;
             return this;
         }
 
-        public Builder stationId(String stationId) {
+        public Builder stationId(@Nullable String stationId) {
             this.stationId = stationId;
             return this;
         }
 
-        public Builder category(String category) {
+        public Builder category(@Nullable String category) {
             this.category = category;
             return this;
         }
 
-        public Builder severity(String severity) {
+        public Builder severity(@Nullable String severity) {
             this.severity = severity;
             return this;
         }
 
-        public Builder code(String code) {
+        public Builder code(@Nullable String code) {
             this.code = code;
             return this;
         }
 
-        public Builder message(String message) {
+        public Builder message(@Nullable String message) {
             this.message = message;
             return this;
         }
 
-        public Builder metrics(Map<String, Object> metrics) {
+        public Builder metrics(@Nullable Map<String, Object> metrics) {
             this.metrics = metrics;
             return this;
         }
 
-        public Builder rawLogs(String rawLogs) {
+        public Builder rawLogs(@Nullable String rawLogs) {
             this.rawLogs = rawLogs;
             return this;
         }
@@ -170,32 +195,41 @@ public class DiagnosticRequest {
     }
 
     // Getters and Setters
+    @Nullable
     public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public void setId(@Nullable String id) { this.id = id; }
 
+    @Nullable
     public String getTimestamp() { return timestamp; }
-    public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
+    public void setTimestamp(@Nullable String timestamp) { this.timestamp = timestamp; }
 
+    @Nullable
     public String getStationId() { return stationId; }
-    public void setStationId(String stationId) { this.stationId = stationId; }
+    public void setStationId(@Nullable String stationId) { this.stationId = stationId; }
 
+    @Nullable
     public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public void setCategory(@Nullable String category) { this.category = category; }
 
+    @Nullable
     public String getSeverity() { return severity; }
-    public void setSeverity(String severity) { this.severity = severity; }
+    public void setSeverity(@Nullable String severity) { this.severity = severity; }
 
+    @Nullable
     public String getCode() { return code; }
-    public void setCode(String code) { this.code = code; }
+    public void setCode(@Nullable String code) { this.code = code; }
 
+    @Nullable
     public String getMessage() { return message; }
-    public void setMessage(String message) { this.message = message; }
+    public void setMessage(@Nullable String message) { this.message = message; }
 
+    @Nullable
     public Map<String, Object> getMetrics() { return metrics; }
-    public void setMetrics(Map<String, Object> metrics) { this.metrics = metrics; }
+    public void setMetrics(@Nullable Map<String, Object> metrics) { this.metrics = metrics; }
 
+    @Nullable
     public String getRawLogs() { return rawLogs; }
-    public void setRawLogs(String rawLogs) { this.rawLogs = rawLogs; }
+    public void setRawLogs(@Nullable String rawLogs) { this.rawLogs = rawLogs; }
 
     @Override
     public String toString() {
