@@ -22,7 +22,7 @@ services:
   # DATABASES
   # ============================================
   postgres:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     container_name: postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
@@ -52,7 +52,7 @@ services:
       start_period: 30s
 
   mongodb:
-    image: mongo:8.2
+    image: mongo:7
     container_name: mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER:?MONGODB_USER is required}
@@ -81,7 +81,7 @@ services:
       start_period: 30s
 
   redis:
-    image: redis:8-alpine
+    image: redis:7-alpine
     container_name: redis
     # Note: Only set password via config if REDIS_PASSWORD is non-empty
     ports:
@@ -103,7 +103,7 @@ services:
       retries: 5
 
   rabbitmq:
-    image: rabbitmq:4-management-alpine
+    image: rabbitmq:3-management-alpine
     container_name: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER is required}
