@@ -180,7 +180,7 @@ func (c *Client) UpdateStatus(stationID string, status *StatusUpdateRequest) (*S
 
 // GetPendingCommands retrieves pending commands for execution.
 func (c *Client) GetPendingCommands(stationID string) ([]PendingCommand, error) {
-	url := fmt.Sprintf("%s/api/base-stations/%s/commands/pending", c.config.BaseURL, stationID)
+	url := fmt.Sprintf("%s/api/v1/stations/%s/commands/pending", c.config.BaseURL, stationID)
 
 	var commands []PendingCommand
 	if err := c.doRequest("GET", url, nil, &commands); err != nil {
@@ -192,7 +192,7 @@ func (c *Client) GetPendingCommands(stationID string) ([]PendingCommand, error) 
 
 // ReportCommandResult reports the result of a command execution.
 func (c *Client) ReportCommandResult(stationID, commandID string, result *CommandResultRequest) (*CommandResultResponse, error) {
-	url := fmt.Sprintf("%s/api/base-stations/%s/commands/%s/result", c.config.BaseURL, stationID, commandID)
+	url := fmt.Sprintf("%s/api/v1/stations/%s/commands/%s/result", c.config.BaseURL, stationID, commandID)
 
 	var resp CommandResultResponse
 	if err := c.doRequest("POST", url, result, &resp); err != nil {
@@ -298,4 +298,47 @@ func (c *Client) Ping() error {
 // IsConnected returns true if the client can reach the cloud.
 func (c *Client) IsConnected() bool {
 	return c.Ping() == nil
+}
+
+// RegisterBridge registers or updates an edge-bridge instance.
+func (c *Client) RegisterBridge(reg *EdgeBridgeRegistration) (*EdgeBridgeInstance, error) {
+	url := fmt.Sprintf("%s/api/v1/edge-bridges/register", c.config.BaseURL)
+
+	var bridge EdgeBridgeInstance
+	if err := c.doRequest("POST", url, reg, &bridge); err != nil {
+		return nil, err
+	}
+
+	return &bridge, nil
+}
+
+// SendHeartbeat sends a heartbeat to the platform.
+func (c *Client) SendHeartbeat(bridgeID string) (*HeartbeatResponse, error) {
+	url := fmt.Sprintf("%s/api/v1/edge-bridges/%s/heartbeat", c.config.BaseURL, bridgeID)
+
+	var resp HeartbeatResponse
+	if err := c.doRequest("POST", url, nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// UpdateManagedStations updates the list of stations managed by this bridge.
+func (c *Client) UpdateManagedStations(bridgeID string, stationIDs []int64) (*EdgeBridgeInstance, error) {
+	url := fmt.Sprintf("%s/api/v1/edge-bridges/%s/stations", c.config.BaseURL, bridgeID)
+
+	var bridge EdgeBridgeInstance
+	if err := c.doRequest("PUT", url, stationIDs, &bridge); err != nil {
+		return nil, err
+	}
+
+	return &bridge, nil
+}
+
+// NotifyBridgeStopping notifies the platform that this bridge is stopping.
+func (c *Client) NotifyBridgeStopping(bridgeID string) error {
+	url := fmt.Sprintf("%s/api/v1/edge-bridges/%s/stop", c.config.BaseURL, bridgeID)
+
+	return c.doRequest("POST", url, nil, nil)
 }

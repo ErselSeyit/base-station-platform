@@ -6,7 +6,6 @@ import org.springframework.data.mongodb.core.index.Indexed;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 /**
  * TMF639 Resource - represents a physical or logical network resource.

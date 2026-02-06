@@ -25,7 +25,8 @@ public class DeviceCommand {
         AI_DIAGNOSTIC,  // Created by AI diagnostic system
         OPERATOR,       // Created by human operator
         AUTOMATED,      // Created by automated rules
-        SYSTEM          // System-generated
+        SYSTEM,         // System-generated
+        SON             // Created by SON recommendation system
     }
 
     @Id
@@ -54,6 +55,9 @@ public class DeviceCommand {
 
     // Link to diagnostic session if created by AI
     private String diagnosticSessionId;
+
+    // Link to SON recommendation if created by SON system
+    private String sonRecommendationId;
 
     // Link to original problem code
     private String problemCode;
@@ -141,6 +145,14 @@ public class DeviceCommand {
 
     public void setDiagnosticSessionId(String diagnosticSessionId) {
         this.diagnosticSessionId = diagnosticSessionId;
+    }
+
+    public String getSonRecommendationId() {
+        return sonRecommendationId;
+    }
+
+    public void setSonRecommendationId(String sonRecommendationId) {
+        this.sonRecommendationId = sonRecommendationId;
     }
 
     public String getProblemCode() {

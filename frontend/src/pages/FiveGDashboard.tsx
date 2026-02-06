@@ -34,13 +34,22 @@ import { CARD_STATUS_STYLES, CSS_VARS, POLLING_INTERVALS } from '../constants/de
 import { metricsApi, stationApi } from '../services/api'
 import { BaseStation, MetricData, StationStatus } from '../types'
 import { ensureArray, avgNumbers, avg } from '../utils/arrayUtils'
+import {
+  type HealthStatus,
+  getSignalStatus,
+  getSinrStatus,
+  getLatencyStatus,
+  getThroughputStatus,
+  getHealthRatioStatus,
+  getWorstHealthStatus,
+} from '../utils/metricEvaluators'
+import { getErrorMessage } from '../utils/statusHelpers'
 
 // ============================================================================
 // Types
 // ============================================================================
 
 type BandType = 'n78' | 'n28' | 'all'
-type HealthStatus = 'healthy' | 'warning' | 'critical'
 type TrendDirection = 'up' | 'down' | 'stable'
 
 interface CellMetrics {
@@ -91,31 +100,6 @@ const BAND_INFO = {
 // Helper Functions
 // ============================================================================
 
-function getSignalStatus(rsrp: number): HealthStatus {
-  if (rsrp >= -85) return 'healthy'
-  if (rsrp >= -100) return 'warning'
-  return 'critical'
-}
-
-function getSinrStatus(sinr: number): HealthStatus {
-  if (sinr >= 10) return 'healthy'
-  if (sinr >= 5) return 'warning'
-  return 'critical'
-}
-
-function getLatencyStatus(latency: number): HealthStatus {
-  if (latency <= 15) return 'healthy'
-  if (latency <= 30) return 'warning'
-  return 'critical'
-}
-
-function getThroughputStatus(value: number, max: number): HealthStatus {
-  const ratio = value / max
-  if (ratio >= 0.5) return 'healthy'
-  if (ratio >= 0.25) return 'warning'
-  return 'critical'
-}
-
 function processCellMetrics(
   stations: BaseStation[],
   metrics: MetricData[]
@@ -145,7 +129,7 @@ function processCellMetrics(
         stationId: station.id,
         stationName: station.stationName,
         location: station.location,
-        status: station.status,
+        status: station.status ?? StationStatus.OFFLINE,
         n78: {
           dlThroughput: avgNumbers(stationMetrics?.get('DL_THROUGHPUT_NR3500')),
           ulThroughput: avgNumbers(stationMetrics?.get('UL_THROUGHPUT_NR3500')),
@@ -172,12 +156,6 @@ interface BandSummaryCardProps {
   avgUl: number
   cellCount: number
   healthyCells: number
-}
-
-function getHealthRatioStatus(healthRatio: number): HealthStatus {
-  if (healthRatio >= 0.9) return 'healthy'
-  if (healthRatio >= 0.7) return 'warning'
-  return 'critical'
 }
 
 function BandSummaryCard({ band, avgDl, avgUl, cellCount, healthyCells }: Readonly<BandSummaryCardProps>) {
@@ -344,21 +322,11 @@ interface CellRowProps {
   onToggle: () => void
 }
 
-function getOverallStatus(rsrpStatus: HealthStatus, sinrStatus: HealthStatus, latencyStatus: HealthStatus): HealthStatus {
-  if (rsrpStatus === 'critical' || sinrStatus === 'critical' || latencyStatus === 'critical') {
-    return 'critical'
-  }
-  if (rsrpStatus === 'warning' || sinrStatus === 'warning' || latencyStatus === 'warning') {
-    return 'warning'
-  }
-  return 'healthy'
-}
-
 function CellRow({ cell, expanded, onToggle }: Readonly<CellRowProps>) {
   const rsrpStatus = getSignalStatus(cell.n78.rsrp)
   const sinrStatus = getSinrStatus(cell.n78.sinr)
   const latencyStatus = getLatencyStatus(cell.latency)
-  const overallStatus = getOverallStatus(rsrpStatus, sinrStatus, latencyStatus)
+  const overallStatus = getWorstHealthStatus([rsrpStatus, sinrStatus, latencyStatus])
   const styles = CARD_STATUS_STYLES[overallStatus]
 
   return (
@@ -586,7 +554,7 @@ export default function FiveGDashboard() {
 
   const error = stationsError || metricsError
   if (error) {
-    return <ErrorDisplay title="Failed to load 5G network data" message={error.message} />
+    return <ErrorDisplay title="Failed to load 5G network data" message={getErrorMessage(error)} />
   }
 
   return (

@@ -46,7 +46,9 @@ public class AuthController {
 
     // Constants for cookie attributes
     private static final String SAME_SITE_ATTR = "SameSite";
-    private static final String SAME_SITE_STRICT = "Strict";
+    // Lax allows cookies on same-site navigations and safe cross-site GET requests
+    // while still preventing CSRF on state-changing requests (POST/PUT/DELETE)
+    private static final String SAME_SITE_LAX = "Lax";
 
     private final JwtUtil jwtUtil;
     private final LoginAttemptService loginAttemptService;
@@ -86,7 +88,7 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         String clientIp = RequestUtils.getClientIp(httpRequest);
-        String username = request.getUsername();
+        String username = request.username();
         String lockKey = username + ":" + clientIp;
 
         // Check if account/IP is blocked due to too many failed attempts
@@ -103,7 +105,7 @@ public class AuthController {
         }
 
         // Authenticate user against database
-        var userOpt = userService.authenticate(username, request.getPassword());
+        var userOpt = userService.authenticate(username, request.password());
         if (userOpt.isPresent()) {
             var user = userOpt.get();
             loginAttemptService.recordSuccessfulLogin(lockKey);
@@ -117,7 +119,7 @@ public class AuthController {
             authCookie.setSecure(secureCookie);
             authCookie.setPath("/");
             authCookie.setMaxAge(cookieMaxAge);
-            authCookie.setAttribute(SAME_SITE_ATTR, SAME_SITE_STRICT);
+            authCookie.setAttribute(SAME_SITE_ATTR, SAME_SITE_LAX);
             httpResponse.addCookie(authCookie);
 
             // Still return token in response for backward compatibility with localStorage
@@ -152,7 +154,7 @@ public class AuthController {
         authCookie.setSecure(secureCookie);
         authCookie.setPath("/");
         authCookie.setMaxAge(0); // Delete the cookie
-        authCookie.setAttribute(SAME_SITE_ATTR, SAME_SITE_STRICT);
+        authCookie.setAttribute(SAME_SITE_ATTR, SAME_SITE_LAX);
         httpResponse.addCookie(authCookie);
 
         // Log the logout for audit purposes
@@ -243,7 +245,7 @@ public class AuthController {
         authCookie.setSecure(secureCookie);
         authCookie.setPath("/");
         authCookie.setMaxAge(cookieMaxAge);
-        authCookie.setAttribute(SAME_SITE_ATTR, SAME_SITE_STRICT);
+        authCookie.setAttribute(SAME_SITE_ATTR, SAME_SITE_LAX);
         httpResponse.addCookie(authCookie);
 
         log.info("Token refreshed for user '{}' from IP '{}'", user.getUsername(), clientIp);

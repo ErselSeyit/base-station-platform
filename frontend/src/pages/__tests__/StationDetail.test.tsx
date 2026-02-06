@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '../../test/test-utils'
 import StationDetail from '../StationDetail'
 import { metricsApi, notificationsApi, stationApi } from '../../services/api'
-import { BaseStation, MetricData, Notification, StationStatus, StationType, MetricType, NotificationType } from '../../types'
+import { BaseStation, ManagementProtocol, MetricData, Notification, StationStatus, StationType, MetricType, NotificationType } from '../../types'
 
 // Mock the API
 vi.mock('../../services/api', () => ({
@@ -43,6 +43,8 @@ describe('StationDetail', () => {
     latitude: 40.7128,
     longitude: -74.006,
     stationType: StationType.MACRO_CELL,
+    ipAddress: '10.0.0.101',
+    managementProtocol: ManagementProtocol.DIRECT,
     status: StationStatus.ACTIVE,
     powerConsumption: 1500,
     description: 'Main NYC station',

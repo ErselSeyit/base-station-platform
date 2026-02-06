@@ -204,7 +204,7 @@ class Problem:
     code: str
     message: str
     metrics: Dict[str, Any]
-    raw_logs: str
+    raw_logs: str = ""  # Optional - may be empty from HTTP requests
     source_protocol: str = "unknown"
 
 
@@ -2151,6 +2151,145 @@ class HTTPAdapter(ProtocolAdapter):
         drone_service = get_drone_service()
         return jsonify(drone_service.get_statistics())
 
+    def _handle_son_test(self):
+        """Handle POST /son/test - trigger SON analysis with test data."""
+        if not SON_SCHEDULER_AVAILABLE:
+            return jsonify({"error": "SON scheduler not available"}), 503
+
+        from son_functions import analyze_cells
+
+        # Test data with values that exceed thresholds:
+        # - PRB > 80% for MLB (overloaded cells)
+        # - HO failure > 5% for MRO
+        # - RSRP < -110 dBm for CCO (poor coverage)
+        # - PRB < 20% for ES (energy saving)
+        test_cells = [
+            {
+                "cell_id": "test-cell-overloaded",
+                "station_id": "1",
+                "timestamp": datetime.now().isoformat(),
+                "prb_utilization": 85.0,  # Triggers MLB (> 80%)
+                "active_users": 120,
+                "dl_throughput": 500.0,
+                "ul_throughput": 200.0,
+                "rsrp_avg": -90.0,
+                "sinr_avg": 15.0,
+                "handover_success_rate": 92.0,  # Triggers MRO (< 95%)
+                "handover_failure_rate": 8.0,
+                "rrc_setup_success_rate": 99.5,
+                "paging_success_rate": 99.0,
+                "interference_level": -85.0,  # Triggers CCO (> -90 dBm)
+                "cqi_avg": 10.0,
+                "power_consumption": 600.0,
+                "neighbor_cells": ["test-cell-underloaded"],
+            },
+            {
+                "cell_id": "test-cell-underloaded",
+                "station_id": "1",
+                "timestamp": datetime.now().isoformat(),
+                "prb_utilization": 15.0,  # Triggers ES (< 20%)
+                "active_users": 5,
+                "dl_throughput": 50.0,
+                "ul_throughput": 20.0,
+                "rsrp_avg": -115.0,  # Triggers CCO (< -110 dBm)
+                "sinr_avg": 5.0,
+                "handover_success_rate": 99.0,
+                "handover_failure_rate": 1.0,
+                "rrc_setup_success_rate": 99.0,
+                "paging_success_rate": 99.0,
+                "interference_level": -100.0,
+                "cqi_avg": 8.0,
+                "power_consumption": 400.0,
+                "neighbor_cells": ["test-cell-overloaded"],
+            },
+        ]
+
+        # Run SON analysis on test data
+        recommendations = analyze_cells(test_cells, ["mlb", "mro", "cco", "es"])
+
+        logger.info(f"SON test generated {len(recommendations)} recommendations")
+
+        return jsonify({
+            "test_cells": len(test_cells),
+            "recommendations_generated": len(recommendations),
+            "recommendations": recommendations,
+        })
+
+    def _handle_son_test_post(self):
+        """Handle POST /son/test/post - generate test recommendations and post to monitoring service."""
+        if not SON_SCHEDULER_AVAILABLE:
+            return jsonify({"error": "SON scheduler not available"}), 503
+
+        from son_scheduler import get_son_scheduler
+
+        # Get the scheduler
+        scheduler = get_son_scheduler()
+
+        # Generate test recommendations
+        from son_functions import analyze_cells
+
+        test_cells = [
+            {
+                "cell_id": f"test-cell-{datetime.now().strftime('%H%M%S')}-overloaded",
+                "station_id": "1",
+                "timestamp": datetime.now().isoformat(),
+                "prb_utilization": 85.0,
+                "active_users": 120,
+                "dl_throughput": 500.0,
+                "ul_throughput": 200.0,
+                "rsrp_avg": -90.0,
+                "sinr_avg": 15.0,
+                "handover_success_rate": 92.0,
+                "handover_failure_rate": 8.0,
+                "rrc_setup_success_rate": 99.5,
+                "paging_success_rate": 99.0,
+                "interference_level": -85.0,
+                "cqi_avg": 10.0,
+                "power_consumption": 600.0,
+                "neighbor_cells": [f"test-cell-{datetime.now().strftime('%H%M%S')}-underloaded"],
+            },
+            {
+                "cell_id": f"test-cell-{datetime.now().strftime('%H%M%S')}-underloaded",
+                "station_id": "1",
+                "timestamp": datetime.now().isoformat(),
+                "prb_utilization": 15.0,
+                "active_users": 5,
+                "dl_throughput": 50.0,
+                "ul_throughput": 20.0,
+                "rsrp_avg": -115.0,
+                "sinr_avg": 5.0,
+                "handover_success_rate": 99.0,
+                "handover_failure_rate": 1.0,
+                "rrc_setup_success_rate": 99.0,
+                "paging_success_rate": 99.0,
+                "interference_level": -100.0,
+                "cqi_avg": 8.0,
+                "power_consumption": 400.0,
+                "neighbor_cells": [f"test-cell-{datetime.now().strftime('%H%M%S')}-overloaded"],
+            },
+        ]
+
+        recommendations = analyze_cells(test_cells, ["mlb", "mro", "cco", "es"])
+        posted = 0
+        errors = []
+
+        for rec in recommendations:
+            try:
+                if scheduler._post_recommendation(rec):
+                    posted += 1
+                else:
+                    errors.append(f"Failed to post {rec.get('recommendation_id')}")
+            except Exception as e:
+                errors.append(f"Error posting {rec.get('recommendation_id')}: {e}")
+
+        logger.info(f"SON test post: generated {len(recommendations)}, posted {posted}")
+
+        return jsonify({
+            "recommendations_generated": len(recommendations),
+            "recommendations_posted": posted,
+            "errors": errors if errors else None,
+        })
+
     def _add_cors_headers(self, response):
         """Add CORS headers to response."""
         response.headers['Access-Control-Allow-Origin'] = '*'
@@ -2279,6 +2418,12 @@ class HTTPAdapter(ProtocolAdapter):
             self._handle_drone_captures)
         app.route('/drone/stats', methods=['GET'])(
             self._handle_drone_stats)
+
+        # SON Test endpoints
+        app.route('/son/test', methods=['POST'])(
+            self._require_auth(self._handle_son_test))
+        app.route('/son/test/post', methods=['POST'])(
+            self._require_auth(self._handle_son_test_post))
 
     def start(self):
         if not FLASK_AVAILABLE:

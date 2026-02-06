@@ -9,10 +9,13 @@ import com.huawei.monitoring.model.SONRecommendation.SONStatus;
 import com.huawei.monitoring.repository.SONRecommendationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,9 +32,14 @@ public class SONService {
     private static final Logger log = LoggerFactory.getLogger(SONService.class);
 
     private final SONRecommendationRepository repository;
+    private final RestClient restClient;
 
-    public SONService(SONRecommendationRepository repository) {
+    @Value("${base-station.service.url:http://base-station-service:8081}")
+    private String baseStationServiceUrl;
+
+    public SONService(SONRecommendationRepository repository, RestClient.Builder restClientBuilder) {
         this.repository = repository;
+        this.restClient = restClientBuilder.build();
     }
 
     // ========================================================================
@@ -125,7 +133,7 @@ public class SONService {
     // ========================================================================
 
     /**
-     * Approves a recommendation.
+     * Approves a recommendation and creates a DeviceCommand for execution.
      */
     public Optional<SONRecommendation> approve(String id, String username) {
         return repository.findById(id)
@@ -134,8 +142,39 @@ public class SONService {
                     rec.approve(username);
                     SONRecommendation saved = repository.save(rec);
                     log.info("SON recommendation {} approved by {}", id, username);
+
+                    // Create DeviceCommand in base-station-service
+                    createDeviceCommand(saved);
+
                     return saved;
                 });
+    }
+
+    /**
+     * Creates a DeviceCommand in base-station-service for the approved recommendation.
+     */
+    private void createDeviceCommand(SONRecommendation rec) {
+        try {
+            var request = Map.of(
+                    "sonRecommendationId", rec.getId(),
+                    "actionType", rec.getActionType() != null ? rec.getActionType() : "",
+                    "actionValue", rec.getActionValue() != null ? rec.getActionValue() : "",
+                    "confidence", rec.getConfidence() != null ? rec.getConfidence() : 0.0
+            );
+
+            restClient.post()
+                    .uri(baseStationServiceUrl + "/api/v1/stations/{stationId}/commands/son", rec.getStationId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .toBodilessEntity();
+
+            log.info("Created DeviceCommand for SON recommendation {} (station={})",
+                    rec.getId(), rec.getStationId());
+        } catch (Exception e) {
+            log.error("Failed to create DeviceCommand for SON recommendation {}: {}",
+                    rec.getId(), e.getMessage());
+        }
     }
 
     /**

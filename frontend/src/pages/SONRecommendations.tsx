@@ -57,7 +57,7 @@ import {
   getActionButtonStyles,
 } from '../constants/designSystem'
 import { sonApi, SON_FUNCTION_NAMES } from '../services/api/son'
-import { formatTimestamp } from '../utils/statusHelpers'
+import { formatTimestamp, getErrorMessage } from '../utils/statusHelpers'
 import { showToast } from '../utils/toast'
 import type { SONRecommendation, SONFunction, SONStatus } from '../services/api/son'
 
@@ -288,7 +288,7 @@ export default function SONRecommendations() {
       queryClient.invalidateQueries({ queryKey: ['son-all'] })
     },
     onError: (error: Error) => {
-      showToast.error(`Failed to approve: ${error.message}`)
+      showToast.error(`Failed to approve: ${getErrorMessage(error)}`)
     },
   })
 
@@ -302,7 +302,7 @@ export default function SONRecommendations() {
       queryClient.invalidateQueries({ queryKey: ['son-all'] })
     },
     onError: (error: Error) => {
-      showToast.error(`Failed to reject: ${error.message}`)
+      showToast.error(`Failed to reject: ${getErrorMessage(error)}`)
     },
   })
 
@@ -315,7 +315,7 @@ export default function SONRecommendations() {
       queryClient.invalidateQueries({ queryKey: ['son-stats'] })
     },
     onError: (error: Error) => {
-      showToast.error(`Failed to rollback: ${error.message}`)
+      showToast.error(`Failed to rollback: ${getErrorMessage(error)}`)
     },
   })
 
@@ -369,7 +369,7 @@ export default function SONRecommendations() {
   }
 
   if (error) {
-    return <ErrorDisplay title="Failed to load SON recommendations" message={error.message} />
+    return <ErrorDisplay title="Failed to load SON recommendations" message={getErrorMessage(error)} />
   }
 
   return (

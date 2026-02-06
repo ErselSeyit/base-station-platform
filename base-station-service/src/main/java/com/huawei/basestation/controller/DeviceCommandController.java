@@ -183,6 +183,35 @@ public class DeviceCommandController {
     }
 
     /**
+     * Create a command from SON recommendation.
+     * Called by monitoring-service when a SON recommendation is approved.
+     */
+    @Operation(summary = "Create SON command", description = "Creates a command from approved SON recommendation")
+    @ApiResponse(responseCode = "201", description = "Command created")
+    @PostMapping("/son")
+    @PreAuthorize(Roles.HAS_SERVICE)
+    public ResponseEntity<DeviceCommand> createSONCommand(
+            @PathVariable Long stationId,
+            @Valid @RequestBody SONCommandRequest request) {
+
+        String createdBy = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        DeviceCommand command = commandService.createFromSONRecommendation(
+                stationId,
+                request.sonRecommendationId(),
+                request.actionType(),
+                request.actionValue(),
+                request.confidence(),
+                createdBy
+        );
+
+        log.info("Created SON command {} for station {} (action={}, recommendation={})",
+                command.getId(), stationId, request.actionType(), request.sonRecommendationId());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(command);
+    }
+
+    /**
      * Cancel a pending command.
      */
     @Operation(summary = "Cancel command", description = "Cancels a pending command")
@@ -251,5 +280,15 @@ public class DeviceCommandController {
     public record ManualCommandRequest(
             @NotBlank String commandType,
             Map<String, String> params
+    ) {}
+
+    /**
+     * SON command creation request.
+     */
+    public record SONCommandRequest(
+            @NotBlank String sonRecommendationId,
+            @NotBlank String actionType,
+            String actionValue,
+            Double confidence
     ) {}
 }

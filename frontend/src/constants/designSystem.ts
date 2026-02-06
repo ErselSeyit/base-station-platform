@@ -10,6 +10,12 @@
  * - Use rgba values (bg, borderColor) for backgrounds/borders
  */
 
+// Re-export HealthStatus for backwards compatibility
+export type { HealthStatus } from '../utils/metricEvaluators'
+
+// Import for local use in HEALTH_STATUS_STYLES
+import type { HealthStatus } from '../utils/metricEvaluators'
+
 // ============================================================================
 // Base Colors - CSS Variables (adapt to light/dark mode automatically)
 // ============================================================================
@@ -138,8 +144,6 @@ export const RGBA = {
 // Health Status Styles - For system health indicators
 // Used in: Dashboard, Metrics, StationDetail
 // ============================================================================
-
-export type HealthStatus = 'healthy' | 'warning' | 'critical'
 
 export interface HealthStatusStyle {
   colorVar: string
@@ -639,16 +643,16 @@ export const GRID_CONTENT_SIDEBAR_SX = {
 // Polling Intervals - For React Query refetchInterval
 // ============================================================================
 
-/** Polling interval constants (in milliseconds) */
+/** Polling interval constants (in milliseconds) - Optimized for performance */
 export const POLLING_INTERVALS = {
-  /** Fast polling for real-time data (10 seconds) */
-  FAST: 10_000,
-  /** Standard polling for live dashboards (15 seconds) */
-  STANDARD: 15_000,
-  /** Normal polling for most data (30 seconds) */
-  NORMAL: 30_000,
-  /** Slow polling for less critical data (60 seconds) */
-  SLOW: 60_000,
+  /** Fast polling for real-time critical data (15 seconds) */
+  FAST: 15_000,
+  /** Standard polling for live dashboards (30 seconds) */
+  STANDARD: 30_000,
+  /** Normal polling for most data (60 seconds) */
+  NORMAL: 60_000,
+  /** Slow polling for less critical data (2 minutes) */
+  SLOW: 120_000,
 } as const
 
 // ============================================================================

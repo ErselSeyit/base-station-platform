@@ -53,6 +53,11 @@ public class AuditLogger {
         ALERT_RULE_UPDATED,
         ALERT_RULE_DELETED,
 
+        // Edge-bridge events
+        EDGE_BRIDGE_REGISTERED,
+        EDGE_BRIDGE_UPDATED,
+        EDGE_BRIDGE_OFFLINE,
+
         // System events
         CONFIG_CHANGED,
         UNAUTHORIZED_ACCESS

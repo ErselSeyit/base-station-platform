@@ -26,6 +26,11 @@ auth:
     username: admin
     password: adminPassword123
 
+# Disable internal authentication for tests
+security:
+  internal:
+    enabled: false
+
 logging:
   level:
     root: WARN

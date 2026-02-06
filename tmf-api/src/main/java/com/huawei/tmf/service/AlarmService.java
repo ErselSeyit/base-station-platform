@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Service for TMF642 Alarm Management.
  */
 @Service
+@SuppressWarnings("null") // Spring Data MongoDB operations guarantee non-null returns; Pageable handled by framework
 public class AlarmService {
 
     private static final Logger log = LoggerFactory.getLogger(AlarmService.class);

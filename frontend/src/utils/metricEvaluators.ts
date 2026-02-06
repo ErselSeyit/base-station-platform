@@ -152,3 +152,125 @@ export function countMetricStatuses(statuses: MetricStatus[]): {
     fail: statuses.filter(s => s === 'fail').length,
   }
 }
+
+// ============================================================================
+// Power Dashboard Status Evaluation
+// ============================================================================
+
+/** Thresholds for power-related metrics */
+export const POWER_THRESHOLDS = {
+  POWER_HEALTHY_RATIO: 0.7,
+  POWER_WARNING_RATIO: 0.9,
+  DEFAULT_MAX_POWER_KW: 5,
+  BATTERY_HEALTHY_SOC: 50,
+  BATTERY_WARNING_SOC: 20,
+  BATTERY_FULL_SOC: 95,
+  BATTERY_CHARGING_SOC: 50,
+  TEMP_HEALTHY_MAX: 65,
+  TEMP_WARNING_MAX: 80,
+  FAN_HEALTHY_MIN: 2000,
+  FAN_HEALTHY_MAX: 5000,
+  FAN_WARNING_MIN: 1000,
+  FAN_HIGH_SPEED: 3000,
+  FAN_ACTIVE_SPEED: 1500,
+} as const
+
+/** Evaluate power consumption status based on ratio to max power */
+export function getPowerStatus(
+  consumption: number,
+  maxPower: number = POWER_THRESHOLDS.DEFAULT_MAX_POWER_KW
+): HealthStatus {
+  const ratio = consumption / maxPower
+  if (ratio <= POWER_THRESHOLDS.POWER_HEALTHY_RATIO) return 'healthy'
+  if (ratio <= POWER_THRESHOLDS.POWER_WARNING_RATIO) return 'warning'
+  return 'critical'
+}
+
+/** Evaluate battery state of charge status */
+export function getBatteryStatus(soc: number): HealthStatus {
+  if (soc >= POWER_THRESHOLDS.BATTERY_HEALTHY_SOC) return 'healthy'
+  if (soc >= POWER_THRESHOLDS.BATTERY_WARNING_SOC) return 'warning'
+  return 'critical'
+}
+
+/** Evaluate temperature status */
+export function getTempStatus(temp: number): HealthStatus {
+  if (temp <= POWER_THRESHOLDS.TEMP_HEALTHY_MAX) return 'healthy'
+  if (temp <= POWER_THRESHOLDS.TEMP_WARNING_MAX) return 'warning'
+  return 'critical'
+}
+
+/** Evaluate fan speed status (must be within healthy range) */
+export function getFanStatus(speed: number): HealthStatus {
+  if (speed >= POWER_THRESHOLDS.FAN_HEALTHY_MIN && speed <= POWER_THRESHOLDS.FAN_HEALTHY_MAX) return 'healthy'
+  if (speed >= POWER_THRESHOLDS.FAN_WARNING_MIN) return 'warning'
+  return 'critical'
+}
+
+/** Get human-readable charging status label */
+export function getChargingStatusLabel(avgBattery: number): string {
+  if (avgBattery >= POWER_THRESHOLDS.BATTERY_FULL_SOC) return 'Full'
+  if (avgBattery >= POWER_THRESHOLDS.BATTERY_CHARGING_SOC) return 'Charging'
+  return 'Low'
+}
+
+/** Get human-readable cooling status label */
+export function getCoolingStatusLabel(avgFanSpeed: number): string {
+  if (avgFanSpeed >= POWER_THRESHOLDS.FAN_HIGH_SPEED) return 'High'
+  if (avgFanSpeed >= POWER_THRESHOLDS.FAN_ACTIVE_SPEED) return 'Active'
+  return 'Idle'
+}
+
+// ============================================================================
+// 5G Dashboard Status Evaluation
+// ============================================================================
+
+/** Thresholds for 5G-related metrics */
+export const FIVEG_THRESHOLDS = {
+  RSRP_HEALTHY: -85,
+  RSRP_WARNING: -100,
+  SINR_HEALTHY: 10,
+  SINR_WARNING: 5,
+  LATENCY_HEALTHY: 15,
+  LATENCY_WARNING: 30,
+  THROUGHPUT_HEALTHY_RATIO: 0.5,
+  THROUGHPUT_WARNING_RATIO: 0.25,
+  HEALTH_RATIO_HEALTHY: 0.9,
+  HEALTH_RATIO_WARNING: 0.7,
+} as const
+
+/** Evaluate RSRP signal strength status (higher is better) */
+export function getSignalStatus(rsrp: number): HealthStatus {
+  if (rsrp >= FIVEG_THRESHOLDS.RSRP_HEALTHY) return 'healthy'
+  if (rsrp >= FIVEG_THRESHOLDS.RSRP_WARNING) return 'warning'
+  return 'critical'
+}
+
+/** Evaluate SINR status (higher is better) */
+export function getSinrStatus(sinr: number): HealthStatus {
+  if (sinr >= FIVEG_THRESHOLDS.SINR_HEALTHY) return 'healthy'
+  if (sinr >= FIVEG_THRESHOLDS.SINR_WARNING) return 'warning'
+  return 'critical'
+}
+
+/** Evaluate latency status (lower is better) */
+export function getLatencyStatus(latency: number): HealthStatus {
+  if (latency <= FIVEG_THRESHOLDS.LATENCY_HEALTHY) return 'healthy'
+  if (latency <= FIVEG_THRESHOLDS.LATENCY_WARNING) return 'warning'
+  return 'critical'
+}
+
+/** Evaluate throughput status based on ratio to max */
+export function getThroughputStatus(value: number, max: number): HealthStatus {
+  const ratio = value / max
+  if (ratio >= FIVEG_THRESHOLDS.THROUGHPUT_HEALTHY_RATIO) return 'healthy'
+  if (ratio >= FIVEG_THRESHOLDS.THROUGHPUT_WARNING_RATIO) return 'warning'
+  return 'critical'
+}
+
+/** Evaluate health ratio status (0-1 range) */
+export function getHealthRatioStatus(healthRatio: number): HealthStatus {
+  if (healthRatio >= FIVEG_THRESHOLDS.HEALTH_RATIO_HEALTHY) return 'healthy'
+  if (healthRatio >= FIVEG_THRESHOLDS.HEALTH_RATIO_WARNING) return 'warning'
+  return 'critical'
+}

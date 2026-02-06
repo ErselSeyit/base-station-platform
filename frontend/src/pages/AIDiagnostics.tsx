@@ -32,7 +32,7 @@ import ErrorDisplay from '../components/ErrorDisplay'
 import FeedbackDialog from '../components/FeedbackDialog'
 import { diagnosticsApi, DiagnosticSession } from '../services/api'
 import { CSS_VARS, getConfidenceColor, POLLING_INTERVALS } from '../constants/designSystem'
-import { formatTimestamp } from '../utils/statusHelpers'
+import { formatTimestamp, getErrorMessage } from '../utils/statusHelpers'
 import {
   DiagnosticLog,
   DiagnosticEvent,
@@ -52,6 +52,9 @@ const PROGRESS_SCALE = {
 // Threshold for pattern success classification
 const SUCCESS_RATE_THRESHOLD_PERCENT = 70
 
+// Placeholder value indicating missing metric data (set by backend)
+const MISSING_METRIC_PLACEHOLDER = -1
+
 /**
  * Transform sessions to DiagnosticLog format.
  * Extracts metric values from metricsSnapshot for display.
@@ -60,9 +63,14 @@ function transformSessionsToLog(sessions: DiagnosticSession[]): DiagnosticLog {
   const events: DiagnosticEvent[] = sessions.map((session) => {
     // Extract metric value and threshold from metricsSnapshot
     // metricsSnapshot format: { "CPU_USAGE": 95, "threshold": 75 }
+    // Backend uses -1.0 as placeholder for missing values
     const snapshot = session.metricsSnapshot || {}
     const metricKeys = Object.keys(snapshot).filter(k => k !== 'threshold')
-    const metricValue = metricKeys.length > 0 ? (snapshot[metricKeys[0]] ?? 0) : 0
+    const rawMetricValue = metricKeys.length > 0 ? snapshot[metricKeys[0]] : null
+    // Convert null, undefined, or placeholder to 0 for display (shown as "N/A" in UI)
+    const metricValue = rawMetricValue != null && rawMetricValue !== MISSING_METRIC_PLACEHOLDER
+      ? rawMetricValue
+      : 0
     const threshold = snapshot.threshold ?? 0
 
     return {
@@ -108,7 +116,7 @@ export default function AIDiagnostics() {
   const [clearAfter, setClearAfter] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
-  // Fetch all diagnostic sessions with React Query (auto-refresh every 5s)
+  // Fetch all diagnostic sessions with React Query
   const { data: sessions = [], isLoading, error: sessionsError, refetch } = useQuery({
     queryKey: ['diagnostic-sessions'],
     queryFn: async () => {
@@ -116,7 +124,7 @@ export default function AIDiagnostics() {
       return response.data
     },
     refetchInterval: POLLING_INTERVALS.NORMAL,
-    staleTime: 0, // Always consider data stale to force fresh fetch
+    staleTime: 30_000, // Cache for 30s to prevent refetch on navigation
   })
 
   // Filter sessions for display (hide old ones if cleared, data stays in DB for AI)
@@ -126,7 +134,7 @@ export default function AIDiagnostics() {
 
   // Transform sessions to log format
   const diagnosticData = transformSessionsToLog(displayedSessions)
-  const error = sessionsError ? (sessionsError instanceof Error ? sessionsError.message : 'Failed to fetch') : null
+  const error = sessionsError ? getErrorMessage(sessionsError) : null
 
   // Fetch pending confirmations from the learning system
   const { data: pendingSessions = [], error: pendingError } = useQuery({
@@ -136,10 +144,10 @@ export default function AIDiagnostics() {
       return response.data
     },
     refetchInterval: POLLING_INTERVALS.NORMAL,
-    staleTime: 0,
+    staleTime: 30_000,
   })
 
-  // Fetch learning stats
+  // Fetch learning stats (less critical, longer cache)
   const { data: learningStats, error: learningError } = useQuery({
     queryKey: ['learning-stats'],
     queryFn: async () => {
@@ -147,7 +155,7 @@ export default function AIDiagnostics() {
       return response.data
     },
     refetchInterval: POLLING_INTERVALS.SLOW,
-    staleTime: 0,
+    staleTime: 60_000, // Cache for 60s - stats don't need real-time updates
   })
 
   const handleOpenFeedback = (session: DiagnosticSession) => {
@@ -498,7 +506,7 @@ export default function AIDiagnostics() {
                       Metric Value
                     </Typography>
                     <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--mono-950)', fontWeight: 600 }}>
-                      {event.metric_value.toFixed(1)} / {event.threshold} threshold
+                      {event.metric_value > 0 ? `${event.metric_value.toFixed(1)} / ${event.threshold} threshold` : 'N/A'}
                     </Typography>
                   </Box>
 
@@ -583,7 +591,7 @@ export default function AIDiagnostics() {
                       {event.problem_type.replace('_', ' ')}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
-                      {event.metric_value.toFixed(1)} / {event.threshold}
+                      {event.metric_value > 0 ? `${event.metric_value.toFixed(1)} / ${event.threshold}` : 'N/A'}
                     </Typography>
                   </TableCell>
                   <TableCell>

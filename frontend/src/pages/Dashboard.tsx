@@ -40,6 +40,7 @@ import {
   getMaintenanceStatus,
   getOfflineStatus,
 } from '../hooks/useDashboardData'
+import { getErrorMessage } from '../utils/statusHelpers'
 
 export default function Dashboard() {
   const [activityDrawerOpen, setActivityDrawerOpen] = useState(false)
@@ -72,7 +73,7 @@ export default function Dashboard() {
   }
 
   if (error) {
-    return <ErrorDisplay title="Failed to load dashboard" message={error.message} />
+    return <ErrorDisplay title="Failed to load dashboard" message={getErrorMessage(error)} />
   }
 
   // Fab button styles

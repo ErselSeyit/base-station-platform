@@ -136,3 +136,39 @@ type ErrorResponse struct {
 	Path      string `json:"path,omitempty"`
 	Timestamp string `json:"timestamp,omitempty"`
 }
+
+// EdgeBridgeRegistration represents the edge-bridge registration request.
+type EdgeBridgeRegistration struct {
+	BridgeID          string  `json:"bridgeId"`
+	Name              string  `json:"name,omitempty"`
+	Hostname          string  `json:"hostname,omitempty"`
+	IPAddress         string  `json:"ipAddress,omitempty"`
+	Version           string  `json:"version,omitempty"`
+	Capabilities      string  `json:"capabilities,omitempty"`
+	Location          string  `json:"location,omitempty"`
+	Latitude          float64 `json:"latitude,omitempty"`
+	Longitude         float64 `json:"longitude,omitempty"`
+	CallbackURL       string  `json:"callbackUrl,omitempty"`
+	ManagedStationIDs []int64 `json:"managedStationIds,omitempty"`
+}
+
+// EdgeBridgeInstance represents the edge-bridge instance from the API.
+type EdgeBridgeInstance struct {
+	ID              int64     `json:"id"`
+	BridgeID        string    `json:"bridgeId"`
+	Name            string    `json:"name,omitempty"`
+	Hostname        string    `json:"hostname,omitempty"`
+	IPAddress       string    `json:"ipAddress,omitempty"`
+	Version         string    `json:"version,omitempty"`
+	Status          string    `json:"status"`
+	LastHeartbeatAt time.Time `json:"lastHeartbeatAt,omitempty"`
+	Capabilities    string    `json:"capabilities,omitempty"`
+	RegisteredAt    time.Time `json:"registeredAt,omitempty"`
+}
+
+// HeartbeatResponse represents the heartbeat response.
+type HeartbeatResponse struct {
+	Status       string `json:"status"`
+	BridgeID     string `json:"bridgeId"`
+	BridgeStatus string `json:"bridgeStatus"`
+}

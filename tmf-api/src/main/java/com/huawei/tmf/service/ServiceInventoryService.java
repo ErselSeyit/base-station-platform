@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Service for TMF638 Service Inventory Management.
  */
 @org.springframework.stereotype.Service
+@SuppressWarnings("null") // Spring Data MongoDB operations guarantee non-null returns
 public class ServiceInventoryService {
 
     private static final Logger log = LoggerFactory.getLogger(ServiceInventoryService.class);

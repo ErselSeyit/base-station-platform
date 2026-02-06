@@ -385,14 +385,15 @@ class BatchMetricsIntegrationTest {
     // ========================================
 
     private Long createStation(String name, double lat, double lon) throws Exception {
-        BaseStationDTO dto = new BaseStationDTO();
-        dto.setStationName(name);
-        dto.setLocation("Test Location");
-        dto.setLatitude(lat);
-        dto.setLongitude(lon);
-        dto.setStationType(StationType.MACRO_CELL);
-        dto.setStatus(StationStatus.ACTIVE);
-        dto.setPowerConsumption(1500.0);
+        BaseStationDTO dto = BaseStationDTO.builder()
+                .stationName(name)
+                .location("Test Location")
+                .latitude(lat)
+                .longitude(lon)
+                .stationType(StationType.MACRO_CELL)
+                .status(StationStatus.ACTIVE)
+                .powerConsumption(1500.0)
+                .build();
 
         MvcResult result = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/stations")
                 .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))

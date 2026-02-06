@@ -18,7 +18,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { notificationsApi } from '../services/api'
 import { Notification, NotificationType } from '../types'
 import { ensureArray } from '../utils/arrayUtils'
-import { formatTimestamp } from '../utils/statusHelpers'
+import { formatTimestamp, getErrorMessage } from '../utils/statusHelpers'
 import { showToast } from '../utils/toast'
 import { POLLING_INTERVALS } from '../constants/designSystem'
 
@@ -271,7 +271,7 @@ export default function Alerts() {
   }
 
   if (error) {
-    return <ErrorDisplay title="Failed to load alerts" message={error.message} />
+    return <ErrorDisplay title="Failed to load alerts" message={getErrorMessage(error)} />
   }
 
   return (

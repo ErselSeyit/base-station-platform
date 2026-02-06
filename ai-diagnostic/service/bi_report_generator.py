@@ -44,30 +44,59 @@ COLORS = {
     "accent4": "#f28b82",
 }
 
+# Status colors matching backend StationStatus enum
 STATUS_COLORS = {
-    "ONLINE": COLORS["success"],
-    "DEGRADED": COLORS["warning"],
-    "OFFLINE": COLORS["danger"],
-    "UNKNOWN": COLORS["secondary"],
+    "ACTIVE": COLORS["success"],       # Green - operational
+    "INACTIVE": COLORS["secondary"],   # Gray - not running
+    "MAINTENANCE": COLORS["warning"],  # Orange - under maintenance
+    "OFFLINE": COLORS["danger"],       # Red - disconnected
+    "ERROR": COLORS["danger"],         # Red - error state
+    "UNKNOWN": COLORS["secondary"],    # Gray - fallback
 }
 
-# Chart style settings
+# Empty state messages
+MSG_NO_DATA = "No data available"
+
+# Chart style settings - Executive presentation quality
 plt.style.use('seaborn-v0_8-whitegrid')
 plt.rcParams.update({
+    # Font configuration for maximum readability
     'font.family': 'sans-serif',
-    'font.sans-serif': ['DejaVu Sans', 'Helvetica', 'Arial'],
-    'font.size': 10,
-    'axes.titlesize': 14,
+    'font.sans-serif': ['DejaVu Sans', 'Helvetica Neue', 'Arial', 'sans-serif'],
+    'font.size': 12,
+    # Title styling - prominent and bold
+    'axes.titlesize': 18,
     'axes.titleweight': 'bold',
-    'axes.labelsize': 11,
-    'axes.labelweight': 'medium',
+    'axes.titlelocation': 'left',
+    'axes.titlepad': 20,
+    # Axis labels - clear and readable
+    'axes.labelsize': 14,
+    'axes.labelweight': 'semibold',
+    'axes.labelpad': 10,
+    # Tick labels - visible from distance
+    'xtick.labelsize': 12,
+    'ytick.labelsize': 12,
+    'xtick.major.pad': 8,
+    'ytick.major.pad': 8,
+    # Legend styling
+    'legend.fontsize': 11,
+    'legend.title_fontsize': 12,
+    'legend.framealpha': 0.95,
+    'legend.edgecolor': '#cccccc',
+    # Spine and grid configuration
     'axes.spines.top': False,
     'axes.spines.right': False,
+    'axes.linewidth': 1.2,
     'figure.facecolor': COLORS["white"],
     'axes.facecolor': COLORS["white"],
-    'axes.edgecolor': COLORS["secondary"],
-    'grid.color': '#e8eaed',
-    'grid.linewidth': 0.5,
+    'axes.edgecolor': COLORS["dark"],
+    'grid.color': '#e0e0e0',
+    'grid.linewidth': 0.8,
+    'grid.alpha': 0.7,
+    # Figure quality
+    'figure.dpi': 150,
+    'savefig.dpi': 150,
+    'savefig.bbox': 'tight',
 })
 
 
@@ -142,30 +171,30 @@ class BIReportGenerator:
         header_ax.imshow(gradient, extent=[0, 1, 0, 1], aspect='auto',
                         cmap=plt.cm.Blues, alpha=0.3)
 
-        header_ax.text(0.03, 0.6, title, fontsize=20, fontweight='bold',
+        header_ax.text(0.03, 0.6, title, fontsize=26, fontweight='bold',
                       color=COLORS["dark"], va='center')
         if subtitle:
-            header_ax.text(0.03, 0.2, subtitle, fontsize=11,
-                          color=COLORS["secondary"], va='center')
+            header_ax.text(0.03, 0.2, subtitle, fontsize=14,
+                          color=COLORS["secondary"], va='center', fontweight='medium')
 
-        header_ax.text(0.97, 0.5, "BASE STATION PLATFORM", fontsize=9,
+        header_ax.text(0.97, 0.5, "BASE STATION PLATFORM", fontsize=11,
                       fontweight='bold', color=COLORS["primary"],
-                      ha='right', va='center', alpha=0.7)
+                      ha='right', va='center', alpha=0.85)
 
     def _add_footer(self, fig, page_num: int):
         """Add footer with page number and timestamp"""
-        footer_ax = fig.add_axes([0, 0, 1, 0.03])
+        footer_ax = fig.add_axes([0, 0, 1, 0.035])
         footer_ax.set_xlim(0, 1)
         footer_ax.set_ylim(0, 1)
         footer_ax.axis('off')
 
-        footer_ax.axhline(y=0.9, color=COLORS["secondary"], linewidth=0.5, alpha=0.3)
+        footer_ax.axhline(y=0.9, color=COLORS["secondary"], linewidth=1.0, alpha=0.4)
         footer_ax.text(0.03, 0.4, f"Generated: {self.report_time.strftime('%Y-%m-%d %H:%M:%S')}",
-                      fontsize=8, color=COLORS["secondary"])
+                      fontsize=10, color=COLORS["secondary"])
         footer_ax.text(0.97, 0.4, f"Page {page_num}",
-                      fontsize=8, color=COLORS["secondary"], ha='right')
+                      fontsize=10, color=COLORS["secondary"], ha='right', fontweight='medium')
         footer_ax.text(0.5, 0.4, "Confidential - Internal Use Only",
-                      fontsize=8, color=COLORS["secondary"], ha='center', style='italic')
+                      fontsize=10, color=COLORS["secondary"], ha='center', style='italic')
 
     def create_title_page(self, pdf: PdfPages):
         """Create title page"""
@@ -178,15 +207,15 @@ class BIReportGenerator:
         ax.imshow(gradient, extent=[0, 1, 0, 1], aspect='auto',
                  cmap='Blues', alpha=0.15, origin='lower')
 
-        ax.text(0.5, 0.65, "Base Station Platform", fontsize=36, fontweight='bold',
+        ax.text(0.5, 0.65, "Base Station Platform", fontsize=42, fontweight='bold',
                ha='center', va='center', color=COLORS["dark"])
-        ax.text(0.5, 0.55, "Business Intelligence Report", fontsize=24,
-               ha='center', va='center', color=COLORS["primary"])
-        ax.axhline(y=0.48, xmin=0.3, xmax=0.7, color=COLORS["primary"], linewidth=2)
+        ax.text(0.5, 0.54, "Business Intelligence Report", fontsize=28,
+               ha='center', va='center', color=COLORS["primary"], fontweight='medium')
+        ax.axhline(y=0.47, xmin=0.3, xmax=0.7, color=COLORS["primary"], linewidth=3)
 
         info_box = plt.Rectangle((0.25, 0.2), 0.5, 0.2, fill=True,
                                   facecolor=COLORS["light"], edgecolor=COLORS["secondary"],
-                                  linewidth=1, alpha=0.8)
+                                  linewidth=1.5, alpha=0.9)
         ax.add_patch(info_box)
 
         stats = [
@@ -199,12 +228,13 @@ class BIReportGenerator:
         for i, (label, value) in enumerate(stats):
             x = 0.32 + (i % 2) * 0.2
             y = 0.35 if i < 2 else 0.25
-            ax.text(x, y, str(value), fontsize=20, fontweight='bold',
+            ax.text(x, y, str(value), fontsize=26, fontweight='bold',
                    color=COLORS["primary"], ha='center')
-            ax.text(x, y - 0.04, label, fontsize=9, color=COLORS["secondary"], ha='center')
+            ax.text(x, y - 0.045, label, fontsize=12, color=COLORS["secondary"], ha='center',
+                   fontweight='medium')
 
         ax.text(0.5, 0.1, f"Report Generated: {self.report_time.strftime('%B %d, %Y at %H:%M')}",
-               fontsize=11, ha='center', color=COLORS["secondary"])
+               fontsize=14, ha='center', color=COLORS["secondary"])
 
         pdf.savefig(fig, facecolor='white')
         plt.close(fig)
@@ -218,7 +248,7 @@ class BIReportGenerator:
             if value is not None:
                 metrics_by_type[mtype].append(float(value))
 
-        online_count = sum(1 for s in self.stations if s.get("status") == "ONLINE")
+        online_count = sum(1 for s in self.stations if s.get("status") == "ACTIVE")
         total_stations = max(len(self.stations), 1)
 
         return {
@@ -347,8 +377,8 @@ class BIReportGenerator:
                         colWidths=[0.08, 0.22, 0.20, 0.15, 0.15, 0.10])
 
         table.auto_set_font_size(False)
-        table.set_fontsize(8)
-        table.scale(1.1, 1.8)
+        table.set_fontsize(11)
+        table.scale(1.1, 2.0)
 
         for i in range(len(headers)):
             table[(0, i)].set_text_props(color='white', fontweight='bold')
@@ -408,29 +438,36 @@ class BIReportGenerator:
             colors = [self._get_threshold_color(v, warn_thresh, crit_thresh) for v in values]
 
             bars = ax.barh(stations, values, color=colors, edgecolor='white', height=0.6)
-            ax.axvline(x=warn_thresh, color=COLORS["warning"], linestyle='--', alpha=0.5,
+            ax.axvline(x=warn_thresh, color=COLORS["warning"], linestyle='--', alpha=0.6, linewidth=2,
                       label=f'Warning ({warn_thresh:.0f}%)')
-            ax.axvline(x=crit_thresh, color=COLORS["danger"], linestyle='--', alpha=0.5,
+            ax.axvline(x=crit_thresh, color=COLORS["danger"], linestyle='--', alpha=0.6, linewidth=2,
                       label=f'Critical ({crit_thresh:.0f}%)')
 
             for bar, val in zip(bars, values):
-                x_pos = val - 5 if val > 85 else val + 1
+                x_pos = val - 6 if val > 85 else val + 1
                 color = 'white' if val > 85 else COLORS["dark"]
                 ax.text(x_pos, bar.get_y() + bar.get_height()/2, f'{val:.0f}%',
-                       va='center', fontsize=8, fontweight='bold', color=color)
+                       va='center', fontsize=12, fontweight='bold', color=color)
 
             ax.set_xlim(0, 105)
-            ax.set_xlabel("Usage (%)")
+            ax.set_xlabel("Usage (%)", fontsize=14, fontweight='semibold')
             if show_legend:
-                ax.legend(loc='lower right', fontsize=8)
-        ax.set_title(title, pad=15)
+                ax.legend(loc='lower right', fontsize=11)
+        ax.set_title(title, pad=18, fontsize=16)
 
     def _create_distribution_histogram(self, ax, values: List[float], title: str,
                                         xlabel: str, thresholds: tuple, higher_is_worse: bool = True,
                                         critical_line: Optional[float] = None) -> None:
         """Create histogram with color-coded distribution."""
+        ax.set_title(title, pad=15)
         if not values:
-            ax.set_title(title, pad=15)
+            ax.text(0.5, 0.5, MSG_NO_DATA, ha='center', va='center',
+                   transform=ax.transAxes, fontsize=12, color=COLORS["secondary"],
+                   style='italic')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for spine in ax.spines.values():
+                spine.set_visible(False)
             return
 
         _, bins, patches = ax.hist(values, bins=15, edgecolor='white', linewidth=1)
@@ -441,16 +478,16 @@ class BIReportGenerator:
             patch.set_facecolor(self._get_threshold_color(mid_val, warn_thresh, crit_thresh, higher_is_worse))
 
         mean_val = np.mean(values)
-        ax.axvline(x=mean_val, color=COLORS["dark"], linestyle='-', linewidth=2,
+        ax.axvline(x=mean_val, color=COLORS["dark"], linestyle='-', linewidth=2.5,
                   label=f'Mean: {mean_val:.1f}')
         if critical_line is not None:
             ax.axvline(x=critical_line, color=COLORS["danger"], linestyle='--', alpha=0.7,
-                      label=f'Critical: {critical_line:.0f}')
+                      linewidth=2, label=f'Critical: {critical_line:.0f}')
 
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel("Frequency")
-        ax.legend(loc='upper right' if higher_is_worse else 'upper left', fontsize=8)
-        ax.set_title(title, pad=15)
+        ax.set_xlabel(xlabel, fontsize=14, fontweight='semibold')
+        ax.set_ylabel("Frequency", fontsize=14, fontweight='semibold')
+        ax.legend(loc='upper right' if higher_is_worse else 'upper left', fontsize=11)
+        ax.set_title(title, pad=18, fontsize=16)
 
     def create_performance_metrics(self, pdf: PdfPages):
         """Create performance metrics page."""
@@ -487,6 +524,7 @@ class BIReportGenerator:
     def _create_simple_bar_chart(self, ax, data: Dict[str, float], title: str,
                                    ylabel: str, color: str, offset: float = 2) -> None:
         """Create simple vertical bar chart."""
+        ax.set_title(title, pad=15)
         if data:
             stations = list(data.keys())[:6]
             values = [data[s] for s in stations]
@@ -494,14 +532,23 @@ class BIReportGenerator:
             bars = ax.bar(stations, values, color=color, edgecolor='white', width=0.6)
             for bar, val in zip(bars, values):
                 ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + offset,
-                       f'{val:.0f}', ha='center', fontsize=9, fontweight='bold')
+                       f'{val:.0f}', ha='center', fontsize=13, fontweight='bold')
 
-            ax.set_ylabel(ylabel)
+            ax.set_ylabel(ylabel, fontsize=14, fontweight='semibold')
             ax.set_ylim(0, max(values) * 1.2 if values else 100)
-        ax.set_title(title, pad=15)
+        else:
+            # Show clear empty state message
+            ax.text(0.5, 0.5, MSG_NO_DATA, ha='center', va='center',
+                   transform=ax.transAxes, fontsize=12, color=COLORS["secondary"],
+                   style='italic')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for spine in ax.spines.values():
+                spine.set_visible(False)
 
     def _create_uptime_chart(self, ax, data: Dict[str, float]) -> None:
         """Create uptime bar chart with color thresholds."""
+        ax.set_title("Station Uptime", pad=15)
         if data:
             stations = list(data.keys())[:6]
             values = [min(data[s], 100) for s in stations]
@@ -510,13 +557,21 @@ class BIReportGenerator:
             bars = ax.bar(stations, values, color=colors, edgecolor='white', width=0.6)
             for bar, val in zip(bars, values):
                 ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                       f'{val:.1f}%', ha='center', fontsize=9, fontweight='bold')
+                       f'{val:.1f}%', ha='center', fontsize=13, fontweight='bold')
 
-            ax.set_ylabel("Uptime (%)")
+            ax.set_ylabel("Uptime (%)", fontsize=14, fontweight='semibold')
             ax.set_ylim(90, 101)
             ax.axhline(y=99, color=COLORS["success"], linestyle='--', alpha=0.5, label='Target: 99%')
-            ax.legend(loc='lower right', fontsize=8)
-        ax.set_title("Station Uptime", pad=15)
+            ax.legend(loc='lower right', fontsize=11)
+        else:
+            # Show clear empty state message
+            ax.text(0.5, 0.5, "No uptime data available", ha='center', va='center',
+                   transform=ax.transAxes, fontsize=12, color=COLORS["secondary"],
+                   style='italic')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for spine in ax.spines.values():
+                spine.set_visible(False)
 
     def _create_metrics_summary_table(self, ax) -> None:
         """Create metrics summary table."""
@@ -540,11 +595,15 @@ class BIReportGenerator:
                             colColours=[COLORS["primary"]]*len(headers),
                             colWidths=[0.35, 0.15, 0.15, 0.15, 0.15])
             table.auto_set_font_size(False)
-            table.set_fontsize(8)
-            table.scale(1.05, 1.6)
+            table.set_fontsize(11)
+            table.scale(1.05, 1.8)
 
             for i in range(len(headers)):
                 table[(0, i)].set_text_props(color='white', fontweight='bold')
+        else:
+            ax.text(0.5, 0.5, "No metrics data available", ha='center', va='center',
+                   transform=ax.transAxes, fontsize=12, color=COLORS["secondary"],
+                   style='italic')
 
         ax.set_title("Metrics Summary", pad=15, loc='center')
 
@@ -580,18 +639,22 @@ class BIReportGenerator:
         plt.close(fig)
 
     def _create_alert_types_chart(self, ax) -> None:
-        """Create alert types bar chart."""
+        """Create alert types bar chart from notifications."""
+        # Use notifications as alert data source (alerts endpoint returns rules, not events)
         alert_types = defaultdict(int)
-        for a in self.alerts:
-            atype = a.get("type", a.get("alertType", "OTHER"))
-            alert_types[atype] += 1
+        for n in self.notifications:
+            ntype = n.get("type", "OTHER")
+            if ntype in ("ALERT", "WARNING", "ERROR", "INFO"):
+                alert_types[ntype] += 1
 
         if alert_types:
             types = list(alert_types.keys())
             counts = list(alert_types.values())
-            colors = [COLORS["danger"], COLORS["warning"], COLORS["info"], COLORS["secondary"]]
+            color_map = {"ALERT": COLORS["danger"], "WARNING": COLORS["warning"],
+                        "ERROR": COLORS["danger"], "INFO": COLORS["info"]}
+            colors = [color_map.get(t, COLORS["secondary"]) for t in types]
 
-            bars = ax.bar(types, counts, color=colors[:len(types)], edgecolor='white')
+            bars = ax.bar(types, counts, color=colors, edgecolor='white')
             for bar, count in zip(bars, counts):
                 ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
                        str(count), ha='center', fontweight='bold')
@@ -625,11 +688,14 @@ class BIReportGenerator:
         ax.set_title("Notification Distribution", pad=15)
 
     def _create_alerts_by_station_chart(self, ax) -> None:
-        """Create alerts by station bar chart."""
+        """Create alerts by station bar chart from notifications."""
+        # Use notifications as alert data source
         alerts_by_station = defaultdict(int)
-        for a in self.alerts:
-            sid = str(a.get("stationId", "?"))
-            alerts_by_station[sid] += 1
+        for n in self.notifications:
+            ntype = n.get("type", "")
+            if ntype in ("ALERT", "WARNING", "ERROR"):
+                sid = str(n.get("stationId", "?"))
+                alerts_by_station[sid] += 1
 
         if alerts_by_station:
             stations = list(alerts_by_station.keys())[:6]
@@ -647,23 +713,27 @@ class BIReportGenerator:
         ax.set_title("Alerts by Station", pad=15)
 
     def _create_recent_alerts_table(self, ax) -> None:
-        """Create recent alerts table."""
+        """Create recent alerts table from notifications."""
         ax.axis('off')
 
-        if self.alerts:
+        # Filter alert-type notifications
+        alert_notifs = [n for n in self.notifications
+                       if n.get("type") in ("ALERT", "WARNING", "ERROR")]
+
+        if alert_notifs:
             headers = ["Station", "Type", "Message"]
-            table_data = [[str(a.get("stationId", "-"))[:8],
-                          a.get("type", a.get("alertType", "-"))[:10],
-                          a.get("message", "-")[:30]]
-                         for a in self.alerts[:6]]
+            table_data = [[str(n.get("stationId", "-"))[:8],
+                          n.get("type", "-")[:10],
+                          n.get("message", "-")[:30]]
+                         for n in alert_notifs[:6]]
 
             table = ax.table(cellText=table_data, colLabels=headers,
                             loc='center', cellLoc='left',
                             colColours=[COLORS["danger"]]*len(headers),
                             colWidths=[0.18, 0.22, 0.55])
             table.auto_set_font_size(False)
-            table.set_fontsize(8)
-            table.scale(1.05, 1.5)
+            table.set_fontsize(11)
+            table.scale(1.05, 1.7)
 
             for i in range(len(headers)):
                 table[(0, i)].set_text_props(color='white', fontweight='bold')
@@ -709,21 +779,21 @@ class BIReportGenerator:
         if lats and lons:
             colors = [STATUS_COLORS.get(s, COLORS["secondary"]) for s in statuses]
 
-            ax.scatter(lons, lats, c=colors, s=300, alpha=0.8,
-                      edgecolors='white', linewidths=2, zorder=5)
+            ax.scatter(lons, lats, c=colors, s=400, alpha=0.85,
+                      edgecolors='white', linewidths=2.5, zorder=5)
 
             for i, name in enumerate(names):
                 ax.annotate(name, (lons[i], lats[i]),
-                           xytext=(8, 8), textcoords='offset points',
-                           fontsize=9, fontweight='bold',
-                           bbox={'boxstyle': 'round,pad=0.3', 'facecolor': 'white', 'alpha': 0.8})
+                           xytext=(10, 10), textcoords='offset points',
+                           fontsize=12, fontweight='bold',
+                           bbox={'boxstyle': 'round,pad=0.4', 'facecolor': 'white', 'alpha': 0.9})
 
-            ax.set_xlabel("Longitude", fontsize=11)
-            ax.set_ylabel("Latitude", fontsize=11)
-            ax.grid(True, alpha=0.3, linestyle='--')
+            ax.set_xlabel("Longitude", fontsize=14, fontweight='semibold')
+            ax.set_ylabel("Latitude", fontsize=14, fontweight='semibold')
+            ax.grid(True, alpha=0.4, linestyle='--')
 
             patches = [mpatches.Patch(color=c, label=s) for s, c in STATUS_COLORS.items()]
-            ax.legend(handles=patches, loc='upper right', framealpha=0.9)
+            ax.legend(handles=patches, loc='upper right', framealpha=0.95, fontsize=11)
 
             lat_range = max(lats) - min(lats) if len(lats) > 1 else 1
             lon_range = max(lons) - min(lons) if len(lons) > 1 else 1
@@ -821,15 +891,16 @@ class BIReportGenerator:
         ax.scatter([0], [0], s=150, color=COLORS["dark"], zorder=10)
 
         # Value text
-        ax.text(0, 0.4, f"{value:.0f}", fontsize=24, fontweight='bold',
+        ax.text(0, 0.4, f"{value:.0f}", fontsize=28, fontweight='bold',
                ha='center', va='center', color=COLORS["dark"])
-        ax.text(0, 0.15, unit, fontsize=10, ha='center', va='center', color=COLORS["secondary"])
-        ax.text(0, -0.1, label, fontsize=11, fontweight='bold',
+        ax.text(0, 0.15, unit, fontsize=13, ha='center', va='center', color=COLORS["secondary"],
+               fontweight='medium')
+        ax.text(0, -0.1, label, fontsize=13, fontweight='bold',
                ha='center', va='center', color=COLORS["dark"])
 
         # Min/Max labels
-        ax.text(-1.1, -0.05, f"{min_val:.0f}", fontsize=8, ha='center', color=COLORS["secondary"])
-        ax.text(1.1, -0.05, f"{max_val:.0f}", fontsize=8, ha='center', color=COLORS["secondary"])
+        ax.text(-1.1, -0.05, f"{min_val:.0f}", fontsize=11, ha='center', color=COLORS["secondary"])
+        ax.text(1.1, -0.05, f"{max_val:.0f}", fontsize=11, ha='center', color=COLORS["secondary"])
 
     def _draw_traffic_light(self, ax, status: str, label: str, value: str, threshold: str):
         """Draw a traffic light indicator."""
@@ -856,10 +927,11 @@ class BIReportGenerator:
         ax.add_patch(glow)
 
         # Text
-        ax.text(0.5, 0.45, value, fontsize=14, fontweight='bold',
+        ax.text(0.5, 0.45, value, fontsize=16, fontweight='bold',
                ha='center', va='center', color=COLORS["dark"])
-        ax.text(0.5, 0.3, label, fontsize=9, ha='center', va='center', color=COLORS["secondary"])
-        ax.text(0.5, 0.15, f"Target: {threshold}", fontsize=7,
+        ax.text(0.5, 0.28, label, fontsize=12, ha='center', va='center', color=COLORS["secondary"],
+               fontweight='medium')
+        ax.text(0.5, 0.13, f"Target: {threshold}", fontsize=10,
                ha='center', va='center', color=COLORS["secondary"], style='italic')
 
     def create_5g_kpi_dashboard(self, pdf: PdfPages):
@@ -969,7 +1041,7 @@ class BIReportGenerator:
                         title: str, cmap: str = 'RdYlGn', vmin: float = None, vmax: float = None):
         """Create a heatmap visualization."""
         if data.size == 0:
-            ax.text(0.5, 0.5, "No data available", ha='center', va='center',
+            ax.text(0.5, 0.5, MSG_NO_DATA, ha='center', va='center',
                    transform=ax.transAxes, fontsize=12, color=COLORS["secondary"])
             ax.set_title(title, pad=15)
             return
@@ -978,8 +1050,8 @@ class BIReportGenerator:
 
         ax.set_xticks(np.arange(len(col_labels)))
         ax.set_yticks(np.arange(len(row_labels)))
-        ax.set_xticklabels(col_labels, fontsize=9)
-        ax.set_yticklabels(row_labels, fontsize=9)
+        ax.set_xticklabels(col_labels, fontsize=11)
+        ax.set_yticklabels(row_labels, fontsize=11)
 
         plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 
@@ -990,11 +1062,11 @@ class BIReportGenerator:
                 if not np.isnan(val):
                     text_color = 'white' if abs(val - (vmin or data.min())) > (((vmax or data.max()) - (vmin or data.min())) / 2) else 'black'
                     ax.text(j, i, f"{val:.1f}", ha="center", va="center",
-                           color=text_color, fontsize=8, fontweight='bold')
+                           color=text_color, fontsize=11, fontweight='bold')
 
-        ax.set_title(title, pad=15)
+        ax.set_title(title, pad=18, fontsize=16)
         cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-        cbar.ax.tick_params(labelsize=8)
+        cbar.ax.tick_params(labelsize=11)
 
     def create_sector_heatmap(self, pdf: PdfPages):
         """Create sector-level RSRP/SINR heatmap page."""
@@ -1116,8 +1188,8 @@ class BIReportGenerator:
                             colWidths=[0.18, 0.16, 0.16, 0.14, 0.14, 0.14])
 
             table.auto_set_font_size(False)
-            table.set_fontsize(9)
-            table.scale(1.1, 2.0)
+            table.set_fontsize(11)
+            table.scale(1.1, 2.2)
 
             for i in range(len(headers)):
                 table[(0, i)].set_text_props(color='white', fontweight='bold')
@@ -1135,9 +1207,9 @@ class BIReportGenerator:
         ]
         for i, (color, text) in enumerate(legend_items):
             x = 0.15 + i * 0.3
-            legend_ax.add_patch(plt.Rectangle((x - 0.02, 0.3), 0.03, 0.4,
+            legend_ax.add_patch(plt.Rectangle((x - 0.02, 0.3), 0.035, 0.4,
                                               facecolor=color, edgecolor='white'))
-            legend_ax.text(x + 0.02, 0.5, text, fontsize=9, va='center')
+            legend_ax.text(x + 0.025, 0.5, text, fontsize=12, va='center', fontweight='medium')
 
         self._add_footer(fig, 11)
         pdf.savefig(fig, facecolor='white')

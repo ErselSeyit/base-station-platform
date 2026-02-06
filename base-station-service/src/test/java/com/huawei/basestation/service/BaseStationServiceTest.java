@@ -57,13 +57,14 @@ class BaseStationServiceTest {
         testStation.setStationType(StationType.MACRO_CELL);
         testStation.setStatus(StationStatus.ACTIVE);
 
-        testDTO = new BaseStationDTO();
-        testDTO.setStationName("BS-001");
-        testDTO.setLocation("Downtown");
-        testDTO.setLatitude(40.7128);
-        testDTO.setLongitude(-74.0060);
-        testDTO.setStationType(StationType.MACRO_CELL);
-        testDTO.setStatus(StationStatus.ACTIVE);
+        testDTO = BaseStationDTO.builder()
+                .stationName("BS-001")
+                .location("Downtown")
+                .latitude(40.7128)
+                .longitude(-74.0060)
+                .stationType(StationType.MACRO_CELL)
+                .status(StationStatus.ACTIVE)
+                .build();
     }
 
     @Test
@@ -75,7 +76,7 @@ class BaseStationServiceTest {
         BaseStationDTO result = service.createStation(testDTO);
 
         assertNotNull(result);
-        assertEquals("BS-001", result.getStationName());
+        assertEquals("BS-001", result.stationName());
         verify(repository).save(any(BaseStation.class));
     }
 
@@ -95,7 +96,7 @@ class BaseStationServiceTest {
         Optional<BaseStationDTO> result = service.getStationById(1L);
 
         assertTrue(result.isPresent());
-        assertEquals("BS-001", result.get().getStationName());
+        assertEquals("BS-001", result.get().stationName());
     }
 
     @Test
@@ -128,12 +129,13 @@ class BaseStationServiceTest {
     @Test
     @SuppressWarnings("null")
     void updateStation_updatesAndReturnsStation() {
-        BaseStationDTO updateDTO = new BaseStationDTO();
-        updateDTO.setStationName("BS-001-Updated");
-        updateDTO.setLocation("New Location");
-        updateDTO.setLatitude(40.7128);
-        updateDTO.setLongitude(-74.0060);
-        updateDTO.setStationType(StationType.MACRO_CELL);
+        BaseStationDTO updateDTO = BaseStationDTO.builder()
+                .stationName("BS-001-Updated")
+                .location("New Location")
+                .latitude(40.7128)
+                .longitude(-74.0060)
+                .stationType(StationType.MACRO_CELL)
+                .build();
 
         when(repository.findById(1L)).thenReturn(Optional.of(testStation));
         when(repository.findByStationName(anyString())).thenReturn(Optional.empty());
@@ -177,6 +179,6 @@ class BaseStationServiceTest {
         List<BaseStationDTO> result = service.getStationsByStatus(StationStatus.ACTIVE);
 
         assertEquals(1, result.size());
-        assertEquals(StationStatus.ACTIVE, result.get(0).getStatus());
+        assertEquals(StationStatus.ACTIVE, result.get(0).status());
     }
 }

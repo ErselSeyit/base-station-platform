@@ -28,7 +28,7 @@ import {
   type AlertSeverity,
 } from '../constants/designSystem'
 import { metricsApi, notificationsApi, stationApi } from '../services/api'
-import { formatTimestamp } from '../utils/statusHelpers'
+import { formatTimestamp, getErrorMessage } from '../utils/statusHelpers'
 import { MetricData, Notification, NotificationType, StationStatus } from '../types'
 import { ensureArray } from '../utils/arrayUtils'
 
@@ -257,7 +257,7 @@ export default function StationDetail() {
 
   const error = stationError || metricsError || notificationsError
   if (error) {
-    return <ErrorDisplay title="Failed to load station data" message={error.message} />
+    return <ErrorDisplay title="Failed to load station data" message={getErrorMessage(error)} />
   }
 
   if (!station) {

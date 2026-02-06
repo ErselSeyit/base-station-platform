@@ -10,6 +10,12 @@ export enum StationStatus {
   INACTIVE = 'INACTIVE',
   MAINTENANCE = 'MAINTENANCE',
   OFFLINE = 'OFFLINE',
+  ERROR = 'ERROR',
+}
+
+export enum ManagementProtocol {
+  DIRECT = 'DIRECT',
+  EDGE_BRIDGE = 'EDGE_BRIDGE',
 }
 
 export enum MetricType {
@@ -46,9 +52,14 @@ export interface BaseStation {
   latitude: number
   longitude: number
   stationType: StationType
-  status: StationStatus
-  powerConsumption: number
+  status?: StationStatus // Derived from metrics/heartbeats
+  ipAddress: string // Required for connectivity
+  port?: number // Optional, defaults to protocol-specific port
+  managementProtocol: ManagementProtocol
+  powerConsumption?: number // Read from metrics
   description?: string
+  lastContactAt?: string
+  edgeBridgeId?: number
   createdAt?: string
   updatedAt?: string
 }

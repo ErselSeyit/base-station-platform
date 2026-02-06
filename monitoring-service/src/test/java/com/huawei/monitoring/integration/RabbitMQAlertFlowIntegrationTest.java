@@ -20,6 +20,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import org.springframework.test.context.ActiveProfiles;
+
 import com.huawei.common.dto.AlertEvent;
 import com.huawei.monitoring.config.RabbitMQConfig;
 import com.huawei.monitoring.dto.MetricDataDTO;
@@ -39,6 +41,7 @@ import com.huawei.monitoring.service.AlertingService;
  */
 @SpringBootTest
 @Testcontainers
+@ActiveProfiles("test")
 @DisplayName("RabbitMQ Alert Flow Integration Tests")
 @DisabledIf("skipInDemoOrNoDocker")
 @SuppressWarnings("resource") // Testcontainers manages RabbitMQContainer lifecycle via @Container
