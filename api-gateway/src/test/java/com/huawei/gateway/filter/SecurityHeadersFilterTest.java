@@ -49,6 +49,22 @@ class SecurityHeadersFilterTest {
         ReflectionTestUtils.setField(filter, "frameOptions", "DENY");
     }
 
+    /**
+     * Helper to run filter and trigger beforeCommit callbacks.
+     * The filter uses beforeCommit to add headers, so we must complete the response.
+     */
+    private HttpHeaders runFilterAndGetHeaders(MockServerWebExchange exchange) {
+        when(filterChain.filter(exchange)).thenReturn(Mono.empty());
+
+        // Run filter (registers beforeCommit callback)
+        StepVerifier.create(filter.filter(exchange, filterChain)).verifyComplete();
+
+        // Trigger beforeCommit callbacks by completing the response
+        StepVerifier.create(exchange.getResponse().setComplete()).verifyComplete();
+
+        return exchange.getResponse().getHeaders();
+    }
+
     @Nested
     @DisplayName("Standard Security Headers")
     class StandardHeadersTests {
@@ -66,14 +82,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get("/api/test").build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             assertThat(headers.getFirst(headerName)).isEqualTo(expectedValue);
         }
 
@@ -84,14 +96,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get("/api/test").build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             String permissionsPolicy = headers.getFirst("Permissions-Policy");
             assertThat(permissionsPolicy)
                     .contains("camera=()")
@@ -114,14 +122,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get("/api/test").build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             String hsts = headers.getFirst("Strict-Transport-Security");
             assertThat(hsts)
                     .contains("max-age=31536000")
@@ -138,14 +142,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get("/api/test").build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             assertThat(headers.getFirst("Strict-Transport-Security")).isNull();
         }
 
@@ -159,14 +159,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get("/api/test").build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             assertThat(headers.getFirst("Strict-Transport-Security")).contains("max-age=86400");
         }
     }
@@ -184,14 +180,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get("/api/test").build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             String csp = headers.getFirst("Content-Security-Policy");
             assertThat(csp)
                     .contains("default-src 'self'")
@@ -209,14 +201,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get("/api/test").build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             assertThat(headers.getFirst("Content-Security-Policy")).isNull();
         }
     }
@@ -238,14 +226,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get(path).build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             assertThat(headers.getFirst("Cache-Control")).contains("no-store");
             assertThat(headers.getFirst("Pragma")).isEqualTo("no-cache");
             assertThat(headers.getFirst("Expires")).isEqualTo("0");
@@ -263,14 +247,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get(path).build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             assertThat(headers.getFirst("Cache-Control")).isNull();
             assertThat(headers.getFirst("Pragma")).isNull();
         }
@@ -289,14 +269,10 @@ class SecurityHeadersFilterTest {
             MockServerHttpRequest request = MockServerHttpRequest.get("/api/test").build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(filterChain.filter(exchange)).thenReturn(Mono.empty());
-
             // When
-            Mono<Void> result = filter.filter(exchange, filterChain);
+            HttpHeaders headers = runFilterAndGetHeaders(exchange);
 
             // Then
-            StepVerifier.create(result).verifyComplete();
-            HttpHeaders headers = exchange.getResponse().getHeaders();
             assertThat(headers.getFirst("X-Frame-Options")).isEqualTo("SAMEORIGIN");
         }
     }
