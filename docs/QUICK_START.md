@@ -122,4 +122,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 - Explore the dashboard at http://localhost:3000
 - Check metrics in Grafana at http://localhost:3001
 - Read API docs at [API.md](API.md)
-- Review [TECH_DEBT.md](../TECH_DEBT.md) for known issues
+- Check [ENHANCEMENT_ROADMAP.md](ENHANCEMENT_ROADMAP.md) for planned features
