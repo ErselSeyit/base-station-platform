@@ -1,5 +1,7 @@
 package com.huawei.basestation.dto;
 
+import org.springframework.lang.Nullable;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -23,7 +25,7 @@ public record BulkImportResponse(
             String stationName,
             Status status,
             String message,
-            Long stationId
+            @Nullable Long stationId
     ) {
         public enum Status {
             CREATED,

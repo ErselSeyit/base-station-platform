@@ -2,15 +2,65 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Base Station Operations & Maintenance Platform</title>
+
+    <!-- DNS prefetch for external resources -->
+    <link rel="dns-prefetch" href="//unpkg.com" />
+    <link rel="preconnect" href="https://unpkg.com" crossorigin />
+
+    <!-- Preconnect to Google Fonts for faster font loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- Critical CSS - inline above-the-fold styles -->
+    <style>
+      /* Prevent layout shift during load */
+      :root {
+        --mono-950: #0a0a0a;
+        --surface-base: #ffffff;
+        --surface-border: #e5e5e5;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: var(--surface-base);
+        color: var(--mono-950);
+      }
+      #root {
+        min-height: 100vh;
+      }
+      /* Loading skeleton placeholder */
+      .app-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+    </style>
+
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+
+    <!-- Leaflet CSS - load async to not block render -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-     crossorigin=""/>
+     crossorigin="" media="print" onload="this.media='all'" />
+    <noscript>
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    </noscript>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Inline loading placeholder - reduces perceived load time -->
+      <div class="app-loading" aria-label="Loading application">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="20" cy="20" r="18" stroke="#e5e5e5" stroke-width="4"/>
+          <path d="M20 2a18 18 0 0 1 18 18" stroke="#3b82f6" stroke-width="4" stroke-linecap="round">
+            <animateTransform attributeName="transform" type="rotate" from="0 20 20" to="360 20 20" dur="1s" repeatCount="indefinite"/>
+          </path>
+        </svg>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

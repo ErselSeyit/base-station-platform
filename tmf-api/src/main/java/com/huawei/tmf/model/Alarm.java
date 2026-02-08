@@ -2,6 +2,7 @@ package com.huawei.tmf.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 
@@ -14,6 +15,7 @@ import java.util.List;
  */
 @Document(collection = "tmf_alarms")
 @CompoundIndex(name = "idx_resource_state", def = "{'alarmedObjectId': 1, 'state': 1}")
+@SuppressWarnings("java:S115")  // Enum values use TMF642 spec-mandated camelCase naming
 public class Alarm {
 
     @Id
@@ -307,15 +309,16 @@ public class Alarm {
 
     public static class Comment {
         private String id;
-        private String comment;
+        @Field("comment")  // Maps to existing MongoDB field name (renamed from 'comment' to 'text' for clarity)
+        private String text;
         private String systemId;
         private Instant time;
         private String userId;
 
         public String getId() { return id; }
         public void setId(String id) { this.id = id; }
-        public String getComment() { return comment; }
-        public void setComment(String comment) { this.comment = comment; }
+        public String getText() { return text; }
+        public void setText(String text) { this.text = text; }
         public String getSystemId() { return systemId; }
         public void setSystemId(String systemId) { this.systemId = systemId; }
         public Instant getTime() { return time; }

@@ -26,6 +26,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/tmf-api/serviceInventoryManagement/v4")
 @CrossOrigin(origins = "*")
+@SuppressWarnings("java:S4684")  // Direct entity exposure required for TMF638 API compliance
 public class ServiceInventoryController {
 
     private final ServiceInventoryService serviceInventoryService;

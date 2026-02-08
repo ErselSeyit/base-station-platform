@@ -258,15 +258,11 @@ class SONRecommendationTest {
         void setStatus_UpdatesTimestamp() {
             LocalDateTime originalUpdatedAt = recommendation.getUpdatedAt();
 
-            // Small delay to ensure timestamp difference
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-
+            // Change status - updatedAt should be updated to current time
             recommendation.setStatus(SONStatus.APPROVED);
 
+            // The updatedAt should be equal to or after the original time
+            // (may be equal if executed within same millisecond)
             assertTrue(recommendation.getUpdatedAt().isAfter(originalUpdatedAt) ||
                     recommendation.getUpdatedAt().isEqual(originalUpdatedAt));
         }

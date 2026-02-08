@@ -228,7 +228,7 @@ public class AlarmService {
 
         Alarm.Comment comment = new Alarm.Comment();
         comment.setId(UUID.randomUUID().toString());
-        comment.setComment((String) commentData.get("comment"));
+        comment.setText((String) commentData.get("comment"));
         comment.setUserId((String) commentData.get("userId"));
         comment.setSystemId((String) commentData.get("systemId"));
         comment.setTime(Instant.now());

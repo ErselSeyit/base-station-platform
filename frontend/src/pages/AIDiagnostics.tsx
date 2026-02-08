@@ -3,15 +3,12 @@ import {
   Warning as WarningIcon,
   Timeline as TimelineIcon,
   Refresh as RefreshIcon,
-  RateReview as FeedbackIcon,
-  School as LearnIcon,
   CheckCircle as CheckIcon,
   AutoFixHigh as AutoFixIcon,
   ClearAll as ClearIcon,
 } from '@mui/icons-material'
 import {
   Box,
-  Button,
   Card,
   Chip,
   Grid,
@@ -26,11 +23,20 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense, useMemo, useState, useEffect, useRef } from 'react'
+import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
+import CircularProgress from '@mui/material/CircularProgress'
+import Button from '@mui/material/Button'
+import Skeleton from '@mui/material/Skeleton'
+import useMediaQuery from '@mui/material/useMediaQuery'
 import ErrorDisplay from '../components/ErrorDisplay'
-import FeedbackDialog from '../components/FeedbackDialog'
+
+// Lazy load below-the-fold components to reduce initial bundle
+const FeedbackDialog = lazy(() => import('../components/FeedbackDialog'))
+const LearningStatsCard = lazy(() => import('../components/LearningStatsCard'))
+const PendingConfirmationsCard = lazy(() => import('../components/PendingConfirmationsCard'))
 import { diagnosticsApi, DiagnosticSession } from '../services/api'
+import type { DiagnosticStatusFilter } from '../services/api/diagnostics'
 import { CSS_VARS, getConfidenceColor, POLLING_INTERVALS } from '../constants/designSystem'
 import { formatTimestamp, getErrorMessage } from '../utils/statusHelpers'
 import {
@@ -49,8 +55,15 @@ const PROGRESS_SCALE = {
   MAX_PERCENT: 100,
 } as const
 
-// Threshold for pattern success classification
-const SUCCESS_RATE_THRESHOLD_PERCENT = 70
+// Display limits for performance
+const DISPLAY_LIMITS = {
+  /** Page size for infinite scroll */
+  PAGE_SIZE: 20,
+  /** Cache duration for session data in milliseconds */
+  SESSION_STALE_TIME_MS: 30_000,
+  /** Cache duration for learning stats in milliseconds */
+  LEARNING_STATS_STALE_TIME_MS: 60_000,
+} as const
 
 // Placeholder value indicating missing metric data (set by backend)
 const MISSING_METRIC_PLACEHOLDER = -1
@@ -109,31 +122,97 @@ function transformSessionsToLog(sessions: DiagnosticSession[]): DiagnosticLog {
   }
 }
 
+// Status filter options
+const STATUS_FILTERS: { value: DiagnosticStatusFilter | 'ALL'; label: string; color: string }[] = [
+  { value: 'ALL', label: 'All', color: 'var(--mono-600)' },
+  { value: 'RESOLVED', label: 'Resolved', color: 'var(--status-active)' },
+  { value: 'FAILED', label: 'Failed', color: 'var(--status-offline)' },
+  { value: 'PENDING_CONFIRMATION', label: 'Pending', color: 'var(--status-maintenance)' },
+  { value: 'DIAGNOSED', label: 'Diagnosed', color: 'var(--status-info)' },
+  { value: 'DETECTED', label: 'Detected', color: 'var(--mono-500)' },
+]
+
 export default function AIDiagnostics() {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
   const [selectedSession, setSelectedSession] = useState<DiagnosticSession | null>(null)
   // Filter to hide old sessions from display (data remains in DB for AI learning)
   const [clearAfter, setClearAfter] = useState<string | null>(null)
+  // Status filter for the list
+  const [statusFilter, setStatusFilter] = useState<DiagnosticStatusFilter | 'ALL'>('ALL')
   const queryClient = useQueryClient()
+  // Only render mobile OR desktop view, not both (reduces DOM nodes and re-renders)
+  const isDesktop = useMediaQuery('(min-width: 900px)')
 
-  // Fetch all diagnostic sessions with React Query
-  const { data: sessions = [], isLoading, error: sessionsError, refetch } = useQuery({
-    queryKey: ['diagnostic-sessions'],
-    queryFn: async () => {
-      const response = await diagnosticsApi.getAll()
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+
+  // Fetch diagnostic sessions with infinite scroll pagination
+  const {
+    data,
+    isLoading,
+    error: sessionsError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['diagnostic-sessions-paged', statusFilter],
+    queryFn: async ({ pageParam = 0 }) => {
+      const status = statusFilter === 'ALL' ? undefined : statusFilter
+      const response = await diagnosticsApi.getPaged(pageParam, DISPLAY_LIMITS.PAGE_SIZE, status)
       return response.data
     },
+    getNextPageParam: (lastPage) => {
+      if (lastPage.last) return undefined
+      return lastPage.number + 1
+    },
+    initialPageParam: 0,
     refetchInterval: POLLING_INTERVALS.NORMAL,
-    staleTime: 30_000, // Cache for 30s to prevent refetch on navigation
+    staleTime: DISPLAY_LIMITS.SESSION_STALE_TIME_MS,
   })
 
-  // Filter sessions for display (hide old ones if cleared, data stays in DB for AI)
-  const displayedSessions = clearAfter
-    ? sessions.filter(s => new Date(s.createdAt) > new Date(clearAfter))
-    : sessions
+  // Flatten all pages into a single array
+  const sessions = useMemo(() => {
+    if (!data?.pages) return []
+    return data.pages.flatMap((page) => page.content)
+  }, [data])
 
-  // Transform sessions to log format
-  const diagnosticData = transformSessionsToLog(displayedSessions)
+  // Get total count from first page
+  const totalCount = data?.pages[0]?.totalElements ?? 0
+
+  // Intersection observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    const currentRef = loadMoreRef.current
+    if (currentRef) {
+      observer.observe(currentRef)
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef)
+      }
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  // Memoize filtered sessions (apply clearAfter filter)
+  const displayedSessions = useMemo(() => {
+    if (!clearAfter) return sessions
+    return sessions.filter(s => new Date(s.createdAt) > new Date(clearAfter))
+  }, [sessions, clearAfter])
+
+  // Memoize transformation to prevent recalculation on every render
+  const diagnosticData = useMemo(
+    () => transformSessionsToLog(displayedSessions),
+    [displayedSessions]
+  )
   const error = sessionsError ? getErrorMessage(sessionsError) : null
 
   // Fetch pending confirmations from the learning system
@@ -144,7 +223,7 @@ export default function AIDiagnostics() {
       return response.data
     },
     refetchInterval: POLLING_INTERVALS.NORMAL,
-    staleTime: 30_000,
+    staleTime: DISPLAY_LIMITS.SESSION_STALE_TIME_MS,
   })
 
   // Fetch learning stats (less critical, longer cache)
@@ -155,7 +234,7 @@ export default function AIDiagnostics() {
       return response.data
     },
     refetchInterval: POLLING_INTERVALS.SLOW,
-    staleTime: 60_000, // Cache for 60s - stats don't need real-time updates
+    staleTime: DISPLAY_LIMITS.LEARNING_STATS_STALE_TIME_MS,
   })
 
   const handleOpenFeedback = (session: DiagnosticSession) => {
@@ -182,9 +261,13 @@ export default function AIDiagnostics() {
   const stats = diagnosticData.stats
   const events = diagnosticData.events
 
-  const resolutionRate = stats.problems_detected > 0
-    ? ((stats.problems_resolved / stats.problems_detected) * 100).toFixed(1)
-    : '0'
+  // Memoize resolution rate calculation
+  const resolutionRate = useMemo(() =>
+    stats.problems_detected > 0
+      ? ((stats.problems_resolved / stats.problems_detected) * 100).toFixed(1)
+      : '0',
+    [stats.problems_detected, stats.problems_resolved]
+  )
 
   const queryError = pendingError || learningError
   if (queryError) {
@@ -219,7 +302,9 @@ export default function AIDiagnostics() {
               AI Diagnostics
             </Typography>
             <Typography variant="body2" sx={{ color: 'var(--mono-500)', fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
-              Automated problem detection and resolution
+              {isLoading
+                ? 'Loading diagnostic sessions...'
+                : `Automated problem detection · ${totalCount.toLocaleString()} total · ${sessions.length.toLocaleString()} loaded`}
             </Typography>
           </Box>
         </Box>
@@ -265,6 +350,27 @@ export default function AIDiagnostics() {
             </IconButton>
           </Tooltip>
         </Box>
+      </Box>
+
+      {/* Status Filter Chips */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+        {STATUS_FILTERS.map((filter) => (
+          <Chip
+            key={filter.value}
+            label={filter.label}
+            onClick={() => setStatusFilter(filter.value)}
+            sx={{
+              fontWeight: 500,
+              fontSize: '0.8125rem',
+              backgroundColor: statusFilter === filter.value ? filter.color : 'var(--surface-elevated)',
+              color: statusFilter === filter.value ? 'white' : 'var(--mono-700)',
+              border: statusFilter === filter.value ? 'none' : '1px solid var(--mono-400)',
+              '&:hover': {
+                backgroundColor: statusFilter === filter.value ? filter.color : 'var(--surface-hover)',
+              },
+            }}
+          />
+        ))}
       </Box>
 
       {/* Error Display */}
@@ -425,7 +531,14 @@ export default function AIDiagnostics() {
         </Card>
       )}
 
-      {/* Recent Events Section */}
+      {/* Learning Stats - lazy loaded */}
+      <Box sx={{ mb: 4 }}>
+        <Suspense fallback={<Skeleton variant="rectangular" height={200} sx={{ borderRadius: '16px' }} />}>
+          {learningStats && <LearningStatsCard stats={learningStats} />}
+        </Suspense>
+      </Box>
+
+      {/* Diagnostic Events Section */}
       <Card
         sx={{
           background: 'var(--surface-elevated)',
@@ -439,15 +552,29 @@ export default function AIDiagnostics() {
             variant="h6"
             sx={{ fontWeight: 600, color: 'var(--mono-950)', fontSize: { xs: '1rem', sm: '1.25rem' } }}
           >
-            Recent Diagnostic Events
+            Diagnostic Events
+            {statusFilter !== 'ALL' && (
+              <Chip
+                label={STATUS_FILTERS.find(f => f.value === statusFilter)?.label}
+                size="small"
+                sx={{
+                  ml: 1.5,
+                  backgroundColor: STATUS_FILTERS.find(f => f.value === statusFilter)?.color,
+                  color: 'white',
+                  fontWeight: 500,
+                  fontSize: '0.75rem',
+                }}
+              />
+            )}
           </Typography>
           <Typography variant="body2" sx={{ color: 'var(--mono-500)', mt: 0.5, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
-            Real-time AI-powered problem detection and resolution
+            AI-powered problem detection and resolution
           </Typography>
         </Box>
 
-        {/* Mobile Card View */}
-        <Box sx={{ display: { xs: 'block', md: 'none' }, p: 2 }}>
+        {/* Mobile Card View - only rendered on mobile */}
+        {!isDesktop && (
+        <Box sx={{ p: 2 }}>
           {events.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography sx={{ color: 'var(--mono-500)' }}>No diagnostic events</Typography>
@@ -549,9 +676,11 @@ export default function AIDiagnostics() {
             </Box>
           )}
         </Box>
+        )}
 
-        {/* Desktop Table View */}
-        <TableContainer sx={{ display: { xs: 'none', md: 'block' } }}>
+        {/* Desktop Table View - only rendered on desktop */}
+        {isDesktop && (
+        <TableContainer>
           <Table>
             <TableHead>
               <TableRow sx={{ backgroundColor: 'var(--surface-subtle)' }}>
@@ -643,217 +772,54 @@ export default function AIDiagnostics() {
             </TableBody>
           </Table>
         </TableContainer>
+        )}
+
+        {/* Load more trigger for infinite scroll */}
+        <Box
+          ref={loadMoreRef}
+          sx={{
+            padding: '16px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '60px',
+          }}
+        >
+          {isFetchingNextPage ? (
+            <CircularProgress size={24} />
+          ) : hasNextPage ? (
+            <Button
+              variant="text"
+              onClick={() => fetchNextPage()}
+              sx={{ color: 'var(--mono-600)' }}
+            >
+              Load more
+            </Button>
+          ) : events.length > 0 ? (
+            <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-500)' }}>
+              All {totalCount.toLocaleString()} diagnostic events loaded
+            </Typography>
+          ) : null}
+        </Box>
       </Card>
 
-      {/* Pending Confirmations Section */}
-      {pendingSessions.length > 0 && (
-        <Card
-          sx={{
-            mt: 4,
-            background: CSS_VARS.colorVioletBg,
-            border: `1px solid ${CSS_VARS.colorVioletBorder}`,
-            borderRadius: '16px',
-            overflow: 'hidden',
-          }}
-        >
-          <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: `1px solid ${CSS_VARS.mono400}` }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box
-                sx={{
-                  p: 1,
-                  borderRadius: '10px',
-                  background: CSS_VARS.gradientAi,
-                  color: 'white',
-                }}
-              >
-                <FeedbackIcon sx={{ fontSize: 20 }} />
-              </Box>
-              <Box>
-                <Typography
-                  variant="h6"
-                  sx={{ fontWeight: 600, color: 'var(--mono-950)', fontSize: { xs: '1rem', sm: '1.25rem' } }}
-                >
-                  Pending Confirmations
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'var(--mono-500)', fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
-                  Help the AI learn by confirming if solutions worked
-                </Typography>
-              </Box>
-            </Box>
-          </Box>
+      {/* Pending Confirmations - lazy loaded */}
+      <Suspense fallback={<Skeleton variant="rectangular" height={200} sx={{ mt: 4, borderRadius: '16px' }} />}>
+        <PendingConfirmationsCard
+          sessions={pendingSessions}
+          onConfirmClick={handleOpenFeedback}
+        />
+      </Suspense>
 
-          <Box sx={{ p: 2 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {pendingSessions.map((session) => (
-                <Box
-                  key={session.id}
-                  sx={{
-                    p: 2,
-                    background: 'var(--surface-base)',
-                    border: '1px solid var(--mono-400)',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: 2,
-                  }}
-                >
-                  <Box sx={{ flex: 1, minWidth: 200 }}>
-                    <Typography sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
-                      {session.problemCode.replaceAll('_', ' ')}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'var(--mono-500)', mt: 0.5 }}>
-                      {session.stationName} - {session.message}
-                    </Typography>
-                    {session.aiSolution && (
-                      <Typography variant="body2" sx={{ color: 'var(--mono-600)', mt: 1, fontStyle: 'italic' }}>
-                        AI Action: {session.aiSolution.action}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Button
-                    variant="contained"
-                    startIcon={<FeedbackIcon />}
-                    onClick={() => handleOpenFeedback(session)}
-                    sx={{
-                      background: CSS_VARS.gradientAi,
-                      color: 'white',
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      px: 3,
-                      '&:hover': {
-                        background: CSS_VARS.gradientAiHover,
-                      },
-                    }}
-                  >
-                    Confirm Solution
-                  </Button>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        </Card>
-      )}
-
-      {/* Learning Stats Section */}
-      {learningStats && learningStats.totalFeedback > 0 && (
-        <Card
-          sx={{
-            mt: 4,
-            background: 'var(--surface-elevated)',
-            border: '1px solid var(--mono-400)',
-            borderRadius: '16px',
-            p: { xs: 2, sm: 3 },
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-            <Box
-              sx={{
-                p: 1,
-                borderRadius: '10px',
-                background: CSS_VARS.gradientSuccess,
-                color: 'white',
-              }}
-            >
-              <LearnIcon sx={{ fontSize: 20 }} />
-            </Box>
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 600, color: 'var(--mono-950)' }}>
-                AI Learning Progress
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-                The AI improves based on your feedback
-              </Typography>
-            </Box>
-          </Box>
-
-          <Grid container spacing={3}>
-            <Grid item xs={6} sm={2.4}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--mono-950)' }}>
-                  {learningStats.totalFeedback}
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-                  Total Feedback
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={6} sm={2.4}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--status-active)' }}>
-                  {learningStats.resolved}
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-                  Successful
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={6} sm={2.4}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--status-offline)' }}>
-                  {learningStats.failed}
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-                  Failed
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={6} sm={2.4}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Tooltip title="Solutions auto-applied due to high AI confidence (95%+)">
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: CSS_VARS.colorPurple500, cursor: 'help' }}>
-                    {learningStats.autoApplied || 0}
-                  </Typography>
-                </Tooltip>
-                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-                  Auto-Applied
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={6} sm={2.4}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: 'var(--color-violet-500)' }}>
-                  {learningStats.successRate.toFixed(1)}%
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-                  Success Rate
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
-
-          {learningStats.topPatterns && learningStats.topPatterns.length > 0 && (
-            <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid var(--mono-400)' }}>
-              <Typography variant="subtitle2" sx={{ color: 'var(--mono-600)', mb: 2 }}>
-                Top Learned Patterns
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {learningStats.topPatterns.map((pattern) => (
-                  <Chip
-                    key={pattern.problemCode}
-                    label={`${pattern.problemCode.replaceAll('_', ' ')} (${pattern.successRate.toFixed(0)}%)`}
-                    size="small"
-                    sx={{
-                      backgroundColor: pattern.successRate >= SUCCESS_RATE_THRESHOLD_PERCENT ? CSS_VARS.colorEmeraldBg : CSS_VARS.colorAmberBg,
-                      color: pattern.successRate >= SUCCESS_RATE_THRESHOLD_PERCENT ? CSS_VARS.colorEmerald600 : CSS_VARS.colorAmber600,
-                      fontWeight: 600,
-                    }}
-                  />
-                ))}
-              </Box>
-            </Box>
-          )}
-        </Card>
-      )}
-
-      {/* Feedback Dialog */}
-      <FeedbackDialog
-        open={feedbackDialogOpen}
-        session={selectedSession}
-        onClose={() => setFeedbackDialogOpen(false)}
-        onSubmit={handleFeedbackSubmit}
-      />
+      {/* Feedback Dialog - lazy loaded */}
+      <Suspense fallback={null}>
+        <FeedbackDialog
+          open={feedbackDialogOpen}
+          session={selectedSession}
+          onClose={() => setFeedbackDialogOpen(false)}
+          onSubmit={handleFeedbackSubmit}
+        />
+      </Suspense>
 
     </Box>
   )

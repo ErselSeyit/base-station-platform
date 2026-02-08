@@ -22,7 +22,11 @@ public class NotificationResponse {
     private LocalDateTime createdAt;
     private LocalDateTime sentAt;
 
+    /**
+     * Default constructor required for Jackson JSON deserialization.
+     */
     public NotificationResponse() {
+        // Required for Jackson deserialization
     }
 
     /**

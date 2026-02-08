@@ -24,7 +24,8 @@ import jakarta.validation.constraints.NotNull;
 @Table(name = "notifications", indexes = {
     @Index(name = "idx_station_status", columnList = "stationId, status"),
     @Index(name = "idx_created_at", columnList = "createdAt"),
-    @Index(name = "idx_status", columnList = "status")
+    @Index(name = "idx_status", columnList = "status"),
+    @Index(name = "idx_type", columnList = "type")
 })
 @EntityListeners(AuditingEntityListener.class)
 public class Notification {
@@ -50,7 +51,7 @@ public class Notification {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private NotificationStatus status = NotificationStatus.PENDING;
+    private NotificationStatus status = NotificationStatus.UNREAD;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

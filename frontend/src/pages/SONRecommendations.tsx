@@ -45,7 +45,6 @@ import {
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ErrorDisplay from '../components/ErrorDisplay'
-import LoadingSpinner from '../components/LoadingSpinner'
 import {
   WORKFLOW_STATUS_STYLES,
   CSS_VARS,
@@ -261,7 +260,7 @@ export default function SONRecommendations() {
     refetchInterval: POLLING_INTERVALS.NORMAL,
   })
 
-  const { data: pendingRecommendations = [], isLoading: pendingLoading, refetch, error: pendingError } = useQuery<SONRecommendation[]>({
+  const { data: pendingRecommendations = [], refetch, error: pendingError } = useQuery<SONRecommendation[]>({
     queryKey: ['son-pending'],
     queryFn: async () => {
       const response = await sonApi.getPending()
@@ -361,12 +360,7 @@ export default function SONRecommendations() {
     }
   }, [selectedTab, allRecommendations, pendingRecommendations])
 
-  const isLoading = statsLoading || pendingLoading
   const error = statsError || pendingError || allError
-
-  if (isLoading) {
-    return <LoadingSpinner />
-  }
 
   if (error) {
     return <ErrorDisplay title="Failed to load SON recommendations" message={getErrorMessage(error)} />
@@ -419,7 +413,7 @@ export default function SONRecommendations() {
               },
             }}
           >
-            <RefreshIcon sx={{ fontSize: ICON_SIZE.MEDIUM, animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshIcon sx={{ fontSize: ICON_SIZE.MEDIUM, animation: statsLoading ? 'spin 1s linear infinite' : 'none' }} />
           </IconButton>
         </Tooltip>
       </Box>

@@ -69,9 +69,30 @@ export interface FeedbackRequest {
   actualOutcome?: string
 }
 
+export interface DiagnosticSessionPage {
+  content: DiagnosticSession[]
+  totalElements: number
+  totalPages: number
+  number: number
+  size: number
+  last: boolean
+}
+
+/** Status values for filtering */
+export type DiagnosticStatusFilter = 'DETECTED' | 'DIAGNOSED' | 'APPLIED' | 'PENDING_CONFIRMATION' | 'RESOLVED' | 'FAILED'
+
 // API methods
 export const diagnosticsApi = {
   getAll: () => api.get<DiagnosticSession[]>('/diagnostics'),
+
+  /** Get recent sessions with limit for performance (default 50, max 200) */
+  getRecent: (limit = 50) => api.get<DiagnosticSession[]>(`/diagnostics/recent?limit=${limit}`),
+
+  /** Get sessions with pagination for infinite scroll, optionally filtered by status */
+  getPaged: (page = 0, size = 20, status?: DiagnosticStatusFilter) => {
+    const statusParam = status ? `&status=${status}` : ''
+    return api.get<DiagnosticSessionPage>(`/diagnostics/page?page=${page}&size=${size}&sort=createdAt,desc${statusParam}`)
+  },
 
   getPending: () => api.get<DiagnosticSession[]>('/diagnostics/pending'),
 

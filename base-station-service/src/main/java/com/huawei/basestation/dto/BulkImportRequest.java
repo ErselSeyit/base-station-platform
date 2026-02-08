@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.lang.Nullable;
 
 import java.util.List;
 
@@ -37,9 +38,9 @@ public record BulkImportRequest(
             @NotNull(message = "Station type is required")
             StationType stationType,
 
-            Double powerConsumption,
+            @Nullable Double powerConsumption,
 
-            String description
+            @Nullable String description
     ) {}
 
     /**

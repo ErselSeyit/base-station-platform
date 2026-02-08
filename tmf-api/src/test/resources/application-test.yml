@@ -1,0 +1,13 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/tmf_test
+      auto-index-creation: true
+
+  security:
+    enabled: false
+
+logging:
+  level:
+    com.huawei.tmf: DEBUG
+    org.springframework.data.mongodb: DEBUG

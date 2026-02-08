@@ -121,7 +121,7 @@ public class MonitoringController {
             @Parameter(description = "End time (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
         return ResponseEntity.ok(service.getMetricsByTimeRange(
                 Objects.requireNonNull(start, ValidationMessages.START_TIME_NULL_MESSAGE),
-                Objects.requireNonNull(end, "End time cannot be null")));
+                Objects.requireNonNull(end, ValidationMessages.END_TIME_NULL_MESSAGE)));
     }
 
     @Operation(summary = "Get daily aggregated metrics", description = "Retrieves daily averaged metrics for chart display. More efficient than fetching raw metrics.")
@@ -133,7 +133,7 @@ public class MonitoringController {
         log.debug("Getting daily aggregates from {} to {}", start, end);
         return ResponseEntity.ok(service.getDailyAggregates(
                 Objects.requireNonNull(start, ValidationMessages.START_TIME_NULL_MESSAGE),
-                Objects.requireNonNull(end, "End time cannot be null")));
+                Objects.requireNonNull(end, ValidationMessages.END_TIME_NULL_MESSAGE)));
     }
 
     @Operation(summary = "Get station metrics by time range", description = "Retrieves metrics for a station within a time range")
@@ -146,7 +146,7 @@ public class MonitoringController {
         return ResponseEntity.ok(service.getMetricsByStationAndTimeRange(
                 Objects.requireNonNull(stationId, ValidationMessages.STATION_ID_NULL_MESSAGE),
                 Objects.requireNonNull(start, ValidationMessages.START_TIME_NULL_MESSAGE),
-                Objects.requireNonNull(end, "End time cannot be null")));
+                Objects.requireNonNull(end, ValidationMessages.END_TIME_NULL_MESSAGE)));
     }
 
     @Operation(summary = "Get metrics above threshold", description = "Retrieves metrics that exceed a specified threshold value")
