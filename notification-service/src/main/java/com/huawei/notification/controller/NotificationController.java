@@ -5,10 +5,14 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.lang.Nullable;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -132,5 +136,71 @@ public class NotificationController {
         return ResponseEntity.ok(notifications.stream()
                 .map(NotificationResponse::fromEntity)
                 .toList());
+    }
+
+    @Operation(summary = "Get notifications (paginated)",
+            description = "Retrieves notifications with pagination support for better performance")
+    @ApiResponse(responseCode = "200", description = "Page of notifications")
+    @GetMapping("/page")
+    public ResponseEntity<Page<NotificationResponse>> getNotificationsPaged(
+            @Parameter(description = "Filter by status (optional)") @RequestParam(required = false) @Nullable NotificationStatus status,
+            @PageableDefault(size = 50, sort = "createdAt") Pageable pageable) {
+        Page<NotificationResponse> page = status != null
+                ? service.getNotificationsByStatusPaged(status, pageable).map(NotificationResponse::fromEntity)
+                : service.getAllNotificationsPaged(pageable).map(NotificationResponse::fromEntity);
+        return ResponseEntity.ok(page);
+    }
+
+    @Operation(summary = "Get notification counts",
+            description = "Returns lightweight notification counts by type/status for badges and stats")
+    @ApiResponse(responseCode = "200", description = "Notification counts")
+    @GetMapping("/counts")
+    public ResponseEntity<Map<String, Long>> getNotificationCounts() {
+        var counts = service.getCounts();
+        return ResponseEntity.ok(Map.of(
+                "total", counts.total(),
+                "unread", counts.unread(),
+                "alerts", counts.alerts(),
+                "warnings", counts.warnings()
+        ));
+    }
+
+    @Operation(summary = "Get recent notifications",
+            description = "Returns the 10 most recent notifications for activity feeds")
+    @ApiResponse(responseCode = "200", description = "Recent notifications")
+    @GetMapping("/recent")
+    public ResponseEntity<List<NotificationResponse>> getRecentNotifications() {
+        return ResponseEntity.ok(service.getRecentNotifications().stream()
+                .map(NotificationResponse::fromEntity)
+                .toList());
+    }
+
+    @Operation(summary = "Delete notification (mark as read)",
+            description = "Deletes a notification, removing it from the system")
+    @ApiResponse(responseCode = "204", description = "Notification deleted")
+    @ApiResponse(responseCode = "404", description = "Notification not found")
+    @DeleteMapping("/{id}")
+    @PreAuthorize(Roles.HAS_OPERATOR)
+    public ResponseEntity<Void> deleteNotification(
+            @Parameter(description = "Notification ID") @PathVariable Long id) {
+        try {
+            service.deleteNotification(id);
+            return ResponseEntity.noContent().build();
+        } catch (NotificationNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @Operation(summary = "Clear all unread notifications",
+            description = "Deletes all unread notifications from the system")
+    @ApiResponse(responseCode = "200", description = "All unread notifications deleted")
+    @DeleteMapping("/unread")
+    @PreAuthorize(Roles.HAS_OPERATOR)
+    public ResponseEntity<Map<String, Object>> deleteAllUnread() {
+        int deleted = service.deleteAllUnread();
+        return ResponseEntity.ok(Map.of(
+                KEY_STATUS, "success",
+                "deleted", deleted
+        ));
     }
 }

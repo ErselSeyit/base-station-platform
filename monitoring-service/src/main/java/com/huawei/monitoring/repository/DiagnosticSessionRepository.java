@@ -2,9 +2,12 @@ package com.huawei.monitoring.repository;
 
 import com.huawei.monitoring.model.DiagnosticSession;
 import com.huawei.monitoring.model.DiagnosticStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
+
+import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -95,6 +98,22 @@ public interface DiagnosticSessionRepository extends MongoRepository<DiagnosticS
      * Find all sessions ordered by creation date (most recent first).
      */
     List<DiagnosticSession> findAllByOrderByCreatedAtDesc();
+
+    /**
+     * Find recent sessions with pagination support.
+     * Use PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"))
+     */
+    List<DiagnosticSession> findAllBy(Pageable pageable);
+
+    /**
+     * Find all sessions with full pagination support (returns Page with total count).
+     */
+    Page<DiagnosticSession> findBy(Pageable pageable);
+
+    /**
+     * Find sessions by status with pagination support.
+     */
+    Page<DiagnosticSession> findByStatus(DiagnosticStatus status, Pageable pageable);
 
     /**
      * Find active sessions for a station and problem code (for deduplication).

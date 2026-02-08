@@ -8,6 +8,9 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -126,6 +129,97 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public List<Notification> getAllNotifications() {
-        return repository.findAll();
+        return repository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Notification> getAllNotificationsPaged(Pageable pageable) {
+        return repository.findAll(pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Notification> getNotificationsByStatusPaged(NotificationStatus status, Pageable pageable) {
+        return repository.findByStatus(status, pageable);
+    }
+
+    // Simple in-memory cache for counts (10 second TTL)
+    // Thread-safety: volatile + immutable record is sufficient for read-heavy cache
+    @SuppressWarnings("java:S3077") // Immutable record is thread-safe with volatile
+    private static final long COUNTS_CACHE_TTL_MS = 10_000;
+    @org.springframework.lang.Nullable
+    private volatile NotificationCounts cachedCounts;
+    private volatile long cachedCountsTimestamp;
+
+    /**
+     * Gets notification counts by status and type for lightweight dashboard/badge queries.
+     * Results are cached for 10 seconds to reduce database load.
+     *
+     * @return map containing total, unread, alerts, and warnings counts
+     */
+    @Transactional(readOnly = true)
+    public NotificationCounts getCounts() {
+        long now = System.currentTimeMillis();
+        NotificationCounts cached = cachedCounts;
+        if (cached != null && (now - cachedCountsTimestamp) < COUNTS_CACHE_TTL_MS) {
+            return cached;
+        }
+
+        NotificationCounts counts = new NotificationCounts(
+                repository.countByStatus(NotificationStatus.UNREAD),
+                repository.countByStatus(NotificationStatus.UNREAD),
+                repository.countByTypeAndStatus(NotificationType.ALERT, NotificationStatus.UNREAD),
+                repository.countByTypeAndStatus(NotificationType.WARNING, NotificationStatus.UNREAD)
+        );
+        cachedCounts = counts;
+        cachedCountsTimestamp = now;
+        return counts;
+    }
+
+    /**
+     * Record holding notification counts for lightweight queries.
+     */
+    public record NotificationCounts(long total, long unread, long alerts, long warnings) {}
+
+    /**
+     * Gets recent unread notifications (last 10) for activity feeds.
+     * Only returns UNREAD notifications so cleared alerts don't appear.
+     *
+     * @return list of the 10 most recent unread notifications
+     */
+    @Transactional(readOnly = true)
+    public List<Notification> getRecentNotifications() {
+        return repository.findByStatus(
+                NotificationStatus.UNREAD,
+                org.springframework.data.domain.PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"))
+        ).getContent();
+    }
+
+    /**
+     * Deletes a notification (marks as read by removing it).
+     *
+     * @param notificationId the notification ID to delete
+     * @throws NotificationNotFoundException if notification not found
+     */
+    public void deleteNotification(Long notificationId) {
+        if (!repository.existsById(notificationId)) {
+            throw new NotificationNotFoundException(notificationId);
+        }
+        repository.deleteById(notificationId);
+        cachedCounts = null;
+        log.debug("Notification {} deleted", notificationId);
+    }
+
+    /**
+     * Deletes all unread notifications (clear all).
+     *
+     * @return the number of notifications deleted
+     */
+    public int deleteAllUnread() {
+        int deleted = repository.deleteByStatusBulk(NotificationStatus.UNREAD);
+        if (deleted > 0) {
+            cachedCounts = null;
+            log.info("Deleted {} unread notifications", deleted);
+        }
+        return deleted;
     }
 }

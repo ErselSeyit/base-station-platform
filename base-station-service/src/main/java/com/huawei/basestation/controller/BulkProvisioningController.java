@@ -17,6 +17,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.lang.Nullable;
+
 import java.util.List;
 
 /**
@@ -124,7 +126,10 @@ public class BulkProvisioningController {
         return csv.toString();
     }
 
-    private String escapeCsv(String value) {
+    private String escapeCsv(@Nullable String value) {
+        if (value == null) {
+            return "";
+        }
         if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
             return "\"" + value.replace("\"", "\"\"") + "\"";
         }

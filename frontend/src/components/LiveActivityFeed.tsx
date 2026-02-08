@@ -3,23 +3,22 @@ import { Box, Typography } from '@mui/material'
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatDistanceToNow } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
-import { notificationsApi } from '../services/api'
-import { Notification } from '../types'
-import { ensureArray } from '../utils/arrayUtils'
+import { notificationsApi, type Notification } from '../services/api/notifications'
 import PulsingStatus from './PulsingStatus'
 import { getSeverityColorVar, POLLING_INTERVALS } from '../constants/designSystem'
 
 export default function LiveActivityFeed() {
+  // Use lightweight recent endpoint (10 items) instead of loading all notifications
   const { data: notifications, error } = useQuery({
     queryKey: ['recent-notifications'],
     queryFn: async () => {
-      const response = await notificationsApi.getAll()
+      const response = await notificationsApi.getRecent()
       return response.data
     },
     refetchInterval: POLLING_INTERVALS.FAST,
   })
 
-  const recentNotifications = ensureArray(notifications as Notification[]).slice(0, 5)
+  const recentNotifications = (notifications ?? []).slice(0, 5)
 
   // Show error state if API fails
   if (error) {
@@ -83,7 +82,7 @@ export default function LiveActivityFeed() {
                   borderRadius: 2,
                   background: 'var(--surface-elevated)',
                   borderLeft: '3px solid',
-                  borderColor: getSeverityColorVar(notification.severity),
+                  borderColor: getSeverityColorVar(notification.type),
                   transition: 'all 0.2s ease',
                   '&:hover': {
                     background: 'var(--surface-hover)',
@@ -93,7 +92,7 @@ export default function LiveActivityFeed() {
               >
                 <Box sx={{ mt: 0.5 }}>
                   <PulsingStatus
-                    color={getSeverityColorVar(notification.severity)}
+                    color={getSeverityColorVar(notification.type)}
                     size={10}
                     animate={notification.status === 'UNREAD'}
                   />

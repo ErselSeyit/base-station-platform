@@ -1,32 +1,41 @@
 import {
   CheckCircle as CheckCircleIcon,
+  ClearAll as ClearAllIcon,
   Error as ErrorIcon,
   Info as InfoIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material'
 import {
   Box,
+  Button,
+  CircularProgress,
   IconButton,
+  Skeleton,
   Tooltip,
   Typography,
 } from '@mui/material'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
-import { useMemo } from 'react'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { memo, useCallback, useMemo, useRef, useEffect } from 'react'
 import ErrorDisplay from '../components/ErrorDisplay'
-import LoadingSpinner from '../components/LoadingSpinner'
-import { notificationsApi } from '../services/api'
-import { Notification, NotificationType } from '../types'
-import { ensureArray } from '../utils/arrayUtils'
+import { notificationsApi, type Notification } from '../services/api/notifications'
+import { NotificationType } from '../types'
 import { formatTimestamp, getErrorMessage } from '../utils/statusHelpers'
 import { showToast } from '../utils/toast'
-import { POLLING_INTERVALS } from '../constants/designSystem'
+
+const PAGE_SIZE = 20 // Smaller initial load for faster LCP
 
 const SEVERITY_STYLES = {
   ALERT: { color: 'var(--status-offline)', shadow: 'var(--status-error-shadow)' },
   WARNING: { color: 'var(--status-maintenance)', shadow: 'var(--status-warning-shadow)' },
   INFO: { color: 'var(--status-info)', shadow: 'var(--status-info-shadow)' },
 }
+
+// Pre-rendered icons to avoid recreation on each render
+const SEVERITY_ICONS = {
+  [NotificationType.ALERT]: <ErrorIcon sx={{ fontSize: '16px' }} />,
+  [NotificationType.WARNING]: <WarningIcon sx={{ fontSize: '16px' }} />,
+  [NotificationType.INFO]: <InfoIcon sx={{ fontSize: '16px' }} />,
+} as const
 
 // Shared styles for stat boxes
 const STAT_BOX_LABEL_SX = {
@@ -48,7 +57,7 @@ const STAT_BOX_VALUE_SX = {
 
 interface StatBoxProps {
   label: string
-  value: number
+  value: number | string
   borderColor: string
 }
 
@@ -70,42 +79,44 @@ function StatBox({ label, value, borderColor }: Readonly<StatBoxProps>) {
   )
 }
 
-interface AlertRowProps {
-  notification: Notification
-  delay: number
-  onMarkAsRead: (id: number) => void
+// Skeleton row for loading state - renders immediately for fast LCP
+function AlertRowSkeleton() {
+  return (
+    <Box sx={{ padding: '20px 24px', borderBottom: '1px solid var(--surface-border)' }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+        <Skeleton variant="circular" width={16} height={16} sx={{ marginTop: '2px' }} />
+        <Box sx={{ flex: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <Skeleton variant="text" width={120} height={20} />
+            <Skeleton variant="text" width={60} height={16} />
+          </Box>
+          <Skeleton variant="text" width="80%" height={20} sx={{ marginBottom: '8px' }} />
+          <Skeleton variant="text" width={140} height={16} />
+        </Box>
+      </Box>
+    </Box>
+  )
 }
 
-const AlertRow = ({ notification, delay, onMarkAsRead }: Readonly<AlertRowProps>) => {
+interface AlertRowProps {
+  notification: Notification
+  onDelete: (id: number) => void
+}
+
+// Memoized row component - only re-renders when notification or callback changes
+const AlertRow = memo(function AlertRow({ notification, onDelete }: Readonly<AlertRowProps>) {
   const severityStyle = SEVERITY_STYLES[notification.type as keyof typeof SEVERITY_STYLES] || SEVERITY_STYLES.INFO
   const severityColor = severityStyle.color
   const isUnread = notification.status === 'UNREAD'
   const notificationId = notification.id
-
-  const getIcon = (type: NotificationType) => {
-    switch (type) {
-      case NotificationType.ALERT:
-        return <ErrorIcon sx={{ fontSize: '16px' }} />
-      case NotificationType.WARNING:
-        return <WarningIcon sx={{ fontSize: '16px' }} />
-      case NotificationType.INFO:
-        return <InfoIcon sx={{ fontSize: '16px' }} />
-      default:
-        return <InfoIcon sx={{ fontSize: '16px' }} />
-    }
-  }
+  const icon = SEVERITY_ICONS[notification.type as keyof typeof SEVERITY_ICONS] || SEVERITY_ICONS[NotificationType.INFO]
 
   return (
     <Box
-      component={motion.div}
-      initial={{ opacity: 0, x: -16 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       sx={{
         position: 'relative',
         padding: '20px 24px',
         borderBottom: '1px solid var(--surface-border)',
-        transition: 'background 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
         background: isUnread ? 'var(--surface-elevated)' : 'transparent',
         '&:hover': {
           background: 'var(--surface-hover)',
@@ -134,7 +145,7 @@ const AlertRow = ({ notification, delay, onMarkAsRead }: Readonly<AlertRowProps>
             alignItems: 'center',
           }}
         >
-          {getIcon(notification.type)}
+          {icon}
         </Box>
 
         {/* Content */}
@@ -203,12 +214,11 @@ const AlertRow = ({ notification, delay, onMarkAsRead }: Readonly<AlertRowProps>
           <Tooltip title="Mark as read">
             <IconButton
               size="small"
-              onClick={() => onMarkAsRead(notificationId)}
+              onClick={() => onDelete(notificationId)}
               sx={{
                 width: '32px',
                 height: '32px',
                 color: 'var(--mono-600)',
-                transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
                 '&:hover': {
                   background: 'var(--mono-200)',
                   color: 'var(--mono-950)',
@@ -222,53 +232,108 @@ const AlertRow = ({ notification, delay, onMarkAsRead }: Readonly<AlertRowProps>
       </Box>
     </Box>
   )
-}
+})
 
 export default function Alerts() {
   const queryClient = useQueryClient()
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: async () => {
-      const response = await notificationsApi.getAll()
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+
+  // Infinite query for paginated data
+  const {
+    data,
+    isLoading,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['notifications-paged', 'UNREAD'],
+    queryFn: async ({ pageParam = 0 }) => {
+      const response = await notificationsApi.getPaged(pageParam, PAGE_SIZE, 'UNREAD')
       return response.data
     },
-    refetchInterval: POLLING_INTERVALS.NORMAL,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.last) return undefined
+      return lastPage.number + 1
+    },
+    initialPageParam: 0,
   })
 
-  const markAsReadMutation = useMutation({
-    mutationFn: notificationsApi.markAsRead,
+  // Intersection observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    const currentRef = loadMoreRef.current
+    if (currentRef) {
+      observer.observe(currentRef)
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef)
+      }
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  const deleteMutation = useMutation({
+    mutationFn: notificationsApi.deleteNotification,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-paged'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['recent-notifications'] })
     },
     onError: (err: Error) => {
-      // Refresh to show current state even on error
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      showToast.error(`Failed to mark notification as read: ${err.message}`)
+      queryClient.invalidateQueries({ queryKey: ['notifications-paged'] })
+      showToast.error(`Failed to delete notification: ${err.message}`)
     },
   })
 
-  const notifications = ensureArray(data as Notification[])
+  const clearAllMutation = useMutation({
+    mutationFn: notificationsApi.clearAllUnread,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['notifications-paged'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['recent-notifications'] })
+      showToast.success(`Cleared ${response.data.deleted} alerts`)
+    },
+    onError: (err: Error) => {
+      showToast.error(`Failed to clear alerts: ${err.message}`)
+    },
+  })
 
-  // Calculate all counts in a single iteration (useMemo must be before early returns)
-  const { unreadCount, alertCount, warningCount } = useMemo(() => {
-    let unread = 0
-    let alerts = 0
-    let warnings = 0
-    for (const n of notifications) {
-      if (n.status === 'UNREAD') unread++
-      if (n.type === NotificationType.ALERT) alerts++
-      if (n.type === NotificationType.WARNING) warnings++
-    }
-    return { unreadCount: unread, alertCount: alerts, warningCount: warnings }
-  }, [notifications])
+  // Flatten all pages into a single array
+  const notifications = useMemo(() => {
+    if (!data?.pages) return []
+    return data.pages.flatMap((page) => page.content)
+  }, [data])
 
-  const handleMarkAsRead = (id: number) => {
-    markAsReadMutation.mutate(id)
-  }
+  // Get total count from first page
+  const totalCount = data?.pages[0]?.totalElements ?? 0
 
-  if (isLoading) {
-    return <LoadingSpinner />
-  }
+  // Use lightweight counts endpoint for accurate stats (doesn't load all data)
+  const { data: counts } = useQuery({
+    queryKey: ['notification-counts'],
+    queryFn: async () => {
+      const response = await notificationsApi.getCounts()
+      return response.data
+    },
+    staleTime: 30000, // Cache for 30s to reduce API calls
+  })
+
+  const unreadCount = counts?.unread ?? 0
+  const alertCount = counts?.alerts ?? 0
+  const warningCount = counts?.warnings ?? 0
+
+  const handleDelete = useCallback((id: number) => {
+    deleteMutation.mutate(id)
+  }, [deleteMutation])
 
   if (error) {
     return <ErrorDisplay title="Failed to load alerts" message={getErrorMessage(error)} />
@@ -276,43 +341,56 @@ export default function Alerts() {
 
   return (
     <Box sx={{ maxWidth: '1400px', margin: '0 auto', padding: { xs: '16px 12px', sm: '24px 16px', md: '32px 24px' } }}>
-      {/* Header - Brutally minimal */}
-      <Box
-        component={motion.div}
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        sx={{ marginBottom: '32px' }}
-      >
-        <Typography
-          variant="h1"
-          sx={{
-            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.25rem' },
-            fontWeight: 700,
-            letterSpacing: '-0.025em',
-            color: 'var(--mono-950)',
-            marginBottom: '8px',
-          }}
-        >
-          Alerts
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: '0.875rem',
-            color: 'var(--mono-500)',
-            letterSpacing: '0.01em',
-          }}
-        >
-          System notifications and alerts · {notifications.length} total · {unreadCount} unread
-        </Typography>
+      {/* Header - renders immediately for fast LCP */}
+      <Box sx={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography
+            variant="h1"
+            sx={{
+              fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.25rem' },
+              fontWeight: 700,
+              letterSpacing: '-0.025em',
+              color: 'var(--mono-950)',
+              marginBottom: '8px',
+            }}
+          >
+            Alerts
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: '0.875rem',
+              color: 'var(--mono-500)',
+              letterSpacing: '0.01em',
+            }}
+          >
+            {isLoading
+              ? 'Loading notifications...'
+              : `System notifications and alerts · ${totalCount.toLocaleString()} total · ${notifications.length.toLocaleString()} loaded`}
+          </Typography>
+        </Box>
+        <Tooltip title={unreadCount === 0 ? 'No unread alerts' : 'Mark all alerts as read'}>
+          <span>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={clearAllMutation.isPending ? <CircularProgress size={16} /> : <ClearAllIcon />}
+              onClick={() => clearAllMutation.mutate()}
+              disabled={clearAllMutation.isPending || unreadCount === 0}
+              sx={{
+                borderColor: 'var(--mono-300)',
+                color: 'var(--mono-700)',
+                '&:hover': { borderColor: 'var(--mono-400)', background: 'var(--surface-hover)' },
+                '&.Mui-disabled': { borderColor: 'var(--mono-200)', color: 'var(--mono-400)' },
+              }}
+            >
+              Clear All ({unreadCount})
+            </Button>
+          </span>
+        </Tooltip>
       </Box>
 
       {/* Stats Bar */}
       <Box
-        component={motion.div}
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         sx={{
           display: 'flex',
           flexDirection: { xs: 'column', sm: 'row' },
@@ -320,17 +398,13 @@ export default function Alerts() {
           marginBottom: '24px',
         }}
       >
-        <StatBox label="Critical" value={alertCount} borderColor={SEVERITY_STYLES.ALERT.color} />
-        <StatBox label="Warnings" value={warningCount} borderColor={SEVERITY_STYLES.WARNING.color} />
-        <StatBox label="Unread" value={unreadCount} borderColor={SEVERITY_STYLES.INFO.color} />
+        <StatBox label="Critical" value={isLoading ? '—' : alertCount} borderColor={SEVERITY_STYLES.ALERT.color} />
+        <StatBox label="Warnings" value={isLoading ? '—' : warningCount} borderColor={SEVERITY_STYLES.WARNING.color} />
+        <StatBox label="Unread" value={isLoading ? '—' : unreadCount} borderColor={SEVERITY_STYLES.INFO.color} />
       </Box>
 
       {/* Alerts List */}
       <Box
-        component={motion.div}
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         sx={{
           background: 'var(--surface-base)',
           border: '1px solid var(--surface-border)',
@@ -338,7 +412,14 @@ export default function Alerts() {
           overflow: 'hidden',
         }}
       >
-        {notifications.length === 0 ? (
+        {isLoading ? (
+          // Skeleton loading - shows page structure immediately for fast LCP
+          <Box>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <AlertRowSkeleton key={i} />
+            ))}
+          </Box>
+        ) : notifications.length === 0 ? (
           <Box sx={{ padding: '48px 24px', textAlign: 'center' }}>
             <Typography
               sx={{
@@ -351,14 +432,41 @@ export default function Alerts() {
           </Box>
         ) : (
           <Box>
-            {notifications.map((notification: Notification, idx: number) => (
+            {notifications.map((notification) => (
               <AlertRow
                 key={notification.id}
                 notification={notification}
-                delay={0.15 + idx * 0.03}
-                onMarkAsRead={handleMarkAsRead}
+                onDelete={handleDelete}
               />
             ))}
+
+            {/* Load more trigger */}
+            <Box
+              ref={loadMoreRef}
+              sx={{
+                padding: '16px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '60px',
+              }}
+            >
+              {isFetchingNextPage ? (
+                <CircularProgress size={24} />
+              ) : hasNextPage ? (
+                <Button
+                  variant="text"
+                  onClick={() => fetchNextPage()}
+                  sx={{ color: 'var(--mono-600)' }}
+                >
+                  Load more
+                </Button>
+              ) : notifications.length > 0 ? (
+                <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-500)' }}>
+                  All {totalCount.toLocaleString()} notifications loaded
+                </Typography>
+              ) : null}
+            </Box>
           </Box>
         )}
       </Box>

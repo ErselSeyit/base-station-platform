@@ -45,6 +45,8 @@ public class DiagnosticClient {
     private static final Logger log = LoggerFactory.getLogger(DiagnosticClient.class);
     private static final int MAX_FAILURES = 5;
     private static final Duration CIRCUIT_RESET_TIME = Duration.ofSeconds(30);
+    private static final String MSG_SERVICE_DISABLED = "Diagnostic service is disabled";
+    private static final String MSG_CIRCUIT_OPEN = "Service temporarily unavailable (circuit open)";
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
@@ -133,12 +135,12 @@ public class DiagnosticClient {
     public DiagnosticResponse diagnose(AlertEvent alert) {
         if (!enabled) {
             log.debug("Diagnostic service disabled, returning fallback");
-            return DiagnosticResponse.fallback("disabled", "Diagnostic service is disabled");
+            return DiagnosticResponse.fallback("disabled", MSG_SERVICE_DISABLED);
         }
 
         if (isCircuitOpen()) {
             log.debug("Circuit breaker open, returning fallback");
-            return DiagnosticResponse.fallback(alert.getAlertRuleId(), "Service temporarily unavailable (circuit open)");
+            return DiagnosticResponse.fallback(alert.getAlertRuleId(), MSG_CIRCUIT_OPEN);
         }
 
         DiagnosticRequest request = DiagnosticRequest.fromAlertEvent(alert);
@@ -151,12 +153,12 @@ public class DiagnosticClient {
     public DiagnosticResponse diagnose(AlertEvent alert, String problemId) {
         if (!enabled) {
             log.debug("Diagnostic service disabled, returning fallback");
-            return DiagnosticResponse.fallback(problemId, "Diagnostic service is disabled");
+            return DiagnosticResponse.fallback(problemId, MSG_SERVICE_DISABLED);
         }
 
         if (isCircuitOpen()) {
             log.debug("Circuit breaker open, returning fallback");
-            return DiagnosticResponse.fallback(problemId, "Service temporarily unavailable (circuit open)");
+            return DiagnosticResponse.fallback(problemId, MSG_CIRCUIT_OPEN);
         }
 
         DiagnosticRequest request = DiagnosticRequest.fromAlertEvent(alert, problemId);
@@ -168,11 +170,11 @@ public class DiagnosticClient {
      */
     public DiagnosticResponse diagnose(DiagnosticRequest request) {
         if (!enabled) {
-            return DiagnosticResponse.fallback(request.getId(), "Diagnostic service is disabled");
+            return DiagnosticResponse.fallback(request.getId(), MSG_SERVICE_DISABLED);
         }
 
         if (isCircuitOpen()) {
-            return DiagnosticResponse.fallback(request.getId(), "Service temporarily unavailable (circuit open)");
+            return DiagnosticResponse.fallback(request.getId(), MSG_CIRCUIT_OPEN);
         }
 
         return executeRequest(request);

@@ -9,7 +9,10 @@ import { Notification, NotificationType } from '../../types'
 vi.mock('../../services/api', () => ({
   notificationsApi: {
     getAll: vi.fn(),
-    markAsRead: vi.fn(),
+    getPaged: vi.fn(),
+    getCounts: vi.fn(),
+    deleteNotification: vi.fn(),
+    clearAllUnread: vi.fn(),
   },
 }))
 
@@ -161,8 +164,8 @@ describe('Alerts', () => {
     expect(checkCircleIcons).toHaveLength(3)
   })
 
-  it('marks notification as read when button is clicked', async () => {
-    vi.mocked(notificationsApi.markAsRead).mockResolvedValue(mockAxiosResponse({}))
+  it('deletes notification when button is clicked', async () => {
+    vi.mocked(notificationsApi.deleteNotification).mockResolvedValue(mockAxiosResponse({}))
 
     render(<Alerts />)
 
@@ -171,19 +174,19 @@ describe('Alerts', () => {
       expect(screen.getByText('3 Unread')).toBeInTheDocument()
     })
 
-    // Click mark as read button for first notification (find the icon and click its parent button)
+    // Click delete button for first notification (find the icon and click its parent button)
     const checkCircleIcons = screen.getAllByTestId('CheckCircleIcon')
     fireEvent.click(checkCircleIcons[0].closest('button')!)
 
     await waitFor(() => {
       // React Query passes (id, context) - check first arg is correct
-      expect(notificationsApi.markAsRead).toHaveBeenCalled()
-      expect(vi.mocked(notificationsApi.markAsRead).mock.calls[0][0]).toBe(1)
+      expect(notificationsApi.deleteNotification).toHaveBeenCalled()
+      expect(vi.mocked(notificationsApi.deleteNotification).mock.calls[0][0]).toBe(1)
     })
   })
 
-  it('refetches data after marking as read', async () => {
-    vi.mocked(notificationsApi.markAsRead).mockResolvedValue(mockAxiosResponse({}))
+  it('refetches data after deleting notification', async () => {
+    vi.mocked(notificationsApi.deleteNotification).mockResolvedValue(mockAxiosResponse({}))
 
     render(<Alerts />)
 

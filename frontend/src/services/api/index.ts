@@ -24,6 +24,7 @@ export { edgeBridgeApi } from './edgeBridge'
 // Re-export types
 export type {
   DiagnosticSession,
+  DiagnosticStatusFilter,
   LearnedPattern,
   LearningStats,
   FeedbackRequest,

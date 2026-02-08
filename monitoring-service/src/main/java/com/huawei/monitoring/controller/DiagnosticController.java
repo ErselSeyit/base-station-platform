@@ -44,6 +44,8 @@ public class DiagnosticController {
         this.sessionService = sessionService;
     }
 
+    private static final int MAX_RECENT_LIMIT = 200;
+
     /**
      * Get all diagnostic sessions.
      */
@@ -51,6 +53,31 @@ public class DiagnosticController {
     public ResponseEntity<List<DiagnosticSession>> getAllSessions() {
         List<DiagnosticSession> sessions = sessionService.getAllSessions();
         return ResponseEntity.ok(sessions);
+    }
+
+    /**
+     * Get recent diagnostic sessions with a limit for performance.
+     * Defaults to 50 sessions, max 200.
+     */
+    @GetMapping("/recent")
+    public ResponseEntity<List<DiagnosticSession>> getRecentSessions(
+            @RequestParam(defaultValue = "50") @Min(1) @Max(200) int limit) {
+        int safeLimit = Math.min(limit, MAX_RECENT_LIMIT);
+        List<DiagnosticSession> sessions = sessionService.getRecentSessions(safeLimit);
+        return ResponseEntity.ok(sessions);
+    }
+
+    /**
+     * Get diagnostic sessions with pagination for infinite scroll.
+     * Returns page info including total count. Optionally filter by status.
+     */
+    @GetMapping("/page")
+    public ResponseEntity<org.springframework.data.domain.Page<DiagnosticSession>> getSessionsPaged(
+            @RequestParam(required = false) @Nullable DiagnosticStatus status,
+            @org.springframework.data.web.PageableDefault(size = 20, sort = "createdAt",
+                direction = org.springframework.data.domain.Sort.Direction.DESC)
+            org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(sessionService.getSessionsPagedByStatus(status, pageable));
     }
 
     /**

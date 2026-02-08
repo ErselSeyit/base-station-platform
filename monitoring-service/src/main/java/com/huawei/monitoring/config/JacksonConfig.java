@@ -59,6 +59,7 @@ public class JacksonConfig {
      * - RFC3339 with offset: "2026-02-04T10:30:00+00:00"
      * - ISO LocalDateTime: "2026-02-04T10:30:00"
      */
+    @SuppressWarnings("java:S110")  // Deep inheritance required for Jackson deserializer extension
     private static class FlexibleLocalDateTimeDeserializer extends LocalDateTimeDeserializer {
 
         private static final DateTimeFormatter ISO_LOCAL = DateTimeFormatter.ISO_LOCAL_DATE_TIME;

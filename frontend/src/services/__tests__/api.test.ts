@@ -207,12 +207,12 @@ describe('API Service', () => {
       expect(result.data.id).toBe(1)
     })
 
-    it('markAsRead should call PUT /notifications/:id/read', async () => {
-      mockPut.mockResolvedValue({ data: {} })
+    it('deleteNotification should call DELETE /notifications/:id', async () => {
+      mockDelete.mockResolvedValue({ data: {} })
 
-      await notificationsApi.markAsRead(1)
+      await notificationsApi.deleteNotification(1)
 
-      expect(mockPut).toHaveBeenCalledWith('/notifications/1/read')
+      expect(mockDelete).toHaveBeenCalledWith('/notifications/1')
     })
   })
 })

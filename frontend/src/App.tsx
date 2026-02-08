@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { CircularProgress, Box } from '@mui/material'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/ToastProvider'
 import { authService } from './services/authService'
+import { useRoutePrefetch } from './hooks/useRoutePrefetch'
 
 // Lazy load pages for code splitting
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -34,6 +35,49 @@ function ProtectedRoute({ children }: { readonly children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Hook to handle unauthorized events (session expiry)
+function useAuthListener() {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      authService.clearLocalState()
+      navigate('/login', { replace: true })
+    }
+
+    globalThis.addEventListener('auth:unauthorized', handleUnauthorized)
+    return () => globalThis.removeEventListener('auth:unauthorized', handleUnauthorized)
+  }, [navigate])
+}
+
+// Wrapper component that uses the auth listener
+function AuthenticatedApp() {
+  useAuthListener()
+  useRoutePrefetch() // Prefetch likely next routes for faster navigation
+
+  return (
+    <ProtectedRoute>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/stations" element={<Stations />} />
+          <Route path="/stations/:id" element={<StationDetail />} />
+          <Route path="/map" element={<MapView />} />
+          <Route path="/alerts" element={<Alerts />} />
+          <Route path="/metrics" element={<Metrics />} />
+          <Route path="/ai-diagnostics" element={<AIDiagnostics />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/5g" element={<FiveGDashboard />} />
+          <Route path="/power" element={<PowerDashboard />} />
+          <Route path="/son" element={<SONRecommendations />} />
+          {/* 404 catch-all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </ProtectedRoute>
+  )
+}
+
 function App() {
   return (
     <>
@@ -43,31 +87,8 @@ function App() {
           {/* Public route */}
           <Route path="/login" element={<Login />} />
 
-          {/* Protected routes */}
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/stations" element={<Stations />} />
-                    <Route path="/stations/:id" element={<StationDetail />} />
-                    <Route path="/map" element={<MapView />} />
-                    <Route path="/alerts" element={<Alerts />} />
-                    <Route path="/metrics" element={<Metrics />} />
-                    <Route path="/ai-diagnostics" element={<AIDiagnostics />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="/5g" element={<FiveGDashboard />} />
-                    <Route path="/power" element={<PowerDashboard />} />
-                    <Route path="/son" element={<SONRecommendations />} />
-                    {/* 404 catch-all */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+          {/* Protected routes with auth listener */}
+          <Route path="/*" element={<AuthenticatedApp />} />
         </Routes>
       </Suspense>
     </>

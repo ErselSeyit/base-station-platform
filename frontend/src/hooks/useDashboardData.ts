@@ -6,7 +6,7 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { metricsApi, notificationsApi, stationApi } from '../services/api'
-import { BaseStation, MetricData, Notification, StationStatus } from '../types'
+import { BaseStation, MetricData, StationStatus } from '../types'
 import { ensureArray } from '../utils/arrayUtils'
 import {
   type HealthStatus,
@@ -37,8 +37,7 @@ export interface DashboardData {
   maintenanceStations: BaseStation[]
   offlineStations: BaseStation[]
 
-  // Notifications
-  notifications: Notification[]
+  // Notifications (counts only for performance)
   unreadAlerts: number
 
   // Metrics
@@ -152,13 +151,14 @@ export function useDashboardData(): DashboardData {
     },
   })
 
-  // Fetch notifications
-  const { data: notificationsData, error: notificationsError } = useQuery({
-    queryKey: ['recent-notifications'],
+  // Fetch notification counts (lightweight endpoint)
+  const { data: notificationCounts, error: notificationsError } = useQuery({
+    queryKey: ['notification-counts'],
     queryFn: async () => {
-      const response = await notificationsApi.getAll()
+      const response = await notificationsApi.getCounts()
       return response.data
     },
+    staleTime: 30000, // Cache for 30s to reduce API calls
   })
 
   // Fetch metrics
@@ -182,9 +182,8 @@ export function useDashboardData(): DashboardData {
   const maintenanceStations = stations.filter((s) => s.status === StationStatus.MAINTENANCE)
   const offlineStations = stations.filter((s) => s.status === StationStatus.OFFLINE)
 
-  // Process notifications
-  const notifications = ensureArray(notificationsData as Notification[])
-  const unreadAlerts = notifications.filter((n) => n.status === 'UNREAD').length
+  // Get unread count from lightweight counts endpoint
+  const unreadAlerts = notificationCounts?.unread ?? 0
 
   // Process metrics
   const metrics = ensureArray(metricsData as MetricData[])
@@ -213,7 +212,6 @@ export function useDashboardData(): DashboardData {
     activeCount,
     maintenanceStations,
     offlineStations,
-    notifications,
     unreadAlerts,
     metrics,
     systemMetrics,

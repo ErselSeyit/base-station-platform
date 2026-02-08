@@ -31,12 +31,10 @@ import {
   Typography,
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { startTransition, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { notificationsApi } from '../services/api'
 import { authService } from '../services/authService'
-import { Notification } from '../types'
-import { ensureArray } from '../utils/arrayUtils'
 import { POLLING_INTERVALS } from '../constants/designSystem'
 
 const drawerWidth = 240
@@ -182,21 +180,19 @@ export default function Layout({ children }: LayoutProps) {
     localStorage.setItem('theme', isDark ? 'dark' : 'light')
   }, [isDark])
 
-  const { data: notifications, error: notificationsError } = useQuery({
-    queryKey: ['notifications'],
+  // Use lightweight counts endpoint instead of loading all notifications
+  const { data: counts, error: countsError } = useQuery({
+    queryKey: ['notification-counts'],
     queryFn: async () => {
-      const response = await notificationsApi.getAll()
+      const response = await notificationsApi.getCounts()
       return response.data
     },
+    staleTime: 30000, // Cache for 30s to reduce API calls
     refetchInterval: POLLING_INTERVALS.NORMAL,
   })
 
   // Gracefully handle error - show 0 unread if query fails
-  const notificationsList = notificationsError ? [] : ensureArray(notifications as Notification[])
-  // Count both UNREAD and PENDING as unread (PENDING = not yet processed)
-  const unreadCount = notificationsList.filter(
-    (n) => n.status === 'UNREAD' || n.status === 'PENDING'
-  ).length || 0
+  const unreadCount = countsError ? 0 : (counts?.unread ?? 0)
 
   const menuItems = useMemo(() => getMenuItems(unreadCount), [unreadCount])
 
@@ -205,7 +201,10 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   const handleNavigate = (path: string) => {
-    navigate(path)
+    // Use startTransition to keep UI responsive during navigation
+    startTransition(() => {
+      navigate(path)
+    })
     setMobileOpen(false)
   }
 

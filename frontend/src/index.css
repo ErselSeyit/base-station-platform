@@ -1,4 +1,5 @@
 /* Next-Generation Minimalist Professional Design System */
+/* Font loading with display=swap prevents FOIT (Flash of Invisible Text) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* Revolutionary CSS Variables */
@@ -277,6 +278,8 @@ html {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   scroll-behavior: smooth;
+  /* Prevent layout thrashing from scrollbar appearance */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -777,5 +780,61 @@ a:hover {
 @media print {
   .no-print {
     display: none !important;
+  }
+}
+
+/* ==========================================================================
+   Performance Optimizations - Reduce Reflows/Repaints
+   ========================================================================== */
+
+/* CSS Containment - isolate layout/paint calculations */
+.card,
+.metric-card,
+.data-table,
+.data-grid {
+  contain: layout style;
+}
+
+/* Content visibility - skip rendering off-screen content */
+.content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
+}
+
+/* Will-change hints for animated elements (use sparingly) */
+.will-animate {
+  will-change: transform, opacity;
+}
+
+/* Force GPU acceleration for smooth animations */
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Use transform for animations instead of top/left */
+.animate-transform {
+  transition: transform var(--transition-base) var(--ease-out);
+}
+
+/* Reduce paint areas with isolation */
+.isolate {
+  isolation: isolate;
+}
+
+/* Optimize text rendering */
+.optimize-legibility {
+  text-rendering: optimizeLegibility;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

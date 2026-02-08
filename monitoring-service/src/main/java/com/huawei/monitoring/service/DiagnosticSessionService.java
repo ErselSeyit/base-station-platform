@@ -9,7 +9,6 @@ import com.huawei.monitoring.model.DiagnosticStatus;
 import com.huawei.monitoring.model.LearnedPattern;
 import com.huawei.monitoring.model.SolutionFeedback;
 import com.huawei.monitoring.repository.DiagnosticSessionRepository;
-import com.huawei.monitoring.repository.LearnedPatternRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -27,11 +26,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**
- * Service for managing diagnostic sessions and the AI learning system.
- * Tracks problem-solution pairs and learns from operator feedback.
+ * Service for managing diagnostic sessions.
+ * Handles session lifecycle from creation through diagnosis to resolution.
+ *
+ * @see LearningPatternService for learning pattern management
  */
 @Service
 @SuppressWarnings("null") // Spring Data repositories and Optional operations guarantee non-null for present values
@@ -40,12 +43,12 @@ public class DiagnosticSessionService {
     private static final Logger log = LoggerFactory.getLogger(DiagnosticSessionService.class);
 
     private final DiagnosticSessionRepository sessionRepository;
-    private final LearnedPatternRepository patternRepository;
+    private final LearningPatternService learningPatternService;
 
     public DiagnosticSessionService(DiagnosticSessionRepository sessionRepository,
-                                    LearnedPatternRepository patternRepository) {
+                                    LearningPatternService learningPatternService) {
         this.sessionRepository = sessionRepository;
-        this.patternRepository = patternRepository;
+        this.learningPatternService = learningPatternService;
     }
 
     private static final String DEFAULT_SEVERITY = "medium";
@@ -206,20 +209,7 @@ public class DiagnosticSessionService {
         );
 
         // Check for learned pattern adjustments
-        patternRepository.findByProblemCode(Objects.requireNonNull(session.getProblemCode()))
-                .ifPresent(pattern -> {
-                    Double adjustedConfidence = pattern.getAdjustedConfidence();
-                    if (adjustedConfidence != null) {
-                        solution.setConfidence(adjustedConfidence);
-                        if (log.isInfoEnabled()) {
-                            log.info("Adjusted confidence for {} from {} to {} based on {} historical cases",
-                                    session.getProblemCode(),
-                                    diagnosis.getConfidence(),
-                                    adjustedConfidence,
-                                    pattern.getResolvedCount() + pattern.getFailedCount());
-                        }
-                    }
-                });
+        learningPatternService.adjustConfidenceFromPattern(solution, Objects.requireNonNull(session.getProblemCode()));
 
         session.markDiagnosed(solution);
         log.info("Marked session {} as DIAGNOSED with confidence={}", problemId, solution.getConfidence());
@@ -293,7 +283,7 @@ public class DiagnosticSessionService {
         session.markResolved(feedback);
 
         // Update learning pattern with auto-apply success
-        updateLearningPattern(session, true, 5);
+        learningPatternService.updateLearningPattern(session, true, 5);
 
         log.info("Auto-resolved session {} for problem code {}",
                 session.getId(), session.getProblemCode());
@@ -345,149 +335,12 @@ public class DiagnosticSessionService {
         DiagnosticSession savedSession = sessionRepository.save(session);
 
         // Update learning patterns
-        updateLearningPattern(session, wasEffective, rating);
+        learningPatternService.updateLearningPattern(session, wasEffective, rating);
 
         log.info("Feedback recorded for session {}: effective={}, rating={}",
                 sessionId, wasEffective, rating);
 
         return Objects.requireNonNull(Optional.of(savedSession));
-    }
-
-    private static final int MAX_LEARNING_RETRIES = 3;
-    private static final int MIN_SAMPLES_FOR_RELIABLE_CONFIDENCE = 5;
-
-    /**
-     * Updates the learning pattern based on feedback.
-     * Uses optimistic locking with exponential backoff retry for concurrent updates.
-     *
-     * Optimization: Skip learning updates if AI solution is missing or invalid.
-     */
-    private void updateLearningPattern(DiagnosticSession session, boolean wasEffective, @Nullable Integer rating) {
-        AISolution solution = session.getAiSolution();
-        if (solution == null || solution.getAction() == null || solution.getAction().isBlank()) {
-            log.debug("Skipping learning update - no valid AI solution for session {}", session.getProblemId());
-            return;
-        }
-
-        String problemCode = Objects.requireNonNull(session.getProblemCode());
-        String category = Objects.requireNonNull(session.getCategory());
-
-        for (int attempt = 1; attempt <= MAX_LEARNING_RETRIES; attempt++) {
-            if (tryUpdatePattern(session, wasEffective, rating, problemCode, category, attempt)) {
-                return;
-            }
-            // Exponential backoff between retries
-            if (attempt < MAX_LEARNING_RETRIES) {
-                try {
-                    Thread.sleep((long) Math.pow(2, attempt) * 10); // 20ms, 40ms
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    log.warn("Learning update interrupted for pattern {}", problemCode);
-                    return;
-                }
-            }
-        }
-        log.warn("Learning update failed for pattern {} after {} retries", problemCode, MAX_LEARNING_RETRIES);
-    }
-
-    /**
-     * Attempts to update a pattern, returning true on success.
-     * Handles both OptimisticLockingFailureException and DuplicateKeyException
-     * which can occur during concurrent pattern updates.
-     */
-    private boolean tryUpdatePattern(DiagnosticSession session, boolean wasEffective,
-                                     @Nullable Integer rating, String problemCode,
-                                     String category, int attempt) {
-        try {
-            LearnedPattern pattern = getOrCreatePattern(problemCode, category);
-            applyFeedbackToPattern(pattern, session.getAiSolution(), wasEffective, rating, problemCode);
-            patternRepository.save(pattern);
-            return true;
-        } catch (OptimisticLockingFailureException | DuplicateKeyException e) {
-            // Both exceptions indicate concurrent modification - retry with fresh data
-            if (attempt < MAX_LEARNING_RETRIES) {
-                log.debug("Concurrent conflict for pattern {} ({}), retry {}/{}",
-                        problemCode, e.getClass().getSimpleName(), attempt, MAX_LEARNING_RETRIES);
-            }
-            return false;
-        }
-    }
-
-    /**
-     * Applies feedback to a learning pattern with optimized confidence calculation.
-     *
-     * Learning optimization:
-     * - Tracks success/failure for specific actions
-     * - Requires minimum samples before adjusting confidence significantly
-     * - Logs learning progress for monitoring
-     */
-    private void applyFeedbackToPattern(LearnedPattern pattern, AISolution solution,
-                                        boolean wasEffective, @Nullable Integer rating,
-                                        String problemCode) {
-        int previousTotal = pattern.getResolvedCount() + pattern.getFailedCount();
-
-        if (wasEffective) {
-            pattern.recordSuccess(solution, rating);
-            if (log.isInfoEnabled()) {
-                log.info("LEARNING [{}]: SUCCESS recorded (total: {} resolved, {} failed, rate: {}%)",
-                        problemCode, pattern.getResolvedCount(), pattern.getFailedCount(),
-                        String.format("%.1f", pattern.getSuccessRate()));
-            }
-        } else {
-            pattern.recordFailure(solution);
-            if (log.isInfoEnabled()) {
-                log.info("LEARNING [{}]: FAILURE recorded (total: {} resolved, {} failed, rate: {}%)",
-                        problemCode, pattern.getResolvedCount(), pattern.getFailedCount(),
-                        String.format("%.1f", pattern.getSuccessRate()));
-            }
-        }
-
-        // Log confidence adjustment milestone when reaching minimum samples
-        int newTotal = pattern.getResolvedCount() + pattern.getFailedCount();
-        if (log.isInfoEnabled()
-                && previousTotal < MIN_SAMPLES_FOR_RELIABLE_CONFIDENCE
-                && newTotal >= MIN_SAMPLES_FOR_RELIABLE_CONFIDENCE) {
-            log.info("LEARNING [{}]: Reached {} samples - confidence now statistically reliable (adjusted: {})",
-                    problemCode, MIN_SAMPLES_FOR_RELIABLE_CONFIDENCE,
-                    String.format("%.2f", pattern.getAdjustedConfidence()));
-        }
-    }
-
-    /**
-     * Gets an existing pattern or creates a new one with pre-processing to prevent duplicates.
-     *
-     * Algorithm:
-     * 1. First check: Query for existing pattern
-     * 2. If not found: Create and save new pattern
-     * 3. On DuplicateKeyException: Re-fetch (another thread created it)
-     * 4. Verify: Final check to ensure pattern exists
-     *
-     * This pre-processing approach minimizes duplicate creation attempts by checking
-     * existence before save, while still handling race conditions gracefully.
-     */
-    private LearnedPattern getOrCreatePattern(String problemCode, String category) {
-        // Pre-processing: Check if pattern already exists BEFORE attempting creation
-        Optional<LearnedPattern> existing = patternRepository.findByProblemCode(problemCode);
-        if (existing.isPresent()) {
-            log.debug("Found existing learning pattern for {}", problemCode);
-            return existing.get();
-        }
-
-        // Pattern doesn't exist, create it
-        log.info("Creating new learning pattern for {} (category={})", problemCode, category);
-        LearnedPattern newPattern = new LearnedPattern(problemCode, category);
-
-        try {
-            LearnedPattern saved = patternRepository.save(newPattern);
-            log.info("Successfully created learning pattern for {}", problemCode);
-            return Objects.requireNonNull(saved);
-        } catch (DuplicateKeyException e) {
-            // Race condition: Another thread created the pattern between our check and save
-            log.debug("Concurrent creation detected for pattern {}, fetching existing", problemCode);
-            return patternRepository.findByProblemCode(problemCode)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Pattern " + problemCode + " should exist after DuplicateKeyException"));
-        }
     }
 
     /**
@@ -496,6 +349,47 @@ public class DiagnosticSessionService {
     @Transactional(readOnly = true)
     public List<DiagnosticSession> getAllSessions() {
         return sessionRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    /**
+     * Gets the most recent diagnostic sessions with a limit.
+     * Used for performance optimization on the AI Diagnostics page.
+     *
+     * @param limit maximum number of sessions to return
+     * @return list of recent sessions, ordered by creation date (most recent first)
+     */
+    @Transactional(readOnly = true)
+    public List<DiagnosticSession> getRecentSessions(int limit) {
+        PageRequest pageRequest = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return sessionRepository.findAllBy(pageRequest);
+    }
+
+    /**
+     * Gets diagnostic sessions with full pagination support.
+     *
+     * @param pageable pagination parameters
+     * @return page of sessions with total count for infinite scroll
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<DiagnosticSession> getSessionsPaged(org.springframework.data.domain.Pageable pageable) {
+        return sessionRepository.findBy(pageable);
+    }
+
+    /**
+     * Gets diagnostic sessions filtered by status with pagination support.
+     *
+     * @param status the status to filter by (null for all)
+     * @param pageable pagination parameters
+     * @return page of sessions with total count for infinite scroll
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<DiagnosticSession> getSessionsPagedByStatus(
+            DiagnosticStatus status,
+            org.springframework.data.domain.Pageable pageable) {
+        if (status == null) {
+            return sessionRepository.findBy(pageable);
+        }
+        return sessionRepository.findByStatus(status, pageable);
     }
 
     /**
@@ -590,54 +484,29 @@ public class DiagnosticSessionService {
 
     /**
      * Gets learning statistics.
+     * @see LearningPatternService#getLearningStats()
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getLearningStats() {
-        Map<String, Object> stats = new HashMap<>();
-
-        long resolved = sessionRepository.countByStatus(DiagnosticStatus.RESOLVED);
-        long failed = sessionRepository.countByStatus(DiagnosticStatus.FAILED);
-        long pending = sessionRepository.countByStatus(DiagnosticStatus.PENDING_CONFIRMATION);
-        long autoApplied = sessionRepository.countByAutoApplied(true);
-        long total = resolved + failed;
-
-        stats.put("totalFeedback", total);
-        stats.put("resolved", resolved);
-        stats.put("failed", failed);
-        stats.put("pendingConfirmation", pending);
-        stats.put("autoApplied", autoApplied);
-        stats.put("successRate", total > 0 ? (double) resolved / total * 100 : 0.0);
-
-        // Get pattern statistics
-        List<LearnedPattern> patterns = patternRepository.findAllOrderByTotalCases();
-        stats.put("learnedPatterns", patterns.size());
-        stats.put("topPatterns", patterns.stream()
-                .limit(5)
-                .map(p -> Map.of(
-                        "problemCode", p.getProblemCode(),
-                        "successRate", p.getSuccessRate(),
-                        "totalCases", p.getResolvedCount() + p.getFailedCount(),
-                        "adjustedConfidence", p.getAdjustedConfidence()
-                ))
-                .toList());
-
-        return stats;
+        return learningPatternService.getLearningStats();
     }
 
     /**
      * Gets the learned pattern for a problem code.
+     * @see LearningPatternService#getLearnedPattern(String)
      */
     @Transactional(readOnly = true)
     public Optional<LearnedPattern> getLearnedPattern(String problemCode) {
-        return patternRepository.findByProblemCode(problemCode);
+        return learningPatternService.getLearnedPattern(problemCode);
     }
 
     /**
      * Gets all learned patterns.
+     * @see LearningPatternService#getAllPatterns()
      */
     @Transactional(readOnly = true)
     public List<LearnedPattern> getAllPatterns() {
-        return patternRepository.findAllOrderByTotalCases();
+        return learningPatternService.getAllPatterns();
     }
 
     /**

@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.lang.Nullable;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +31,7 @@ import java.util.Optional;
  * - Validation and dry-run modes
  */
 @Service
-@SuppressWarnings("null") // Spring Data and record accessors guarantee non-null returns
+@SuppressWarnings("null") // Null safety handled defensively; @NonNullApi package annotation causes IDE hints
 public class BulkProvisioningService {
 
     private static final Logger log = LoggerFactory.getLogger(BulkProvisioningService.class);
@@ -99,7 +101,7 @@ public class BulkProvisioningService {
     }
 
     private ImportResult processStationImport(StationImportItem item,
-                                              Organization organization,
+                                              @Nullable Organization organization,
                                               ImportOptions options) {
         String stationName = item.stationName();
 
@@ -152,7 +154,8 @@ public class BulkProvisioningService {
         }
     }
 
-    private String validateCoordinates(Double latitude, Double longitude) {
+    @Nullable
+    private String validateCoordinates(@Nullable Double latitude, @Nullable Double longitude) {
         if (latitude == null || longitude == null) {
             return "Latitude and longitude are required";
         }
@@ -165,7 +168,7 @@ public class BulkProvisioningService {
         return null;
     }
 
-    private BaseStation createStationFromItem(StationImportItem item, Organization organization) {
+    private BaseStation createStationFromItem(StationImportItem item, @Nullable Organization organization) {
         BaseStation station = new BaseStation(
                 item.stationName(),
                 item.location(),

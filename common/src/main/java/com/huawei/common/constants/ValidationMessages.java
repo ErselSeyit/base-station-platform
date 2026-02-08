@@ -41,6 +41,11 @@ public final class ValidationMessages {
     public static final String START_TIME_NULL_MESSAGE = "Start time cannot be null";
 
     /**
+     * Message for null end time validation.
+     */
+    public static final String END_TIME_NULL_MESSAGE = "End time cannot be null";
+
+    /**
      * Message for null DTO validation.
      */
     public static final String DTO_NULL_MESSAGE = "DTO cannot be null";

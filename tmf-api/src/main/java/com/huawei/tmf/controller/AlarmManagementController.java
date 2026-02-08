@@ -26,6 +26,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/tmf-api/alarmManagement/v4")
 @CrossOrigin(origins = "*")
+@SuppressWarnings("java:S4684")  // Direct entity exposure required for TMF642 API compliance
 public class AlarmManagementController {
 
     private static final String ALARM_RAISED_TIME_FIELD = "alarmRaisedTime";

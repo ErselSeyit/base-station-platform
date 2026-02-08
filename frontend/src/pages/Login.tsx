@@ -296,12 +296,10 @@ export default function Login() {
                 fontSize: '0.8125rem',
                 color: 'var(--mono-600)',
                 marginTop: '4px',
-                fontFamily: "'JetBrains Mono', monospace",
-                lineHeight: 1.8,
+                lineHeight: 1.6,
               }}
             >
-              <div>admin / AdminPass12345!</div>
-              <div>operator / AdminPass12345!</div>
+              See .env.example or QUICK_START.md for test credentials
             </Typography>
           </Box>
         )}

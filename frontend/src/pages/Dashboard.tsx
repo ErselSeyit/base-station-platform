@@ -17,14 +17,17 @@ import {
   Fab,
   Grid,
   IconButton,
+  Skeleton,
   Typography,
 } from '@mui/material'
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import ErrorDisplay from '../components/ErrorDisplay'
-import LiveActivityFeed from '../components/LiveActivityFeed'
 import LoadingSpinner from '../components/LoadingSpinner'
-import MetricsChart from '../components/MetricsChart'
+
+// Lazy load heavy components to improve LCP
+const MetricsChart = lazy(() => import('../components/MetricsChart'))
+const LiveActivityFeed = lazy(() => import('../components/LiveActivityFeed'))
 import {
   StatusBanner,
   SectionHeader,
@@ -278,7 +281,9 @@ export default function Dashboard() {
         <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: 'var(--mono-950)', marginBottom: '16px' }}>
           Performance Trends
         </Typography>
-        <MetricsChart />
+        <Suspense fallback={<Skeleton variant="rectangular" height={300} sx={{ borderRadius: '12px' }} />}>
+          <MetricsChart />
+        </Suspense>
       </Box>
 
       {/* Floating Activity Feed Button */}
@@ -378,7 +383,9 @@ export default function Dashboard() {
             </IconButton>
           </Box>
           <Box sx={{ flex: 1, overflow: 'auto', padding: '20px' }}>
-            <LiveActivityFeed />
+            <Suspense fallback={<Skeleton variant="rectangular" height={200} />}>
+              <LiveActivityFeed />
+            </Suspense>
           </Box>
         </Box>
       </Drawer>
