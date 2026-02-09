@@ -105,5 +105,23 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("DELETE FROM Notification n WHERE n.status = :status")
     int deleteByStatusBulk(@org.springframework.data.repository.query.Param("status") NotificationStatus status);
+
+    /**
+     * Finds all notifications linked to a diagnostic problem.
+     *
+     * @param problemId the problem ID from AlertEvent/DiagnosticSession
+     * @return a list of notifications (never null, may be empty)
+     */
+    List<Notification> findByProblemId(String problemId);
+
+    /**
+     * Finds notifications with any of the given statuses (paginated).
+     * Used for activity feeds that show both active and resolved alerts.
+     *
+     * @param statuses the list of statuses to include
+     * @param pageable pagination parameters
+     * @return a page of notifications (never null)
+     */
+    Page<Notification> findByStatusIn(List<NotificationStatus> statuses, Pageable pageable);
 }
 

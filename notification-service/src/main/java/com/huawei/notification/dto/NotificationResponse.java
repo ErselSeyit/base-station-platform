@@ -21,6 +21,8 @@ public class NotificationResponse {
     private NotificationStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime sentAt;
+    private String problemId;
+    private LocalDateTime resolvedAt;
 
     /**
      * Default constructor required for Jackson JSON deserialization.
@@ -44,6 +46,8 @@ public class NotificationResponse {
         response.setStatus(notification.getStatus());
         response.setCreatedAt(notification.getCreatedAt());
         response.setSentAt(notification.getSentAt());
+        response.setProblemId(notification.getProblemId());
+        response.setResolvedAt(notification.getResolvedAt());
         return response;
     }
 
@@ -102,5 +106,23 @@ public class NotificationResponse {
 
     public void setSentAt(@Nullable LocalDateTime sentAt) {
         this.sentAt = sentAt;
+    }
+
+    @Nullable
+    public String getProblemId() {
+        return problemId;
+    }
+
+    public void setProblemId(@Nullable String problemId) {
+        this.problemId = problemId;
+    }
+
+    @Nullable
+    public LocalDateTime getResolvedAt() {
+        return resolvedAt;
+    }
+
+    public void setResolvedAt(@Nullable LocalDateTime resolvedAt) {
+        this.resolvedAt = resolvedAt;
     }
 }

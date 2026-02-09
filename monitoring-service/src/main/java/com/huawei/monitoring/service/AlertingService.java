@@ -126,6 +126,175 @@ public class AlertingService {
                         .severity(AlertSeverity.WARNING)
                         .message("Signal strength below acceptable level (" + (int) thresholdConfig.getSignalWeak() + " dBm)")
                         .build()));
+
+        // Memory warning
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("memory-warning")
+                        .name("Memory Warning")
+                        .metricType(MetricType.MEMORY_USAGE)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getMemoryWarning())
+                        .severity(AlertSeverity.WARNING)
+                        .message("Memory usage exceeded " + (int) thresholdConfig.getMemoryWarning() + "%")
+                        .build()));
+
+        // Temperature warning
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("temperature-warning")
+                        .name("Temperature Warning")
+                        .metricType(MetricType.TEMPERATURE)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getTemperatureWarning())
+                        .severity(AlertSeverity.WARNING)
+                        .message("Temperature above warning threshold (" + (int) thresholdConfig.getTemperatureWarning() + "°C)")
+                        .build()));
+
+        // BLER (Block Error Rate) thresholds
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("bler-critical")
+                        .name("BLER Critical")
+                        .metricType(MetricType.INITIAL_BLER)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getBlerCritical())
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("Block error rate critical (" + (int) thresholdConfig.getBlerCritical() + "%)")
+                        .build()));
+
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("bler-warning")
+                        .name("BLER Warning")
+                        .metricType(MetricType.INITIAL_BLER)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getBlerWarning())
+                        .severity(AlertSeverity.WARNING)
+                        .message("Block error rate elevated (" + (int) thresholdConfig.getBlerWarning() + "%)")
+                        .build()));
+
+        // Battery thresholds - alert when SOC is LOW
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("battery-low")
+                        .name("Battery Low")
+                        .metricType(MetricType.BATTERY_SOC)
+                        .operator(AlertRule.Operator.LESS_THAN)
+                        .threshold(thresholdConfig.getBatteryLow())
+                        .severity(AlertSeverity.WARNING)
+                        .message("Battery state of charge low (" + (int) thresholdConfig.getBatteryLow() + "%)")
+                        .build()));
+
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("battery-critical")
+                        .name("Battery Critical")
+                        .metricType(MetricType.BATTERY_SOC)
+                        .operator(AlertRule.Operator.LESS_THAN)
+                        .threshold(thresholdConfig.getBatteryCritical())
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("Battery state of charge critical (" + (int) thresholdConfig.getBatteryCritical() + "%)")
+                        .build()));
+
+        // Latency thresholds
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("latency-warning")
+                        .name("Latency Warning")
+                        .metricType(MetricType.LATENCY_PING)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getLatencyWarning())
+                        .severity(AlertSeverity.WARNING)
+                        .message("Network latency elevated (" + (int) thresholdConfig.getLatencyWarning() + "ms)")
+                        .build()));
+
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("latency-critical")
+                        .name("Latency Critical")
+                        .metricType(MetricType.LATENCY_PING)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getLatencyCritical())
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("Network latency critical (" + (int) thresholdConfig.getLatencyCritical() + "ms)")
+                        .build()));
+
+        // Throughput thresholds - alert when throughput is LOW
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("throughput-low")
+                        .name("Throughput Low")
+                        .metricType(MetricType.DATA_THROUGHPUT)
+                        .operator(AlertRule.Operator.LESS_THAN)
+                        .threshold(thresholdConfig.getThroughputLow())
+                        .severity(AlertSeverity.WARNING)
+                        .message("Data throughput below threshold (" + (int) thresholdConfig.getThroughputLow() + " Mbps)")
+                        .build()));
+
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("throughput-critical")
+                        .name("Throughput Critical")
+                        .metricType(MetricType.DATA_THROUGHPUT)
+                        .operator(AlertRule.Operator.LESS_THAN)
+                        .threshold(thresholdConfig.getThroughputCritical())
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("Data throughput critically low (" + (int) thresholdConfig.getThroughputCritical() + " Mbps)")
+                        .build()));
+
+        // Power consumption thresholds
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("power-high")
+                        .name("Power High")
+                        .metricType(MetricType.POWER_CONSUMPTION)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getPowerHigh())
+                        .severity(AlertSeverity.WARNING)
+                        .message("Power consumption high (" + (int) thresholdConfig.getPowerHigh() + "W)")
+                        .build()));
+
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("power-critical")
+                        .name("Power Critical")
+                        .metricType(MetricType.POWER_CONSUMPTION)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getPowerCritical())
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("Power consumption critical (" + (int) thresholdConfig.getPowerCritical() + "W)")
+                        .build()));
+
+        // Handover success rate - alert when below threshold
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("handover-warning")
+                        .name("Handover Warning")
+                        .metricType(MetricType.HANDOVER_SUCCESS_RATE)
+                        .operator(AlertRule.Operator.LESS_THAN)
+                        .threshold(thresholdConfig.getHandoverWarning())
+                        .severity(AlertSeverity.WARNING)
+                        .message("Handover success rate below threshold (" + (int) thresholdConfig.getHandoverWarning() + "%)")
+                        .build()));
+
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("handover-critical")
+                        .name("Handover Critical")
+                        .metricType(MetricType.HANDOVER_SUCCESS_RATE)
+                        .operator(AlertRule.Operator.LESS_THAN)
+                        .threshold(thresholdConfig.getHandoverCritical())
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("Handover success rate critical (" + (int) thresholdConfig.getHandoverCritical() + "%)")
+                        .build()));
+
+        // Interference level - alert when above threshold (dBm, higher is worse)
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("interference-warning")
+                        .name("Interference Warning")
+                        .metricType(MetricType.INTERFERENCE_LEVEL)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getInterferenceWarning())
+                        .severity(AlertSeverity.WARNING)
+                        .message("Interference level elevated (" + (int) thresholdConfig.getInterferenceWarning() + " dBm)")
+                        .build()));
+
+        addRule(Objects.requireNonNull(AlertRule.builder()
+                        .id("interference-critical")
+                        .name("Interference Critical")
+                        .metricType(MetricType.INTERFERENCE_LEVEL)
+                        .operator(AlertRule.Operator.GREATER_THAN)
+                        .threshold(thresholdConfig.getInterferenceCritical())
+                        .severity(AlertSeverity.CRITICAL)
+                        .message("Interference level critical (" + (int) thresholdConfig.getInterferenceCritical() + " dBm)")
+                        .build()));
     }
 
     /**
@@ -247,6 +416,9 @@ public class AlertingService {
         // Send alert event to notification service via RabbitMQ
         if (template != null) {
             try {
+                // Generate problemId for linking alerts to diagnostic sessions
+                String problemId = generateProblemId(rule.getId());
+
                 // Convert enums to strings for cross-service compatibility
                 // Use Optional.map() instead of ternary null checks
                 AlertEvent alertEvent = Objects.requireNonNull(AlertEvent.builder()
@@ -263,6 +435,7 @@ public class AlertingService {
                                 .map(AlertSeverity::name)
                                 .orElse(null))
                         .message(rule.getMessage())
+                        .problemId(problemId)
                         .build());
 
                 template.convertAndSend(
@@ -301,8 +474,14 @@ public class AlertingService {
             return;
         }
 
+        // Use problemId from alert (already generated in triggerAlert)
+        String problemId = alert.getProblemId();
+        if (problemId == null || problemId.isBlank()) {
+            log.warn("Alert has no problemId, skipping diagnosis: {}", alert.getAlertRuleId());
+            return;
+        }
+
         // Create or reuse session (deduplication handled in createSession)
-        String problemId = generateProblemId(alert);
         DiagnosticSession session = createDiagnosticSession(sessionService, alert, problemId);
 
         if (session == null) {
@@ -361,8 +540,12 @@ public class AlertingService {
         }
     }
 
-    private String generateProblemId(AlertEvent alert) {
-        return DiagnosticConstants.PROBLEM_ID_PREFIX + System.currentTimeMillis() + "-" + alert.getAlertRuleId();
+    /**
+     * Generates a unique problem ID for linking alerts to diagnostic sessions.
+     * Format: PROB-{timestamp}-{ruleId}
+     */
+    private String generateProblemId(String ruleId) {
+        return DiagnosticConstants.PROBLEM_ID_PREFIX + System.currentTimeMillis() + "-" + ruleId;
     }
 
     @Nullable

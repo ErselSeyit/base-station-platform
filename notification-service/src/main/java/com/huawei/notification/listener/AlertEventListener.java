@@ -47,11 +47,22 @@ public class AlertEventListener {
                             alertEvent.getThreshold()),
                     "Notification message cannot be null");
             
-            notificationService.createNotification(
-                    Objects.requireNonNull(alertEvent.getStationId(), "Station ID cannot be null"),
-                    notificationMessage,
-                    notificationType
-            );
+            // Create notification with problemId for linking to diagnostic sessions
+            String problemId = alertEvent.getProblemId();
+            if (problemId != null && !problemId.isBlank()) {
+                notificationService.createNotificationWithProblemId(
+                        Objects.requireNonNull(alertEvent.getStationId(), "Station ID cannot be null"),
+                        notificationMessage,
+                        notificationType,
+                        problemId
+                );
+            } else {
+                notificationService.createNotification(
+                        Objects.requireNonNull(alertEvent.getStationId(), "Station ID cannot be null"),
+                        notificationMessage,
+                        notificationType
+                );
+            }
             
             log.info("Notification created from alert event: ruleId={}, stationId={}", 
                     alertEvent.getAlertRuleId(), alertEvent.getStationId());

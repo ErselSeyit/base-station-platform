@@ -25,7 +25,8 @@ import jakarta.validation.constraints.NotNull;
     @Index(name = "idx_station_status", columnList = "stationId, status"),
     @Index(name = "idx_created_at", columnList = "createdAt"),
     @Index(name = "idx_status", columnList = "status"),
-    @Index(name = "idx_type", columnList = "type")
+    @Index(name = "idx_type", columnList = "type"),
+    @Index(name = "idx_problem_id", columnList = "problemId")
 })
 @EntityListeners(AuditingEntityListener.class)
 public class Notification {
@@ -67,6 +68,19 @@ public class Notification {
 
     @Column(length = 500)
     private String lastError;
+
+    /**
+     * Problem ID for linking to diagnostic sessions.
+     * Format: PROB-{stationId}-{problemCode}-{timestamp}
+     */
+    @Column(name = "problem_id")
+    private String problemId;
+
+    /**
+     * When the alert was resolved by AI diagnostics.
+     */
+    @Column(name = "resolved_at")
+    private LocalDateTime resolvedAt;
 
     // Constructors
     public Notification() {
@@ -161,6 +175,22 @@ public class Notification {
 
     public void setLastError(String lastError) {
         this.lastError = lastError;
+    }
+
+    public String getProblemId() {
+        return problemId;
+    }
+
+    public void setProblemId(String problemId) {
+        this.problemId = problemId;
+    }
+
+    public LocalDateTime getResolvedAt() {
+        return resolvedAt;
+    }
+
+    public void setResolvedAt(LocalDateTime resolvedAt) {
+        this.resolvedAt = resolvedAt;
     }
 }
 

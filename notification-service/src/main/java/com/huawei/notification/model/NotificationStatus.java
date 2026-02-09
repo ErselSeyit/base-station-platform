@@ -4,6 +4,7 @@ package com.huawei.notification.model;
  * Status of a notification.
  * <p>
  * Lifecycle: UNREAD -> READ (user action) or UNREAD -> SENT (if delivery required)
+ * or UNREAD -> RESOLVED (if AI diagnostics resolves the issue)
  * </p>
  */
 public enum NotificationStatus {
@@ -16,6 +17,8 @@ public enum NotificationStatus {
     /** Notification successfully delivered */
     SENT,
     /** Notification delivery failed */
-    FAILED
+    FAILED,
+    /** Alert was resolved by AI diagnostics or manual intervention */
+    RESOLVED
 }
 

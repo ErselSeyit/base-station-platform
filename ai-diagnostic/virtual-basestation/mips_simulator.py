@@ -239,15 +239,15 @@ class VirtualMIPSBaseStation:
         },
         {
             "category": ProblemCategory.NETWORK,
-            "code": "5G_BLER_HIGH",
-            "message": "5G Initial BLER exceeds threshold",
+            "code": "HIGH_BLOCK_ERROR_RATE",
+            "message": "Block error rate exceeds threshold",
             "trigger": lambda s: s.initial_bler > 10,
             "severity": ProblemSeverity.MEDIUM,
             "logs": "5g: Initial BLER: 12.5% (threshold: 10%)\n5g: MCS downgrade recommended"
         },
         {
             "category": ProblemCategory.NETWORK,
-            "code": "HANDOVER_FAILURES",
+            "code": "HANDOVER_FAILURE",
             "message": "Handover success rate below threshold",
             "trigger": lambda s: s.handover_success_rate < 95,
             "severity": ProblemSeverity.HIGH,

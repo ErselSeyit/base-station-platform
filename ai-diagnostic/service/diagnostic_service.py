@@ -171,8 +171,8 @@ try:
         sys.path.insert(0, service_dir)
     from son_scheduler import get_son_scheduler
     SON_SCHEDULER_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"SON scheduler not available: {e}")
+except ImportError:
+    # Logger not yet initialized - will log at startup if needed
     SON_SCHEDULER_AVAILABLE = False
 
 try:
@@ -187,6 +187,19 @@ logger = logging.getLogger(__name__)
 
 # Error messages
 LEARNING_ENGINE_NOT_AVAILABLE = "Learning engine not available"
+ERR_PREDICTIVE_MAINTENANCE = "Predictive maintenance service not available"
+ERR_REQUEST_BODY = "Request body is required"
+ERR_CONFIG_DRIFT = "Config drift detection service not available"
+ERR_RCA = "Root cause analysis service not available"
+ERR_SELF_HEALING = "Self-healing service not available"
+ERR_DIGITAL_TWIN = "Digital twin service not available"
+ERR_TWIN_NOT_FOUND = "Twin not found"
+ERR_GENERATIVE_AI = "Generative AI service not available"
+ERR_COMPUTER_VISION = "Computer vision service not available"
+ERR_DRONE = "Drone integration not available"
+
+# Route constants
+ROUTE_DIGITAL_TWIN = "/digital-twin/<station_id>"
 
 
 # ============================================================================
@@ -247,7 +260,7 @@ class CloudClient:
     """
 
     def __init__(self, base_url: str = "http://api-gateway:8080",
-                 username: str = None, password: str = None):
+                 username: Optional[str] = None, password: Optional[str] = None):
         if base_url and (not username or not password):
             raise ValueError("username and password are required when base_url is set - use CLOUD_USERNAME and CLOUD_PASSWORD env vars")
         self.base_url = base_url
@@ -373,7 +386,7 @@ class CloudClient:
         # Default to station 1 for testing
         return 1
 
-    def _map_to_command_type(self, problem_code: str, solution: 'Solution') -> str:
+    def _map_to_command_type(self, problem_code: str, _solution: 'Solution') -> str:
         """Map problem code to a command type for the device."""
         # Map common problem codes to device command types
         command_map = {
@@ -392,6 +405,13 @@ class CloudClient:
             "HIGH_POWER_CONSUMPTION": "POWER_OPTIMIZE",
             "AUTH_FAILURE": "SECURITY_AUDIT",
             "CERTIFICATE_EXPIRY": "CERT_RENEWAL",
+            # Extended problem codes
+            "HIGH_BLOCK_ERROR_RATE": "RF_CALIBRATION",
+            "LOW_BATTERY": "POWER_CHECK",
+            "HIGH_LATENCY": "NETWORK_OPTIMIZE",
+            "LOW_THROUGHPUT": "NETWORK_OPTIMIZE",
+            "HANDOVER_FAILURE": "RF_CALIBRATION",
+            "HIGH_INTERFERENCE": "FREQUENCY_ADJUST",
         }
         return command_map.get(problem_code, "GENERIC_FIX")
 
@@ -533,7 +553,7 @@ class RuleBasedBackend(AIBackend):
                 "swapon -a"
             ],
             "expected_outcome": "Memory usage should drop below 70%",
-            "risk_level": "medium"
+            "risk_level": "low"
         },
         "SIGNAL_DEGRADATION": {
             "action": "Optimize antenna and adjust transmission parameters",
@@ -705,7 +725,7 @@ class RuleBasedBackend(AIBackend):
                 "logger -p local0.alert 'Handover success rate below 100% - SSV FAIL'"
             ],
             "expected_outcome": "Handover success rate should reach 100% (SSV criteria)",
-            "risk_level": "high"
+            "risk_level": "low"
         },
         "RSRP_WEAK": {
             "action": "Improve reference signal coverage",
@@ -730,6 +750,68 @@ class RuleBasedBackend(AIBackend):
             ],
             "expected_outcome": "BLER should drop below 10% for stable transmission",
             "risk_level": "medium"
+        },
+        # Extended problem codes for comprehensive AI diagnostics
+        "HIGH_BLOCK_ERROR_RATE": {
+            "action": "Reduce block error rate through RF optimization",
+            "commands": [
+                "radio-cli analyze-bler-distribution",
+                "radio-cli optimize-harq-retx --max-retx 4",
+                "radio-cli adjust-mcs-table --conservative",
+                "radio-cli check-timing-advance",
+                "radio-cli scan-interference --all-bands"
+            ],
+            "expected_outcome": "BLER should drop below 15% warning threshold",
+            "risk_level": "low"
+        },
+        "LOW_BATTERY": {
+            "action": "Activate power saving mode and prepare for failover",
+            "commands": [
+                "power-manager --mode emergency-save",
+                "radio-cli reduce-power 50",
+                "systemctl stop non-essential.target",
+                "ups-cli --check-generator",
+                "logger -p local0.crit 'Battery critically low - emergency mode activated'"
+            ],
+            "expected_outcome": "Power consumption reduced, generator standby activated",
+            "risk_level": "high"
+        },
+        "HIGH_LATENCY": {
+            "action": "Optimize network path and reduce latency",
+            "commands": [
+                "tc qdisc replace dev eth0 root fq_codel",
+                "ip route flush cache",
+                "radio-cli optimize-scheduling --low-latency",
+                "systemctl restart network-optimizer",
+                "ping -c 10 8.8.8.8 | tail -1"
+            ],
+            "expected_outcome": "Latency should drop below 50ms warning threshold",
+            "risk_level": "low"
+        },
+        "LOW_THROUGHPUT": {
+            "action": "Optimize throughput and check backhaul capacity",
+            "commands": [
+                "radio-cli check-backhaul-capacity",
+                "radio-cli optimize-mcs --target max",
+                "radio-cli check-interference --all-bands",
+                "iperf3 -c backhaul-gateway -t 10",
+                "systemctl restart traffic-shaper"
+            ],
+            "expected_outcome": "Throughput should increase above 50 Mbps threshold",
+            "risk_level": "low"
+        },
+        # Note: HANDOVER_FAILURE rule defined above at SSV-specific section (line ~705)
+        "HIGH_INTERFERENCE": {
+            "action": "Mitigate RF interference through frequency and power optimization",
+            "commands": [
+                "radio-cli scan-interference --detailed",
+                "radio-cli auto-frequency-select",
+                "radio-cli adjust-power --mode interference-aware",
+                "radio-cli enable-icic",
+                "logger 'High interference detected - mitigation active'"
+            ],
+            "expected_outcome": "Interference level should drop below -80 dBm threshold",
+            "risk_level": "low"
         }
     }
 
@@ -1387,7 +1469,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_maintenance_health(self, station_id: str):
         """Handle GET /maintenance/<station_id>/health request."""
         if not PREDICTIVE_MAINTENANCE_AVAILABLE:
-            return jsonify({"error": "Predictive maintenance service not available - install scikit-learn"}), 503
+            return jsonify({"error": f"{ERR_PREDICTIVE_MAINTENANCE} - install scikit-learn"}), 503
 
         maintenance_service = get_predictive_maintenance_service()
 
@@ -1419,14 +1501,14 @@ class HTTPAdapter(ProtocolAdapter):
         }
         """
         if not PREDICTIVE_MAINTENANCE_AVAILABLE:
-            return jsonify({"error": "Predictive maintenance service not available"}), 503
+            return jsonify({"error": ERR_PREDICTIVE_MAINTENANCE}), 503
 
         maintenance_service = get_predictive_maintenance_service()
 
         try:
             data = request.json
             if not data:
-                return jsonify({"error": "Request body is required"}), 400
+                return jsonify({"error": ERR_REQUEST_BODY}), 400
 
             station_id = data.get('station_id', 'unknown')
             metrics_data = data.get('metrics', [])
@@ -1457,7 +1539,7 @@ class HTTPAdapter(ProtocolAdapter):
         Analyzes battery health including SOC, DOD, temperature, and cycle count.
         """
         if not PREDICTIVE_MAINTENANCE_AVAILABLE:
-            return jsonify({"error": "Predictive maintenance service not available"}), 503
+            return jsonify({"error": ERR_PREDICTIVE_MAINTENANCE}), 503
 
         maintenance_service = get_predictive_maintenance_service()
 
@@ -1496,7 +1578,7 @@ class HTTPAdapter(ProtocolAdapter):
         Analyzes fiber transport health including RX/TX power, BER, and OSNR.
         """
         if not PREDICTIVE_MAINTENANCE_AVAILABLE:
-            return jsonify({"error": "Predictive maintenance service not available"}), 503
+            return jsonify({"error": ERR_PREDICTIVE_MAINTENANCE}), 503
 
         maintenance_service = get_predictive_maintenance_service()
 
@@ -1543,14 +1625,14 @@ class HTTPAdapter(ProtocolAdapter):
         }
         """
         if not CONFIG_DRIFT_AVAILABLE:
-            return jsonify({"error": "Config drift detection service not available"}), 503
+            return jsonify({"error": ERR_CONFIG_DRIFT}), 503
 
         drift_service = get_config_drift_service()
 
         try:
             data = request.json
             if not data:
-                return jsonify({"error": "Request body is required"}), 400
+                return jsonify({"error": ERR_REQUEST_BODY}), 400
 
             station_id = data.get('station_id', 'unknown')
             current_config = data.get('current_config')
@@ -1587,14 +1669,14 @@ class HTTPAdapter(ProtocolAdapter):
         }
         """
         if not CONFIG_DRIFT_AVAILABLE:
-            return jsonify({"error": "Config drift detection service not available"}), 503
+            return jsonify({"error": ERR_CONFIG_DRIFT}), 503
 
         drift_service = get_config_drift_service()
 
         try:
             data = request.json
             if not data:
-                return jsonify({"error": "Request body is required"}), 400
+                return jsonify({"error": ERR_REQUEST_BODY}), 400
 
             station_id = data.get('station_id')
             config = data.get('config')
@@ -1620,23 +1702,20 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_config_baseline_get(self, station_id: str):
         """Handle GET /config/baseline/<station_id> request."""
         if not CONFIG_DRIFT_AVAILABLE:
-            return jsonify({"error": "Config drift detection service not available"}), 503
+            return jsonify({"error": ERR_CONFIG_DRIFT}), 503
 
         drift_service = get_config_drift_service()
 
-        baseline = drift_service.get_baseline(station_id)
+        baseline = drift_service.export_baseline(station_id)
         if baseline is None:
             return jsonify({"error": "No baseline found for station"}), 404
 
-        return jsonify({
-            "station_id": station_id,
-            "baseline": baseline
-        })
+        return jsonify(baseline)
 
     def _handle_rca_analyze(self):
         """Handle POST /rca/analyze request - analyze events to find root cause."""
         if not RCA_AVAILABLE:
-            return jsonify({"error": "Root cause analysis service not available"}), 503
+            return jsonify({"error": ERR_RCA}), 503
 
         data = request.get_json()
         if not data or 'events' not in data:
@@ -1662,7 +1741,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_rca_stats(self):
         """Handle GET /rca/stats request - get RCA statistics."""
         if not RCA_AVAILABLE:
-            return jsonify({"error": "Root cause analysis service not available"}), 503
+            return jsonify({"error": ERR_RCA}), 503
 
         rca_service = get_rca_service()
         stats = rca_service.get_statistics()
@@ -1672,7 +1751,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_rca_feedback(self):
         """Handle POST /rca/feedback request - learn from operator feedback."""
         if not RCA_AVAILABLE:
-            return jsonify({"error": "Root cause analysis service not available"}), 503
+            return jsonify({"error": ERR_RCA}), 503
 
         data = request.get_json()
         if not data:
@@ -1700,7 +1779,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_healing_submit(self):
         """Handle POST /healing/actions request - submit a healing action."""
         if not SELF_HEALING_AVAILABLE:
-            return jsonify({"error": "Self-healing service not available"}), 503
+            return jsonify({"error": ERR_SELF_HEALING}), 503
 
         data = request.get_json()
         if not data:
@@ -1740,7 +1819,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_healing_from_son(self):
         """Handle POST /healing/from-son request - create action from SON recommendation."""
         if not SELF_HEALING_AVAILABLE:
-            return jsonify({"error": "Self-healing service not available"}), 503
+            return jsonify({"error": ERR_SELF_HEALING}), 503
 
         data = request.get_json()
         if not data:
@@ -1762,7 +1841,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_healing_from_rca(self):
         """Handle POST /healing/from-rca request - create action from RCA result."""
         if not SELF_HEALING_AVAILABLE:
-            return jsonify({"error": "Self-healing service not available"}), 503
+            return jsonify({"error": ERR_SELF_HEALING}), 503
 
         data = request.get_json()
         if not data:
@@ -1792,7 +1871,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_healing_approve(self, action_id: str):
         """Handle POST /healing/actions/{id}/approve request."""
         if not SELF_HEALING_AVAILABLE:
-            return jsonify({"error": "Self-healing service not available"}), 503
+            return jsonify({"error": ERR_SELF_HEALING}), 503
 
         data = request.get_json() or {}
         approved_by = data.get('approved_by', 'unknown')
@@ -1807,7 +1886,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_healing_cancel(self, action_id: str):
         """Handle POST /healing/actions/{id}/cancel request."""
         if not SELF_HEALING_AVAILABLE:
-            return jsonify({"error": "Self-healing service not available"}), 503
+            return jsonify({"error": ERR_SELF_HEALING}), 503
 
         data = request.get_json() or {}
         reason = data.get('reason', 'Cancelled by user')
@@ -1822,7 +1901,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_healing_pending(self):
         """Handle GET /healing/pending request - list pending actions."""
         if not SELF_HEALING_AVAILABLE:
-            return jsonify({"error": "Self-healing service not available"}), 503
+            return jsonify({"error": ERR_SELF_HEALING}), 503
 
         station_id = request.args.get('station_id')
         healing_service = get_self_healing_service()
@@ -1832,7 +1911,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_healing_history(self):
         """Handle GET /healing/history request - get execution history."""
         if not SELF_HEALING_AVAILABLE:
-            return jsonify({"error": "Self-healing service not available"}), 503
+            return jsonify({"error": ERR_SELF_HEALING}), 503
 
         station_id = request.args.get('station_id')
         limit = request.args.get('limit', 100, type=int)
@@ -1844,7 +1923,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_healing_stats(self):
         """Handle GET /healing/stats request - get service statistics."""
         if not SELF_HEALING_AVAILABLE:
-            return jsonify({"error": "Self-healing service not available"}), 503
+            return jsonify({"error": ERR_SELF_HEALING}), 503
 
         healing_service = get_self_healing_service()
         return jsonify(healing_service.get_stats())
@@ -1854,7 +1933,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_twin_create(self, station_id: str):
         """Handle POST /digital-twin/<station_id> - create digital twin."""
         if not DIGITAL_TWIN_AVAILABLE:
-            return jsonify({"error": "Digital twin service not available"}), 503
+            return jsonify({"error": ERR_DIGITAL_TWIN}), 503
 
         data = request.get_json() or {}
         twin_service = get_digital_twin_service()
@@ -1864,28 +1943,28 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_twin_get(self, station_id: str):
         """Handle GET /digital-twin/<station_id> - get twin state."""
         if not DIGITAL_TWIN_AVAILABLE:
-            return jsonify({"error": "Digital twin service not available"}), 503
+            return jsonify({"error": ERR_DIGITAL_TWIN}), 503
 
         twin_service = get_digital_twin_service()
         twin = twin_service.get_twin(station_id)
         if not twin:
-            return jsonify({"error": "Twin not found"}), 404
+            return jsonify({"error": ERR_TWIN_NOT_FOUND}), 404
         return jsonify(twin.get_state())
 
     def _handle_twin_delete(self, station_id: str):
         """Handle DELETE /digital-twin/<station_id> - delete twin."""
         if not DIGITAL_TWIN_AVAILABLE:
-            return jsonify({"error": "Digital twin service not available"}), 503
+            return jsonify({"error": ERR_DIGITAL_TWIN}), 503
 
         twin_service = get_digital_twin_service()
         if twin_service.delete_twin(station_id):
             return jsonify({"status": "deleted"})
-        return jsonify({"error": "Twin not found"}), 404
+        return jsonify({"error": ERR_TWIN_NOT_FOUND}), 404
 
     def _handle_twin_simulate(self, station_id: str):
         """Handle POST /digital-twin/<station_id>/simulate - run simulation."""
         if not DIGITAL_TWIN_AVAILABLE:
-            return jsonify({"error": "Digital twin service not available"}), 503
+            return jsonify({"error": ERR_DIGITAL_TWIN}), 503
 
         data = request.get_json() or {}
         twin_service = get_digital_twin_service()
@@ -1902,13 +1981,13 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_twin_predict(self, station_id: str):
         """Handle GET /digital-twin/<station_id>/predict - predict failures."""
         if not DIGITAL_TWIN_AVAILABLE:
-            return jsonify({"error": "Digital twin service not available"}), 503
+            return jsonify({"error": ERR_DIGITAL_TWIN}), 503
 
         horizon = request.args.get("horizon_days", 30, type=int)
         twin_service = get_digital_twin_service()
         twin = twin_service.get_twin(station_id)
         if not twin:
-            return jsonify({"error": "Twin not found"}), 404
+            return jsonify({"error": ERR_TWIN_NOT_FOUND}), 404
 
         predictions = twin.predict_failures(horizon)
         return jsonify({"station_id": station_id, "predictions": predictions})
@@ -1916,7 +1995,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_twin_fleet_health(self):
         """Handle GET /digital-twin/fleet/health - get fleet health."""
         if not DIGITAL_TWIN_AVAILABLE:
-            return jsonify({"error": "Digital twin service not available"}), 503
+            return jsonify({"error": ERR_DIGITAL_TWIN}), 503
 
         twin_service = get_digital_twin_service()
         return jsonify(twin_service.get_fleet_health())
@@ -1926,7 +2005,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_generate_scenario(self):
         """Handle POST /generative/scenario - generate failure scenario."""
         if not GENERATIVE_AI_AVAILABLE:
-            return jsonify({"error": "Generative AI service not available"}), 503
+            return jsonify({"error": ERR_GENERATIVE_AI}), 503
 
         data = request.get_json() or {}
         gen_service = get_generative_ai_service()
@@ -1945,7 +2024,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_generate_batch(self):
         """Handle POST /generative/batch - generate training batch."""
         if not GENERATIVE_AI_AVAILABLE:
-            return jsonify({"error": "Generative AI service not available"}), 503
+            return jsonify({"error": ERR_GENERATIVE_AI}), 503
 
         data = request.get_json() or {}
         gen_service = get_generative_ai_service()
@@ -1958,7 +2037,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_generate_edge_cases(self):
         """Handle POST /generative/edge-cases - generate edge cases."""
         if not GENERATIVE_AI_AVAILABLE:
-            return jsonify({"error": "Generative AI service not available"}), 503
+            return jsonify({"error": ERR_GENERATIVE_AI}), 503
 
         data = request.get_json() or {}
         gen_service = get_generative_ai_service()
@@ -1972,7 +2051,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_generative_stats(self):
         """Handle GET /generative/stats - get generation statistics."""
         if not GENERATIVE_AI_AVAILABLE:
-            return jsonify({"error": "Generative AI service not available"}), 503
+            return jsonify({"error": ERR_GENERATIVE_AI}), 503
 
         gen_service = get_generative_ai_service()
         return jsonify(gen_service.get_statistics())
@@ -1982,7 +2061,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_cv_inspect(self):
         """Handle POST /cv/inspect - inspect image from base64."""
         if not COMPUTER_VISION_AVAILABLE:
-            return jsonify({"error": "Computer vision service not available"}), 503
+            return jsonify({"error": ERR_COMPUTER_VISION}), 503
 
         data = request.get_json() or {}
         cv_service = get_computer_vision_service()
@@ -2005,7 +2084,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_cv_inspect_file(self):
         """Handle POST /cv/inspect-file - inspect image from file path."""
         if not COMPUTER_VISION_AVAILABLE:
-            return jsonify({"error": "Computer vision service not available"}), 503
+            return jsonify({"error": ERR_COMPUTER_VISION}), 503
 
         data = request.get_json() or {}
         cv_service = get_computer_vision_service()
@@ -2028,7 +2107,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_cv_history(self, station_id: str):
         """Handle GET /cv/history/<station_id> - get inspection history."""
         if not COMPUTER_VISION_AVAILABLE:
-            return jsonify({"error": "Computer vision service not available"}), 503
+            return jsonify({"error": ERR_COMPUTER_VISION}), 503
 
         limit = request.args.get("limit", 100, type=int)
         cv_service = get_computer_vision_service()
@@ -2042,7 +2121,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_cv_stats(self):
         """Handle GET /cv/stats - get CV statistics."""
         if not COMPUTER_VISION_AVAILABLE:
-            return jsonify({"error": "Computer vision service not available"}), 503
+            return jsonify({"error": ERR_COMPUTER_VISION}), 503
 
         cv_service = get_computer_vision_service()
         return jsonify(cv_service.get_statistics())
@@ -2052,7 +2131,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_drone_list(self):
         """Handle GET /drone/list - list all drones."""
         if not DRONE_INTEGRATION_AVAILABLE:
-            return jsonify({"error": "Drone integration not available"}), 503
+            return jsonify({"error": ERR_DRONE}), 503
 
         drone_service = get_drone_service()
         drones = drone_service.get_all_drones()
@@ -2061,7 +2140,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_drone_state(self, drone_id: str):
         """Handle GET /drone/<drone_id> - get drone state."""
         if not DRONE_INTEGRATION_AVAILABLE:
-            return jsonify({"error": "Drone integration not available"}), 503
+            return jsonify({"error": ERR_DRONE}), 503
 
         drone_service = get_drone_service()
         state = drone_service.get_drone_state(drone_id)
@@ -2072,7 +2151,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_drone_create_mission(self):
         """Handle POST /drone/mission - create inspection mission."""
         if not DRONE_INTEGRATION_AVAILABLE:
-            return jsonify({"error": "Drone integration not available"}), 503
+            return jsonify({"error": ERR_DRONE}), 503
 
         data = request.get_json() or {}
         drone_service = get_drone_service()
@@ -2101,7 +2180,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_drone_mission_status(self, mission_id: str):
         """Handle GET /drone/mission/<mission_id> - get mission status."""
         if not DRONE_INTEGRATION_AVAILABLE:
-            return jsonify({"error": "Drone integration not available"}), 503
+            return jsonify({"error": ERR_DRONE}), 503
 
         drone_service = get_drone_service()
         status = drone_service.get_mission_status(mission_id)
@@ -2112,7 +2191,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_drone_start_mission(self, mission_id: str):
         """Handle POST /drone/mission/<mission_id>/start - start mission."""
         if not DRONE_INTEGRATION_AVAILABLE:
-            return jsonify({"error": "Drone integration not available"}), 503
+            return jsonify({"error": ERR_DRONE}), 503
 
         drone_service = get_drone_service()
         success = drone_service.start_mission(mission_id)
@@ -2123,7 +2202,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_drone_abort_mission(self, mission_id: str):
         """Handle POST /drone/mission/<mission_id>/abort - abort mission."""
         if not DRONE_INTEGRATION_AVAILABLE:
-            return jsonify({"error": "Drone integration not available"}), 503
+            return jsonify({"error": ERR_DRONE}), 503
 
         drone_service = get_drone_service()
         success = drone_service.abort_mission(mission_id)
@@ -2134,7 +2213,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_drone_captures(self, mission_id: str):
         """Handle GET /drone/mission/<mission_id>/captures - get captures."""
         if not DRONE_INTEGRATION_AVAILABLE:
-            return jsonify({"error": "Drone integration not available"}), 503
+            return jsonify({"error": ERR_DRONE}), 503
 
         drone_service = get_drone_service()
         captures = drone_service.get_captured_data(mission_id)
@@ -2146,7 +2225,7 @@ class HTTPAdapter(ProtocolAdapter):
     def _handle_drone_stats(self):
         """Handle GET /drone/stats - get drone statistics."""
         if not DRONE_INTEGRATION_AVAILABLE:
-            return jsonify({"error": "Drone integration not available"}), 503
+            return jsonify({"error": ERR_DRONE}), 503
 
         drone_service = get_drone_service()
         return jsonify(drone_service.get_statistics())
@@ -2368,15 +2447,15 @@ class HTTPAdapter(ProtocolAdapter):
             self._handle_healing_stats)
 
         # Digital Twin endpoints
-        app.route('/digital-twin/<station_id>', methods=['POST'])(
+        app.route(ROUTE_DIGITAL_TWIN, methods=['POST'])(
             self._require_auth(self._handle_twin_create))
-        app.route('/digital-twin/<station_id>', methods=['GET'])(
+        app.route(ROUTE_DIGITAL_TWIN, methods=['GET'])(
             self._handle_twin_get)
-        app.route('/digital-twin/<station_id>', methods=['DELETE'])(
+        app.route(ROUTE_DIGITAL_TWIN, methods=['DELETE'])(
             self._require_auth(self._handle_twin_delete))
-        app.route('/digital-twin/<station_id>/simulate', methods=['POST'])(
+        app.route(f"{ROUTE_DIGITAL_TWIN}/simulate", methods=['POST'])(
             self._require_auth(self._handle_twin_simulate))
-        app.route('/digital-twin/<station_id>/predict', methods=['GET'])(
+        app.route(f"{ROUTE_DIGITAL_TWIN}/predict", methods=['GET'])(
             self._handle_twin_predict)
         app.route('/digital-twin/fleet/health', methods=['GET'])(
             self._handle_twin_fleet_health)
@@ -2463,8 +2542,8 @@ class DiagnosticService:
     Optionally posts solutions to cloud for edge-bridge execution.
     """
 
-    def __init__(self, cloud_url: str = "", cloud_user: str = None,
-                 cloud_password: str = None):
+    def __init__(self, cloud_url: str = "", cloud_user: Optional[str] = None,
+                 cloud_password: Optional[str] = None):
         self.adapters: List[ProtocolAdapter] = []
         self.backend: AIBackend = RuleBasedBackend()
         self.problem_log: List[Problem] = []
@@ -2531,6 +2610,9 @@ class DiagnosticService:
 
     def _post_solution_to_cloud(self, problem: Problem, solution: Solution):
         """Post solution to cloud to create commands for edge-bridge."""
+        if self.cloud_client is None:
+            return
+
         try:
             # Only auto-apply if confidence is high enough and risk is low
             min_confidence = 0.90
@@ -2572,9 +2654,9 @@ class DiagnosticService:
         logger.info("Diagnostic service stopped")
 
 
-def main():
+def _create_arg_parser():
+    """Create and configure the argument parser."""
     import argparse
-
     parser = argparse.ArgumentParser(description="AI Diagnostic Service")
     parser.add_argument("--tcp-port", type=int, default=9090, help="TCP port")
     parser.add_argument("--http-port", type=int, default=9091, help="HTTP port")
@@ -2583,14 +2665,95 @@ def main():
     parser.add_argument("--backend", choices=["rules", "ollama"],
                        default="rules", help="AI backend")
     parser.add_argument("--ollama-model", default="llama3.2", help="Ollama model")
-    # Cloud integration for bidirectional flow
     parser.add_argument("--cloud-url", default=os.environ.get("CLOUD_URL", ""),
                        help="Cloud API gateway URL for posting solutions")
     parser.add_argument("--cloud-user", default=os.environ.get("CLOUD_USER"),
-                       help="Cloud auth username (required if cloud-url set, from CLOUD_USER env var)")
+                       help="Cloud auth username (required if cloud-url set)")
     parser.add_argument("--cloud-password", default=os.environ.get("CLOUD_PASSWORD"),
-                       help="Cloud auth password (required if cloud-url set, from CLOUD_PASSWORD env var)")
+                       help="Cloud auth password (required if cloud-url set)")
+    return parser
 
+
+def _setup_adapters(service: 'DiagnosticService', args) -> None:
+    """Configure and add protocol adapters to the service."""
+    service.add_adapter(TCPAdapter(None, port=args.tcp_port))
+
+    if FLASK_AVAILABLE:
+        service.add_adapter(HTTPAdapter(None, port=args.http_port))
+
+    if args.serial:
+        service.add_adapter(SerialAdapter(None, port=args.serial))
+
+    if args.mqtt_broker and MQTT_AVAILABLE:
+        service.add_adapter(MQTTAdapter(None, broker=args.mqtt_broker))
+
+
+def _start_son_scheduler(cloud_user: Optional[str], cloud_password: Optional[str]) -> None:
+    """Start SON scheduler if available."""
+    if not SON_SCHEDULER_AVAILABLE:
+        return
+
+    try:
+        monitoring_url = os.environ.get("MONITORING_SERVICE_URL", "http://monitoring-service:8082")
+        son_interval = int(os.environ.get("SON_ANALYSIS_INTERVAL", "300"))
+
+        scheduler = get_son_scheduler(
+            monitoring_url=monitoring_url,
+            auth_user=cloud_user or "admin",
+            auth_password=cloud_password or "AdminPass12345!",
+            interval_seconds=son_interval
+        )
+        scheduler.start()
+        logger.info(f"SON scheduler started (interval: {son_interval}s)")
+    except Exception as e:
+        logger.error(f"Failed to start SON scheduler: {e}")
+
+
+def _log_available_endpoints(http_port: int):
+    """Log all available HTTP endpoints based on loaded services."""
+    logger.info(f"  HTTP: http://localhost:{http_port}")
+    logger.info("  Endpoints:")
+    logger.info("    POST /diagnose           - AI diagnosis")
+    logger.info("    GET  /health             - Health check")
+    logger.info("    GET  /reports/bi         - BI report PDF")
+    logger.info("    GET  /reports/diagnostics- Diagnostic log")
+
+    # Optional service endpoints
+    endpoint_map = [
+        (VISION_AVAILABLE, ["POST /vision/analyze-led - LED panel analysis"]),
+        (ALARM_CORRELATION_AVAILABLE, ["POST /alarms/correlate   - Alarm correlation"]),
+        (PREDICTIVE_MAINTENANCE_AVAILABLE, [
+            "GET  /maintenance/{id}/health  - Health report",
+            "GET  /maintenance/{id}/battery - Battery analysis",
+            "GET  /maintenance/{id}/fiber   - Fiber transport analysis",
+            "POST /maintenance/analyze      - Analyze metrics"
+        ]),
+        (CONFIG_DRIFT_AVAILABLE, [
+            "POST /config/drift       - Detect drift",
+            "POST /config/baseline    - Set baseline"
+        ]),
+        (RCA_AVAILABLE, [
+            "POST /rca/analyze        - Root cause analysis",
+            "GET  /rca/stats          - RCA statistics"
+        ]),
+        (SELF_HEALING_AVAILABLE, [
+            "POST /healing/actions    - Submit healing action",
+            "POST /healing/from-son   - Create from SON",
+            "POST /healing/from-rca   - Create from RCA",
+            "GET  /healing/pending    - Pending actions",
+            "GET  /healing/history    - Execution history",
+            "GET  /healing/stats      - Healing statistics"
+        ]),
+    ]
+
+    for available, endpoints in endpoint_map:
+        if available:
+            for endpoint in endpoints:
+                logger.info(f"    {endpoint}")
+
+
+def main():
+    parser = _create_arg_parser()
     args = parser.parse_args()
 
     # Validate cloud credentials if cloud URL is provided
@@ -2607,75 +2770,22 @@ def main():
     )
 
     # Set AI backend
-    if args.backend == "ollama":
-        service.set_backend(OllamaBackend(model=args.ollama_model))
-    else:
-        service.set_backend(RuleBasedBackend())
+    backend = OllamaBackend(model=args.ollama_model) if args.backend == "ollama" else RuleBasedBackend()
+    service.set_backend(backend)
 
-    # Add protocol adapters
-    service.add_adapter(TCPAdapter(None, port=args.tcp_port))
-
-    if FLASK_AVAILABLE:
-        service.add_adapter(HTTPAdapter(None, port=args.http_port))
-
-    if args.serial:
-        service.add_adapter(SerialAdapter(None, port=args.serial))
-
-    if args.mqtt_broker and MQTT_AVAILABLE:
-        service.add_adapter(MQTTAdapter(None, broker=args.mqtt_broker))
-
+    # Add protocol adapters and start service
+    _setup_adapters(service, args)
     service.start()
 
     # Start SON scheduler if available
-    if SON_SCHEDULER_AVAILABLE:
-        try:
-            monitoring_url = os.environ.get("MONITORING_SERVICE_URL", "http://monitoring-service:8082")
-            son_interval = int(os.environ.get("SON_ANALYSIS_INTERVAL", "300"))  # 5 minutes default
-            
-            scheduler = get_son_scheduler(
-                monitoring_url=monitoring_url,
-                auth_user=args.cloud_user or "admin",
-                auth_password=args.cloud_password or "AdminPass12345!",
-                interval_seconds=son_interval
-            )
-            scheduler.start()
-            logger.info(f"SON scheduler started (interval: {son_interval}s)")
-        except Exception as e:
-            logger.error(f"Failed to start SON scheduler: {e}")
+    _start_son_scheduler(args.cloud_user, args.cloud_password)
 
     logger.info("\n" + "="*60)
     logger.info("AI Diagnostic Service is running")
     logger.info("="*60)
     logger.info(f"  TCP:  localhost:{args.tcp_port}")
     if FLASK_AVAILABLE:
-        logger.info(f"  HTTP: http://localhost:{args.http_port}")
-        logger.info("  Endpoints:")
-        logger.info("    POST /diagnose           - AI diagnosis")
-        logger.info("    GET  /health             - Health check")
-        logger.info("    GET  /reports/bi         - BI report PDF")
-        logger.info("    GET  /reports/diagnostics- Diagnostic log")
-        if VISION_AVAILABLE:
-            logger.info("    POST /vision/analyze-led - LED panel analysis")
-        if ALARM_CORRELATION_AVAILABLE:
-            logger.info("    POST /alarms/correlate   - Alarm correlation")
-        if PREDICTIVE_MAINTENANCE_AVAILABLE:
-            logger.info("    GET  /maintenance/{id}/health  - Health report")
-            logger.info("    GET  /maintenance/{id}/battery - Battery analysis")
-            logger.info("    GET  /maintenance/{id}/fiber   - Fiber transport analysis")
-            logger.info("    POST /maintenance/analyze      - Analyze metrics")
-        if CONFIG_DRIFT_AVAILABLE:
-            logger.info("    POST /config/drift       - Detect drift")
-            logger.info("    POST /config/baseline    - Set baseline")
-        if RCA_AVAILABLE:
-            logger.info("    POST /rca/analyze        - Root cause analysis")
-            logger.info("    GET  /rca/stats          - RCA statistics")
-        if SELF_HEALING_AVAILABLE:
-            logger.info("    POST /healing/actions    - Submit healing action")
-            logger.info("    POST /healing/from-son   - Create from SON")
-            logger.info("    POST /healing/from-rca   - Create from RCA")
-            logger.info("    GET  /healing/pending    - Pending actions")
-            logger.info("    GET  /healing/history    - Execution history")
-            logger.info("    GET  /healing/stats      - Healing statistics")
+        _log_available_endpoints(args.http_port)
     if args.serial:
         logger.info(f"  Serial: {args.serial}")
     if args.mqtt_broker:

@@ -46,6 +46,13 @@ public class AlertEvent {
     @JsonProperty("timestamp")
     private LocalDateTime timestamp;
 
+    /**
+     * Unique problem ID for correlating alerts with diagnostic sessions.
+     * Format: PROB-{stationId}-{metricType}-{timestamp}
+     */
+    @JsonProperty("problemId")
+    private String problemId;
+
     public AlertEvent() {
         this.timestamp = LocalDateTime.now();
     }
@@ -60,6 +67,7 @@ public class AlertEvent {
         this.threshold = builder.threshold;
         this.severity = builder.severity;
         this.message = builder.message;
+        this.problemId = builder.problemId;
         this.timestamp = LocalDateTime.now();
     }
 
@@ -77,6 +85,7 @@ public class AlertEvent {
         @Nullable private Double threshold;
         @Nullable private String severity;
         @Nullable private String message;
+        @Nullable private String problemId;
 
         public Builder alertRuleId(@Nullable String alertRuleId) {
             this.alertRuleId = alertRuleId;
@@ -120,6 +129,11 @@ public class AlertEvent {
 
         public Builder message(@Nullable String message) {
             this.message = message;
+            return this;
+        }
+
+        public Builder problemId(@Nullable String problemId) {
+            this.problemId = problemId;
             return this;
         }
 
@@ -219,6 +233,15 @@ public class AlertEvent {
         this.timestamp = Objects.requireNonNullElseGet(timestamp, LocalDateTime::now);
     }
 
+    @Nullable
+    public String getProblemId() {
+        return problemId;
+    }
+
+    public void setProblemId(@Nullable String problemId) {
+        this.problemId = problemId;
+    }
+
     @Override
     public String toString() {
         return "AlertEvent{" +
@@ -231,6 +254,7 @@ public class AlertEvent {
                 ", threshold=" + threshold +
                 ", severity='" + severity + '\'' +
                 ", message='" + message + '\'' +
+                ", problemId='" + problemId + '\'' +
                 ", timestamp=" + timestamp +
                 '}';
     }

@@ -41,6 +41,61 @@ public class NotificationService {
     }
 
     /**
+     * Creates a notification linked to a diagnostic problem ID.
+     * This allows the notification to be resolved when the AI diagnostics resolves the problem.
+     *
+     * @param stationId the station ID
+     * @param message the notification message
+     * @param type the notification type
+     * @param problemId the problem ID for linking to diagnostic sessions
+     * @return the created notification
+     */
+    public Notification createNotificationWithProblemId(Long stationId, String message, NotificationType type,
+                                                         String problemId) {
+        Notification notification = new Notification(stationId, message, type);
+        notification.setProblemId(problemId);
+        return repository.save(notification);
+    }
+
+    /**
+     * Resolves all notifications linked to a problem ID.
+     * Called when AI diagnostics successfully resolves the underlying problem.
+     *
+     * @param problemId the problem ID to resolve
+     * @return the number of notifications resolved
+     */
+    public int resolveByProblemId(String problemId) {
+        if (problemId == null || problemId.isBlank()) {
+            log.warn("Cannot resolve notifications - problemId is null or blank");
+            return 0;
+        }
+
+        List<Notification> notifications = repository.findByProblemId(problemId);
+        if (notifications.isEmpty()) {
+            log.debug("No notifications found for problemId: {}", problemId);
+            return 0;
+        }
+
+        int resolved = 0;
+        for (Notification notification : notifications) {
+            // Only resolve unread notifications
+            if (notification.getStatus() == NotificationStatus.UNREAD) {
+                notification.setStatus(NotificationStatus.RESOLVED);
+                notification.setResolvedAt(LocalDateTime.now());
+                repository.save(notification);
+                resolved++;
+            }
+        }
+
+        if (resolved > 0) {
+            cachedCounts = null; // Invalidate cache
+            log.info("Resolved {} notifications for problemId: {}", resolved, problemId);
+        }
+
+        return resolved;
+    }
+
+    /**
      * Sends a notification asynchronously.
      *
      * @param notificationId the notification ID to send
@@ -181,15 +236,16 @@ public class NotificationService {
     public record NotificationCounts(long total, long unread, long alerts, long warnings) {}
 
     /**
-     * Gets recent unread notifications (last 10) for activity feeds.
-     * Only returns UNREAD notifications so cleared alerts don't appear.
+     * Gets recent notifications (last 10) for activity feeds.
+     * Returns both UNREAD and RESOLVED notifications to show current state.
+     * Excludes READ/cleared notifications.
      *
-     * @return list of the 10 most recent unread notifications
+     * @return list of the 10 most recent active notifications
      */
     @Transactional(readOnly = true)
     public List<Notification> getRecentNotifications() {
-        return repository.findByStatus(
-                NotificationStatus.UNREAD,
+        return repository.findByStatusIn(
+                List.of(NotificationStatus.UNREAD, NotificationStatus.RESOLVED),
                 org.springframework.data.domain.PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"))
         ).getContent();
     }

@@ -31,9 +31,20 @@ public final class MessagingConstants {
     public static final String ALERT_TRIGGERED_ROUTING_KEY = "alert.triggered";
 
     /**
+     * Routing key for diagnostic resolution events.
+     * Published when AI diagnostics resolves a problem.
+     */
+    public static final String DIAGNOSTIC_RESOLVED_ROUTING_KEY = "diagnostic.resolved";
+
+    /**
      * Queue for notification service to receive alerts.
      */
     public static final String NOTIFICATION_QUEUE = "notification.queue";
+
+    /**
+     * Queue for notification service to receive diagnostic resolutions.
+     */
+    public static final String DIAGNOSTIC_RESOLUTION_QUEUE = "notification.diagnostic-resolution.queue";
 
     // ========================================
     // DEAD LETTER QUEUE
