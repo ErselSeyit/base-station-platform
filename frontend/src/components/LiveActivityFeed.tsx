@@ -1,5 +1,5 @@
-import { Circle } from '@mui/icons-material'
-import { Box, Typography } from '@mui/material'
+import { Circle, CheckCircle as CheckCircleIcon, AutoFixHigh as AutoFixHighIcon } from '@mui/icons-material'
+import { Box, Chip, Typography } from '@mui/material'
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatDistanceToNow } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
@@ -60,66 +60,115 @@ export default function LiveActivityFeed() {
             </Typography>
           </motion.div>
         ) : (
-          recentNotifications.map((notification: Notification, index: number) => (
-            <motion.div
-              key={notification.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{
-                delay: index * 0.05,
-                duration: 0.3,
-                ease: [0.16, 1, 0.3, 1]
-              }}
-              layout
-            >
-              <Box
-                sx={{
-                  display: 'flex',
-                  gap: 2,
-                  p: 2,
-                  mb: 1.5,
-                  borderRadius: 2,
-                  background: 'var(--surface-elevated)',
-                  borderLeft: '3px solid',
-                  borderColor: getSeverityColorVar(notification.type),
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    background: 'var(--surface-hover)',
-                    transform: 'translateX(4px)',
-                  },
+          recentNotifications.map((notification: Notification, index: number) => {
+            const isResolved = notification.status === 'RESOLVED'
+            const isUnread = notification.status === 'UNREAD'
+            const borderColor = isResolved ? 'var(--status-active)' : getSeverityColorVar(notification.type)
+
+            return (
+              <motion.div
+                key={notification.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{
+                  delay: index * 0.05,
+                  duration: 0.3,
+                  ease: [0.16, 1, 0.3, 1]
                 }}
+                layout
               >
-                <Box sx={{ mt: 0.5 }}>
-                  <PulsingStatus
-                    color={getSeverityColorVar(notification.type)}
-                    size={10}
-                    animate={notification.status === 'UNREAD'}
-                  />
+                <Box
+                  sx={{
+                    display: 'flex',
+                    gap: 2,
+                    p: 2,
+                    mb: 1.5,
+                    borderRadius: 2,
+                    background: 'var(--surface-elevated)',
+                    borderLeft: '3px solid',
+                    borderColor: borderColor,
+                    opacity: isResolved ? 0.7 : 1,
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      background: 'var(--surface-hover)',
+                      transform: 'translateX(4px)',
+                    },
+                  }}
+                >
+                  <Box sx={{ mt: 0.5 }}>
+                    {isResolved ? (
+                      <AutoFixHighIcon sx={{ fontSize: 14, color: 'var(--status-active)' }} />
+                    ) : (
+                      <PulsingStatus
+                        color={getSeverityColorVar(notification.type)}
+                        size={10}
+                        animate={isUnread}
+                      />
+                    )}
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    {/* Header with station name and resolved chip */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 600,
+                          color: isResolved ? 'var(--mono-500)' : 'var(--mono-700)',
+                        }}
+                      >
+                        {notification.stationName || `Station ${notification.stationId}`}
+                      </Typography>
+                      {isResolved && (
+                        <Chip
+                          icon={<CheckCircleIcon sx={{ fontSize: '12px !important' }} />}
+                          label="Resolved"
+                          size="small"
+                          sx={{
+                            height: '18px',
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            backgroundColor: 'var(--status-active)',
+                            color: 'white',
+                            '& .MuiChip-icon': { color: 'white' },
+                            '& .MuiChip-label': { px: 0.5 },
+                          }}
+                        />
+                      )}
+                    </Box>
+                    {/* Message */}
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: isUnread ? 600 : 400,
+                        mb: 0.5,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        color: isResolved ? 'var(--mono-500)' : 'var(--mono-950)',
+                        textDecoration: isResolved ? 'line-through' : 'none',
+                      }}
+                    >
+                      {notification.message}
+                    </Typography>
+                    {/* Timestamp */}
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
+                        {notification.createdAt
+                          ? formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })
+                          : 'Just now'}
+                      </Typography>
+                      {isResolved && notification.resolvedAt && (
+                        <Typography variant="caption" sx={{ color: 'var(--status-active)' }}>
+                          · Resolved {formatDistanceToNow(new Date(notification.resolvedAt), { addSuffix: true })}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
                 </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: notification.status === 'UNREAD' ? 600 : 400,
-                      mb: 0.5,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      color: 'var(--mono-950)',
-                    }}
-                  >
-                    {notification.message}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
-                    {notification.createdAt
-                      ? formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })
-                      : 'Just now'}
-                  </Typography>
-                </Box>
-              </Box>
-            </motion.div>
-          ))
+              </motion.div>
+            )
+          })
         )}
       </AnimatePresence>
     </Box>

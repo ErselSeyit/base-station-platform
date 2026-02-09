@@ -32,8 +32,8 @@ export interface DiagnosticEvent {
   category: string
   severity: string
   problem_description: string
-  metric_value: number
-  threshold: number
+  metric_value: number | null
+  threshold: number | null
   ai_action: string
   ai_commands: string[]
   ai_confidence: number

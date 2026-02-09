@@ -1,7 +1,9 @@
 package com.huawei.monitoring.service;
 
 import com.huawei.common.constants.DiagnosticConstants;
+import com.huawei.common.constants.MessagingConstants;
 import com.huawei.common.dto.AlertEvent;
+import com.huawei.common.dto.DiagnosticResolutionEvent;
 import com.huawei.common.dto.DiagnosticResponse;
 import com.huawei.monitoring.model.AISolution;
 import com.huawei.monitoring.model.DiagnosticSession;
@@ -26,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -44,11 +47,14 @@ public class DiagnosticSessionService {
 
     private final DiagnosticSessionRepository sessionRepository;
     private final LearningPatternService learningPatternService;
+    private final RabbitTemplate rabbitTemplate;
 
     public DiagnosticSessionService(DiagnosticSessionRepository sessionRepository,
-                                    LearningPatternService learningPatternService) {
+                                    LearningPatternService learningPatternService,
+                                    RabbitTemplate rabbitTemplate) {
         this.sessionRepository = sessionRepository;
         this.learningPatternService = learningPatternService;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     private static final String DEFAULT_SEVERITY = "medium";
@@ -287,6 +293,47 @@ public class DiagnosticSessionService {
 
         log.info("Auto-resolved session {} for problem code {}",
                 session.getId(), session.getProblemCode());
+
+        // Publish resolution event to notification service
+        publishResolutionEvent(session, true, SYSTEM_ACTOR);
+    }
+
+    /**
+     * Publishes a resolution event to notify other services (e.g., notification-service)
+     * that a diagnostic session has been resolved.
+     *
+     * @param session the resolved diagnostic session
+     * @param wasEffective whether the solution was effective
+     * @param resolvedBy who resolved the session (username or "system")
+     */
+    private void publishResolutionEvent(DiagnosticSession session, boolean wasEffective, String resolvedBy) {
+        try {
+            DiagnosticResolutionEvent event = wasEffective
+                    ? DiagnosticResolutionEvent.success(
+                            session.getId(),
+                            session.getProblemId(),
+                            session.getStationId(),
+                            session.getProblemCode(),
+                            resolvedBy)
+                    : DiagnosticResolutionEvent.failure(
+                            session.getId(),
+                            session.getProblemId(),
+                            session.getStationId(),
+                            session.getProblemCode(),
+                            resolvedBy);
+
+            rabbitTemplate.convertAndSend(
+                    MessagingConstants.ALERTS_EXCHANGE,
+                    MessagingConstants.DIAGNOSTIC_RESOLVED_ROUTING_KEY,
+                    event);
+
+            log.info("Published resolution event for session {} (effective={}, problemId={})",
+                    session.getId(), wasEffective, session.getProblemId());
+        } catch (Exception e) {
+            // Log but don't fail the main operation - resolution events are non-critical
+            log.warn("Failed to publish resolution event for session {}: {}",
+                    session.getId(), e.getMessage());
+        }
     }
 
     /**
@@ -336,6 +383,9 @@ public class DiagnosticSessionService {
 
         // Update learning patterns
         learningPatternService.updateLearningPattern(session, wasEffective, rating);
+
+        // Publish resolution event to notification service
+        publishResolutionEvent(session, wasEffective, confirmedBy);
 
         log.info("Feedback recorded for session {}: effective={}, rating={}",
                 sessionId, wasEffective, rating);
@@ -546,6 +596,12 @@ public class DiagnosticSessionService {
             case "MEMORY_USAGE" -> "MEMORY_PRESSURE";
             case "SIGNAL_STRENGTH" -> "SIGNAL_DEGRADATION";
             case "POWER_CONSUMPTION" -> "HIGH_POWER_CONSUMPTION";
+            case "INITIAL_BLER" -> "HIGH_BLOCK_ERROR_RATE";
+            case "BATTERY_SOC" -> "LOW_BATTERY";
+            case "LATENCY_PING" -> "HIGH_LATENCY";
+            case "DATA_THROUGHPUT" -> "LOW_THROUGHPUT";
+            case "HANDOVER_SUCCESS_RATE" -> "HANDOVER_FAILURE";
+            case "INTERFERENCE_LEVEL" -> "HIGH_INTERFERENCE";
             default -> metricType + "_ISSUE";
         };
     }

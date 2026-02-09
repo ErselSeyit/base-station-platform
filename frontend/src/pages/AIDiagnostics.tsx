@@ -80,18 +80,18 @@ function transformSessionsToLog(sessions: DiagnosticSession[]): DiagnosticLog {
     const snapshot = session.metricsSnapshot || {}
     const metricKeys = Object.keys(snapshot).filter(k => k !== 'threshold')
     const rawMetricValue = metricKeys.length > 0 ? snapshot[metricKeys[0]] : null
-    // Convert null, undefined, or placeholder to 0 for display (shown as "N/A" in UI)
+    // Keep null for missing values - display logic will show "N/A"
     const metricValue = rawMetricValue != null && rawMetricValue !== MISSING_METRIC_PLACEHOLDER
       ? rawMetricValue
-      : 0
-    const threshold = snapshot.threshold ?? 0
+      : null
+    const threshold = snapshot.threshold ?? null
 
     return {
       id: session.id,
       timestamp: session.createdAt,
       station_id: session.stationId,
       station_name: session.stationName || `Station ${session.stationId}`,
-      problem_type: session.problemCode.split('_')[0],
+      problem_type: session.problemCode,
       problem_code: session.problemCode,
       category: session.category || 'SYSTEM',
       severity: session.severity,
@@ -144,8 +144,12 @@ export default function AIDiagnostics() {
   const isDesktop = useMediaQuery('(min-width: 900px)')
 
   const loadMoreRef = useRef<HTMLDivElement>(null)
+  // Track if we've already tried fetching at the bottom (prevents repeated attempts)
+  const hasFetchedAtBottom = useRef(false)
 
   // Fetch diagnostic sessions with infinite scroll pagination
+  // NOTE: refetchInterval is disabled - incompatible with infinite scroll
+  // Use manual refresh button instead
   const {
     data,
     isLoading,
@@ -162,11 +166,11 @@ export default function AIDiagnostics() {
       return response.data
     },
     getNextPageParam: (lastPage) => {
-      if (lastPage.last) return undefined
+      // Only provide next page if there's actually more data
+      if (lastPage.last || lastPage.content.length === 0) return undefined
       return lastPage.number + 1
     },
     initialPageParam: 0,
-    refetchInterval: POLLING_INTERVALS.NORMAL,
     staleTime: DISPLAY_LIMITS.SESSION_STALE_TIME_MS,
   })
 
@@ -179,11 +183,37 @@ export default function AIDiagnostics() {
   // Get total count from first page
   const totalCount = data?.pages[0]?.totalElements ?? 0
 
-  // Intersection observer for infinite scroll
+  // Reset the "fetched at bottom" flag only when filter changes (not on data changes)
   useEffect(() => {
+    hasFetchedAtBottom.current = false
+  }, [statusFilter])
+
+  // Reset fetch flag after successful page load (not on scroll)
+  useEffect(() => {
+    if (!isFetchingNextPage && hasNextPage) {
+      // A fetch completed successfully and there's more - allow next fetch
+      hasFetchedAtBottom.current = false
+    }
+  }, [data, isFetchingNextPage, hasNextPage])
+
+  // Intersection observer for infinite scroll
+  // Only attempts fetch ONCE when scrolled to bottom, stops completely when no more data
+  useEffect(() => {
+    // Don't set up observer if:
+    // - Loading
+    // - No more pages
+    // - Clear View is active (all server data would be filtered out anyway)
+    // - Currently fetching next page
+    if (isLoading || !hasNextPage || clearAfter || isFetchingNextPage) return
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+        const isAtBottom = entries[0].isIntersecting
+
+        // Only fetch if at bottom and haven't tried yet
+        // Note: We DON'T reset the flag on scroll-away to prevent race conditions
+        if (isAtBottom && !hasFetchedAtBottom.current) {
+          hasFetchedAtBottom.current = true
           fetchNextPage()
         }
       },
@@ -200,7 +230,7 @@ export default function AIDiagnostics() {
         observer.unobserve(currentRef)
       }
     }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, isLoading, clearAfter])
 
   // Memoize filtered sessions (apply clearAfter filter)
   const displayedSessions = useMemo(() => {
@@ -633,7 +663,7 @@ export default function AIDiagnostics() {
                       Metric Value
                     </Typography>
                     <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--mono-950)', fontWeight: 600 }}>
-                      {event.metric_value > 0 ? `${event.metric_value.toFixed(1)} / ${event.threshold} threshold` : 'N/A'}
+                      {event.metric_value != null ? `${event.metric_value.toFixed(1)} / ${event.threshold} threshold` : 'N/A'}
                     </Typography>
                   </Box>
 
@@ -720,7 +750,7 @@ export default function AIDiagnostics() {
                       {event.problem_type.replace('_', ' ')}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
-                      {event.metric_value > 0 ? `${event.metric_value.toFixed(1)} / ${event.threshold}` : 'N/A'}
+                      {event.metric_value != null ? `${event.metric_value.toFixed(1)} / ${event.threshold}` : 'N/A'}
                     </Typography>
                   </TableCell>
                   <TableCell>

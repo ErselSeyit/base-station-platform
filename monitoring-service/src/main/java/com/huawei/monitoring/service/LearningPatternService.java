@@ -224,11 +224,10 @@ public class LearningPatternService {
         stats.put("autoApplied", autoApplied);
         stats.put("successRate", total > 0 ? (double) resolved / total * 100 : 0.0);
 
-        // Get pattern statistics
+        // Get pattern statistics - show all patterns (no limit)
         List<LearnedPattern> patterns = patternRepository.findAllOrderByTotalCases();
         stats.put("learnedPatterns", patterns.size());
         stats.put("topPatterns", patterns.stream()
-                .limit(5)
                 .map(p -> Map.of(
                         "problemCode", p.getProblemCode(),
                         "successRate", p.getSuccessRate(),

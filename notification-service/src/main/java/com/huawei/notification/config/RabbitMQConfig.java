@@ -22,6 +22,8 @@ public class RabbitMQConfig {
     public static final String NOTIFICATION_QUEUE = MessagingConstants.NOTIFICATION_QUEUE;
     public static final String ALERTS_EXCHANGE = MessagingConstants.ALERTS_EXCHANGE;
     public static final String ALERT_TRIGGERED_ROUTING_KEY = MessagingConstants.ALERT_TRIGGERED_ROUTING_KEY;
+    public static final String DIAGNOSTIC_RESOLUTION_QUEUE = MessagingConstants.DIAGNOSTIC_RESOLUTION_QUEUE;
+    public static final String DIAGNOSTIC_RESOLVED_ROUTING_KEY = MessagingConstants.DIAGNOSTIC_RESOLVED_ROUTING_KEY;
 
     @Bean
     public Exchange alertsExchange() {
@@ -39,6 +41,20 @@ public class RabbitMQConfig {
                 .bind(notificationQueue)
                 .to(alertsExchange)
                 .with(ALERT_TRIGGERED_ROUTING_KEY)
+                .noargs();
+    }
+
+    @Bean("diagnosticResolutionQueue")
+    public Queue diagnosticResolutionQueue() {
+        return new Queue(DIAGNOSTIC_RESOLUTION_QUEUE, true);
+    }
+
+    @Bean
+    public Binding diagnosticResolutionBinding(Queue diagnosticResolutionQueue, Exchange alertsExchange) {
+        return BindingBuilder
+                .bind(diagnosticResolutionQueue)
+                .to(alertsExchange)
+                .with(DIAGNOSTIC_RESOLVED_ROUTING_KEY)
                 .noargs();
     }
 

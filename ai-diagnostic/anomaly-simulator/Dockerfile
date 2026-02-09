@@ -5,7 +5,8 @@ WORKDIR /app
 # Install dependencies
 RUN pip install --no-cache-dir requests
 
-# Copy simulator
+# Copy protocol and simulator
+COPY device_protocol.py .
 COPY anomaly_simulator.py .
 
 # Run simulator

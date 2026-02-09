@@ -4,10 +4,12 @@ import {
   Error as ErrorIcon,
   Info as InfoIcon,
   Warning as WarningIcon,
+  AutoFixHigh as AutoFixHighIcon,
 } from '@mui/icons-material'
 import {
   Box,
   Button,
+  Chip,
   CircularProgress,
   IconButton,
   Skeleton,
@@ -108,8 +110,12 @@ const AlertRow = memo(function AlertRow({ notification, onDelete }: Readonly<Ale
   const severityStyle = SEVERITY_STYLES[notification.type as keyof typeof SEVERITY_STYLES] || SEVERITY_STYLES.INFO
   const severityColor = severityStyle.color
   const isUnread = notification.status === 'UNREAD'
+  const isResolved = notification.status === 'RESOLVED'
   const notificationId = notification.id
   const icon = SEVERITY_ICONS[notification.type as keyof typeof SEVERITY_ICONS] || SEVERITY_ICONS[NotificationType.INFO]
+
+  // Resolved alerts use green color for the left border
+  const borderColor = isResolved ? 'var(--status-active)' : severityColor
 
   return (
     <Box
@@ -118,6 +124,7 @@ const AlertRow = memo(function AlertRow({ notification, onDelete }: Readonly<Ale
         padding: '20px 24px',
         borderBottom: '1px solid var(--surface-border)',
         background: isUnread ? 'var(--surface-elevated)' : 'transparent',
+        opacity: isResolved ? 0.7 : 1,
         '&:hover': {
           background: 'var(--surface-hover)',
         },
@@ -131,7 +138,7 @@ const AlertRow = memo(function AlertRow({ notification, onDelete }: Readonly<Ale
           top: 0,
           bottom: 0,
           width: '3px',
-          background: severityColor,
+          background: borderColor,
         },
       }}
     >
@@ -140,27 +147,42 @@ const AlertRow = memo(function AlertRow({ notification, onDelete }: Readonly<Ale
         <Box
           sx={{
             marginTop: '2px',
-            color: severityColor,
+            color: isResolved ? 'var(--status-active)' : severityColor,
             display: 'flex',
             alignItems: 'center',
           }}
         >
-          {icon}
+          {isResolved ? <AutoFixHighIcon sx={{ fontSize: '16px' }} /> : icon}
         </Box>
 
         {/* Content */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           {/* Header */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
             <Typography
               sx={{
                 fontSize: '0.875rem',
                 fontWeight: 600,
-                color: 'var(--mono-950)',
+                color: isResolved ? 'var(--mono-600)' : 'var(--mono-950)',
               }}
             >
               {notification.stationName || `Station ${notification.stationId}`}
             </Typography>
+            {isResolved && (
+              <Chip
+                icon={<CheckCircleIcon sx={{ fontSize: '14px !important' }} />}
+                label="Resolved by AI"
+                size="small"
+                sx={{
+                  height: '22px',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  backgroundColor: 'var(--status-active)',
+                  color: 'white',
+                  '& .MuiChip-icon': { color: 'white' },
+                }}
+              />
+            )}
             {isUnread && (
               <Box
                 sx={{
@@ -189,24 +211,38 @@ const AlertRow = memo(function AlertRow({ notification, onDelete }: Readonly<Ale
           <Typography
             sx={{
               fontSize: '0.875rem',
-              color: 'var(--mono-700)',
+              color: isResolved ? 'var(--mono-500)' : 'var(--mono-700)',
               lineHeight: 1.6,
               marginBottom: '8px',
+              textDecoration: isResolved ? 'line-through' : 'none',
             }}
           >
             {notification.message}
           </Typography>
 
           {/* Timestamp */}
-          <Typography
-            sx={{
-              fontSize: '0.75rem',
-              fontFamily: "'JetBrains Mono', monospace",
-              color: 'var(--mono-500)',
-            }}
-          >
-            {formatTimestamp(notification.createdAt)}
-          </Typography>
+          <Box sx={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <Typography
+              sx={{
+                fontSize: '0.75rem',
+                fontFamily: "'JetBrains Mono', monospace",
+                color: 'var(--mono-500)',
+              }}
+            >
+              {formatTimestamp(notification.createdAt)}
+            </Typography>
+            {isResolved && notification.resolvedAt && (
+              <Typography
+                sx={{
+                  fontSize: '0.75rem',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  color: 'var(--status-active)',
+                }}
+              >
+                Resolved {formatTimestamp(notification.resolvedAt)}
+              </Typography>
+            )}
+          </Box>
         </Box>
 
         {/* Action */}
@@ -238,7 +274,7 @@ export default function Alerts() {
   const queryClient = useQueryClient()
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
-  // Infinite query for paginated data
+  // Infinite query for paginated data - fetch all statuses to show resolved alerts
   const {
     data,
     isLoading,
@@ -247,9 +283,9 @@ export default function Alerts() {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['notifications-paged', 'UNREAD'],
+    queryKey: ['notifications-paged'],
     queryFn: async ({ pageParam = 0 }) => {
-      const response = await notificationsApi.getPaged(pageParam, PAGE_SIZE, 'UNREAD')
+      const response = await notificationsApi.getPaged(pageParam, PAGE_SIZE)
       return response.data
     },
     getNextPageParam: (lastPage) => {

@@ -28,5 +28,10 @@ public enum ManagementProtocol {
     /**
      * O-RAN protocol - Open RAN interface standard.
      */
-    ORAN
+    ORAN,
+
+    /**
+     * Edge Bridge protocol - communication via edge-bridge gateway.
+     */
+    EDGE_BRIDGE
 }

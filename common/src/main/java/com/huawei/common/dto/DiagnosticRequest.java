@@ -123,12 +123,16 @@ public class DiagnosticRequest {
 
     private static String mapMetricTypeToCode(String metricType) {
         return switch (metricType.toUpperCase()) {
-            case "CPU_USAGE" -> "CPU_OVERHEAT";
+            case "CPU_USAGE", "TEMPERATURE" -> "CPU_OVERHEAT";
             case "MEMORY_USAGE" -> "MEMORY_PRESSURE";
-            case "TEMPERATURE" -> "CPU_OVERHEAT";
             case "SIGNAL_STRENGTH" -> "SIGNAL_DEGRADATION";
-            case "LATENCY" -> "BACKHAUL_LATENCY";
             case "POWER_CONSUMPTION" -> "HIGH_POWER_CONSUMPTION";
+            case "INITIAL_BLER" -> "HIGH_BLOCK_ERROR_RATE";
+            case "BATTERY_SOC" -> "LOW_BATTERY";
+            case "LATENCY_PING" -> "HIGH_LATENCY";
+            case "DATA_THROUGHPUT" -> "LOW_THROUGHPUT";
+            case "HANDOVER_SUCCESS_RATE" -> "HANDOVER_FAILURE";
+            case "INTERFERENCE_LEVEL" -> "HIGH_INTERFERENCE";
             default -> metricType.toUpperCase() + "_ISSUE";
         };
     }

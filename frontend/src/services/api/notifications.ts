@@ -18,8 +18,10 @@ export interface Notification {
   stationName?: string
   message: string
   type: 'ALERT' | 'WARNING' | 'INFO'
-  status: 'UNREAD' | 'READ' | 'SENT' | 'PENDING'
+  status: 'UNREAD' | 'READ' | 'SENT' | 'PENDING' | 'RESOLVED'
   createdAt: string
+  problemId?: string
+  resolvedAt?: string
 }
 
 export interface NotificationCounts {
