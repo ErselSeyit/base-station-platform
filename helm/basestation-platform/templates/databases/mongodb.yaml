@@ -1,0 +1,89 @@
+{{- $db := .Values.databases.mongodb }}
+{{- if $db.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "mongodb") | nindent 4 }}
+    tier: database
+    component: mongodb
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+        tier: database
+        component: mongodb
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: mongodb
+          image: {{ $db.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $db.port }}
+              protocol: TCP
+          env:
+            {{- range $key, $ref := $db.envFromSecrets }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $ref.secret }}
+                  key: {{ $ref.key }}
+            {{- end }}
+          resources:
+            {{- toYaml $db.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml (index .Values.securityPresets "relaxed") | nindent 12 }}
+          livenessProbe:
+            exec:
+              command:
+                {{- toYaml $db.probe.command | nindent 16 }}
+            initialDelaySeconds: {{ $db.probe.livenessInitialDelay }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                {{- toYaml $db.probe.command | nindent 16 }}
+            initialDelaySeconds: {{ $db.probe.readinessInitialDelay }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: {{ $db.dataPath }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mongodb-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "mongodb") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: mongodb
+  ports:
+    - port: {{ $db.port }}
+      targetPort: {{ $db.port }}
+      protocol: TCP
+{{- end }}

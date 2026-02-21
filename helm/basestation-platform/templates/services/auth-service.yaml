@@ -1,0 +1,6 @@
+{{- $svc := index .Values.services "auth-service" }}
+{{- if $svc.enabled }}
+{{ include "basestation.deployment" (dict "root" . "name" "auth-service" "svc" $svc) }}
+---
+{{ include "basestation.service" (dict "root" . "name" "auth-service" "svc" $svc) }}
+{{- end }}

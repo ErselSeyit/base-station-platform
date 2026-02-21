@@ -1,0 +1,4 @@
+{{- $svc := index .Values.services "edge-bridge" }}
+{{- if $svc.enabled }}
+{{ include "basestation.deployment" (dict "root" . "name" "edge-bridge" "svc" $svc) }}
+{{- end }}

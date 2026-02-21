@@ -1,0 +1,33 @@
+# Development/minikube overrides
+# Usage: helm upgrade --install basestation helm/basestation-platform -f helm/basestation-platform/values-dev.yaml
+
+global:
+  storageClass: standard
+
+services:
+  auth-service:
+    replicas: 1
+  base-station-service:
+    replicas: 1
+  monitoring-service:
+    replicas: 1
+  notification-service:
+    replicas: 1
+  api-gateway:
+    replicas: 1
+  ai-diagnostic:
+    replicas: 1
+  frontend:
+    replicas: 1
+
+production:
+  enabled: false
+
+networkPolicies:
+  enabled: false
+
+istio:
+  enabled: false
+
+backups:
+  enabled: false

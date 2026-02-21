@@ -1,0 +1,28 @@
+# Production overrides
+# Usage: helm upgrade --install basestation helm/basestation-platform -f helm/basestation-platform/values-prod.yaml
+
+production:
+  enabled: true
+
+networkPolicies:
+  enabled: true
+
+backups:
+  enabled: true
+
+ingress:
+  enabled: true
+  mode: single-domain
+  host: basestation.example.com
+  apiHost: api.basestation.example.com
+  tlsSecretName: basestation-tls
+
+# PostgreSQL HA (requires CloudNativePG operator)
+# To enable: install CNPG operator first, then uncomment below
+# databases:
+#   postgres:
+#     ha:
+#       enabled: true
+#       instances: 3
+#       monitoring:
+#         enabled: true

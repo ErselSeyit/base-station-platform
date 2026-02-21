@@ -1,0 +1,95 @@
+{{- if .Values.monitoring.enabled }}
+{{- $loki := .Values.monitoring.loki }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+  namespace: {{ .Release.Namespace }}
+data:
+  loki.yaml: |
+    {{ .Files.Get "files/loki.yaml" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "loki") | nindent 4 }}
+    tier: monitoring
+    component: loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+        tier: monitoring
+        component: loki
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: loki
+          image: {{ $loki.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          args:
+            - "-config.file=/etc/loki/loki.yaml"
+          ports:
+            - containerPort: {{ $loki.httpPort }}
+              protocol: TCP
+            - containerPort: {{ $loki.grpcPort }}
+              protocol: TCP
+              name: grpc
+          resources:
+            {{- toYaml $loki.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml (index .Values.securityPresets "relaxed") | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: {{ $loki.httpPort }}
+            initialDelaySeconds: 45
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ $loki.httpPort }}
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki
+            - name: data
+              mountPath: /loki
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: loki-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "loki") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: loki
+  ports:
+    - port: {{ $loki.httpPort }}
+      targetPort: {{ $loki.httpPort }}
+      protocol: TCP
+      name: http
+    - port: {{ $loki.grpcPort }}
+      targetPort: {{ $loki.grpcPort }}
+      protocol: TCP
+      name: grpc
+{{- end }}

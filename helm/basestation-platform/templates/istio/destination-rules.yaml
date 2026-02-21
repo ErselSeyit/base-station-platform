@@ -1,0 +1,188 @@
+{{- if .Values.istio.enabled }}
+---
+# ========== AUTH SERVICE ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: auth-service
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: auth-service
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+        maxRequestsPerConnection: 100
+      tcp:
+        maxConnections: 100
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ========== BASE STATION SERVICE ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: base-station-service
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: base-station-service
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+        maxRequestsPerConnection: 100
+      tcp:
+        maxConnections: 100
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ========== MONITORING SERVICE ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: monitoring-service
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: monitoring-service
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+        maxRequestsPerConnection: 100
+      tcp:
+        maxConnections: 150
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ========== NOTIFICATION SERVICE ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: notification-service
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: notification-service
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+        maxRequestsPerConnection: 50
+      tcp:
+        maxConnections: 50
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ========== AI DIAGNOSTIC ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: ai-diagnostic
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: ai-diagnostic
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+        maxRequestsPerConnection: 20
+      tcp:
+        maxConnections: 30
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 30s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 30
+---
+# ========== API GATEWAY ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: api-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: api-gateway
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+        maxRequestsPerConnection: 200
+      tcp:
+        maxConnections: 200
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ========== POSTGRES ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: postgres
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: postgres
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+---
+# ========== MONGODB ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: mongodb
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: mongodb
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+---
+# ========== REDIS ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: redis
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: redis
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+---
+# ========== RABBITMQ ==========
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: rabbitmq
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: rabbitmq
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+{{- end }}

@@ -1,0 +1,162 @@
+{{- if .Values.istio.enabled }}
+---
+# ========== DEFAULT DENY ==========
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: default-deny
+  namespace: {{ .Release.Namespace }}
+spec: {}
+---
+# ========== ALLOW GATEWAY TO AUTH ==========
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-from-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/api-gateway
+---
+# ========== ALLOW GATEWAY TO BASE STATION ==========
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-gateway-to-basestation
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: base-station-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/api-gateway
+---
+# ========== ALLOW GATEWAY TO MONITORING ==========
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-gateway-to-monitoring
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: monitoring-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/api-gateway
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/base-station-service
+---
+# ========== ALLOW GATEWAY TO NOTIFICATION ==========
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-gateway-to-notification
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: notification-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/api-gateway
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/monitoring-service
+---
+# ========== ALLOW MONITORING TO DIAGNOSTIC ==========
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-monitoring-to-diagnostic
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: ai-diagnostic
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/monitoring-service
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/api-gateway
+---
+# ========== ALLOW EXTERNAL TO GATEWAY ==========
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-external-to-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - istio-system
+      to:
+        - operation:
+            ports:
+              - "8080"
+---
+# ========== ALLOW EXTERNAL TO FRONTEND ==========
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-external-to-frontend
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - istio-system
+      to:
+        - operation:
+            ports:
+              - "80"
+---
+# ========== ALLOW PROMETHEUS SCRAPE ==========
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: {{ .Release.Namespace }}
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - monitoring
+              - {{ .Release.Namespace }}
+      to:
+        - operation:
+            paths:
+              - /actuator/prometheus
+              - /actuator/health
+              - /actuator/health/*
+              - /metrics
+{{- end }}

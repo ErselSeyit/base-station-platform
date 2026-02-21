@@ -1,0 +1,6 @@
+{{- $svc := .Values.services.frontend }}
+{{- if $svc.enabled }}
+{{ include "basestation.deployment" (dict "root" . "name" "frontend" "svc" $svc) }}
+---
+{{ include "basestation.service" (dict "root" . "name" "frontend" "svc" $svc) }}
+{{- end }}

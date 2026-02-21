@@ -1,0 +1,50 @@
+{{- range $name, $db := .Values.databases }}
+{{- if $db.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}-pvc
+  namespace: {{ $.Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $.Values.global.storageClass }}
+  resources:
+    requests:
+      storage: {{ $db.storage }}
+{{- end }}
+{{- end }}
+{{- if .Values.backups.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-pvc
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.global.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.backups.storage }}
+{{- end }}
+{{- if .Values.monitoring.enabled }}
+{{- $monPvcs := dict "prometheus" .Values.monitoring.prometheus "grafana" .Values.monitoring.grafana "zipkin" .Values.monitoring.zipkin "loki" .Values.monitoring.loki }}
+{{- range $name, $mon := $monPvcs }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}-pvc
+  namespace: {{ $.Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $.Values.global.storageClass }}
+  resources:
+    requests:
+      storage: {{ $mon.storage }}
+{{- end }}
+{{- end }}

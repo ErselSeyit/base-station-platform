@@ -1,0 +1,19 @@
+{{- if .Values.production.enabled }}
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: basestation-limits
+  namespace: {{ .Release.Namespace }}
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: {{ .Values.production.limitRange.default.cpu }}
+        memory: {{ .Values.production.limitRange.default.memory }}
+      defaultRequest:
+        cpu: {{ .Values.production.limitRange.defaultRequest.cpu }}
+        memory: {{ .Values.production.limitRange.defaultRequest.memory }}
+    - type: PersistentVolumeClaim
+      max:
+        storage: {{ .Values.production.limitRange.maxPvc }}
+{{- end }}

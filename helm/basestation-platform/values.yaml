@@ -1,0 +1,689 @@
+# =============================================================================
+# GLOBAL
+# =============================================================================
+global:
+  imagePrefix: "basestation-platform-"
+  imageTag: "1.0.0"
+  imagePullPolicy: IfNotPresent
+  storageClass: standard
+
+# =============================================================================
+# RESOURCE PRESETS (mirrors ResourceSpec.java)
+# =============================================================================
+resourcePresets:
+  standard:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  minimal:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  high:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  aiWorkload:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+# =============================================================================
+# SECURITY CONTEXT PRESETS (mirrors SecurityContextSpec.java)
+# =============================================================================
+securityPresets:
+  secure:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+  relaxed:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+
+# =============================================================================
+# APPLICATION SERVICES
+# =============================================================================
+services:
+  auth-service:
+    enabled: true
+    replicas: 1
+    port: 8084
+    tier: backend
+    component: auth
+    resourcePreset: standard
+    securityPreset: secure
+    probes:
+      liveness:
+        path: /actuator/health/liveness
+        initialDelay: 45
+      readiness:
+        path: /actuator/health/readiness
+        initialDelay: 15
+    env:
+      SPRING_PROFILES_ACTIVE: kubernetes
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      JWT_COOKIE_SECURE: "false"
+      AUTH_BRIDGE_USERNAME: edge-bridge
+    envFromSecrets:
+      SPRING_DATASOURCE_USERNAME:
+        secret: postgres-secrets
+        key: username
+      SPRING_DATASOURCE_PASSWORD:
+        secret: postgres-secrets
+        key: password
+      JWT_SECRET:
+        secret: jwt-secret
+        key: secret
+      AUTH_ADMIN_PASSWORD:
+        secret: auth-credentials
+        key: admin-password
+    volumes:
+      - name: tmp-vol
+        type: emptyDir
+        mountPath: /tmp
+
+  base-station-service:
+    enabled: true
+    imageTag: "1.0.2"
+    replicas: 1
+    port: 8081
+    tier: backend
+    component: core
+    resourcePreset: standard
+    securityPreset: secure
+    probes:
+      liveness:
+        path: /actuator/health/liveness
+        initialDelay: 45
+      readiness:
+        path: /actuator/health/readiness
+        initialDelay: 15
+    env:
+      SPRING_PROFILES_ACTIVE: kubernetes
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+    envFromSecrets:
+      SPRING_DATASOURCE_USERNAME:
+        secret: postgres-secrets
+        key: username
+      SPRING_DATASOURCE_PASSWORD:
+        secret: postgres-secrets
+        key: password
+      SECURITY_INTERNAL_SECRET:
+        secret: security-internal-secret
+        key: secret
+    volumes:
+      - name: tmp-vol
+        type: emptyDir
+        mountPath: /tmp
+
+  monitoring-service:
+    enabled: true
+    imageTag: "1.0.2"
+    replicas: 1
+    port: 8082
+    tier: backend
+    component: monitoring
+    resourcePreset: high
+    securityPreset: secure
+    probes:
+      liveness:
+        path: /actuator/health/liveness
+        initialDelay: 60
+      readiness:
+        path: /actuator/health/readiness
+        initialDelay: 20
+    env:
+      SPRING_PROFILES_ACTIVE: kubernetes
+      DIAGNOSTIC_SERVICE_URL: http://ai-diagnostic:9091
+    envFromSecrets:
+      SPRING_DATA_MONGODB_USERNAME:
+        secret: mongodb-secret
+        key: username
+      SPRING_DATA_MONGODB_PASSWORD:
+        secret: mongodb-secret
+        key: password
+      SPRING_RABBITMQ_USERNAME:
+        secret: rabbitmq-secret
+        key: username
+      SPRING_RABBITMQ_PASSWORD:
+        secret: rabbitmq-secret
+        key: password
+      SECURITY_INTERNAL_SECRET:
+        secret: security-internal-secret
+        key: secret
+    volumes:
+      - name: tmp-vol
+        type: emptyDir
+        mountPath: /tmp
+
+  notification-service:
+    enabled: true
+    replicas: 1
+    port: 8083
+    tier: backend
+    component: notification
+    resourcePreset: standard
+    securityPreset: secure
+    probes:
+      liveness:
+        path: /actuator/health/liveness
+        initialDelay: 45
+      readiness:
+        path: /actuator/health/readiness
+        initialDelay: 15
+    env:
+      SPRING_PROFILES_ACTIVE: kubernetes
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+    envFromSecrets:
+      SPRING_DATASOURCE_USERNAME:
+        secret: postgres-secrets
+        key: username
+      SPRING_DATASOURCE_PASSWORD:
+        secret: postgres-secrets
+        key: password
+      SPRING_RABBITMQ_USERNAME:
+        secret: rabbitmq-secret
+        key: username
+      SPRING_RABBITMQ_PASSWORD:
+        secret: rabbitmq-secret
+        key: password
+      SECURITY_INTERNAL_SECRET:
+        secret: security-internal-secret
+        key: secret
+    volumes:
+      - name: tmp-vol
+        type: emptyDir
+        mountPath: /tmp
+
+  api-gateway:
+    enabled: true
+    imageTag: "1.0.1"
+    replicas: 1
+    port: 8080
+    tier: gateway
+    component: api
+    resourcePreset: high
+    securityPreset: secure
+    probes:
+      liveness:
+        path: /actuator/health/liveness
+        initialDelay: 30
+      readiness:
+        path: /actuator/health/readiness
+        initialDelay: 10
+    env:
+      SPRING_PROFILES_ACTIVE: kubernetes
+      SPRING_DATA_REDIS_HOST: redis
+    envFromSecrets:
+      SECURITY_INTERNAL_SECRET:
+        secret: security-internal-secret
+        key: secret
+      JWT_SECRET:
+        secret: jwt-secret
+        key: secret
+    volumes:
+      - name: tmp-vol
+        type: emptyDir
+        mountPath: /tmp
+
+  ai-diagnostic:
+    enabled: true
+    replicas: 1
+    port: 9091
+    tier: ai
+    component: diagnostic
+    resourcePreset: aiWorkload
+    securityPreset: relaxed
+    probes:
+      liveness:
+        path: /health
+        initialDelay: 30
+      readiness:
+        path: /health
+        initialDelay: 10
+    env:
+      DIAGNOSTIC_REQUIRE_AUTH: "true"
+      CLOUD_URL: http://api-gateway:8080
+      MONITORING_SERVICE_URL: http://monitoring-service:8082
+      ANOMALY_SIMULATOR_URL: http://anomaly-simulator:8099
+      HEALING_VERIFY_DELAY: "45"
+      BASE_STATION_SERVICE_URL: http://base-station-service:8081
+    envFromSecrets:
+      CLOUD_USER:
+        secret: auth-credentials
+        key: admin-username
+      CLOUD_PASSWORD:
+        secret: auth-credentials
+        key: admin-password
+      DIAGNOSTIC_SECRET:
+        secret: security-internal-secret
+        key: secret
+      SECURITY_INTERNAL_SECRET:
+        secret: security-internal-secret
+        key: secret
+
+  frontend:
+    enabled: true
+    replicas: 1
+    port: 80
+    tier: frontend
+    component: ui
+    resourcePreset: minimal
+    securityPreset: relaxed
+    serviceType: NodePort
+    probes:
+      liveness:
+        path: /
+        initialDelay: 10
+      readiness:
+        path: /
+        initialDelay: 5
+
+  edge-bridge:
+    enabled: true
+    imageTag: "1.0.1"
+    replicas: 1
+    tier: edge
+    component: bridge
+    resourcePreset: minimal
+    securityPreset: relaxed
+    createService: false
+    env:
+      STATION_ID: BS-001
+      STATION_NAME: Istanbul Base Station
+      STATION_TYPE: MACRO_CELL
+      STATION_LOCATION: Istanbul, Turkey
+      STATION_LATITUDE: "41.0082"
+      STATION_LONGITUDE: "28.9784"
+      STATION_DESCRIPTION: Primary 5G NR base station
+      CLOUD_BASE_URL: http://api-gateway:8080
+      BRIDGE_USERNAME: edge-bridge
+      DEVICE_HOST: device-simulator
+      DEVICE_PORT: "9999"
+    envFromSecrets:
+      BRIDGE_PASSWORD:
+        secret: edge-bridge-secret
+        key: password
+
+  device-simulator:
+    enabled: true
+    imageTag: "1.0.1"
+    replicas: 1
+    port: 9999
+    tier: edge
+    component: simulator
+    resourcePreset: minimal
+    securityPreset: relaxed
+    additionalPorts:
+      - name: control-api
+        port: 8098
+    probes:
+      liveness:
+        type: tcp
+        initialDelay: 10
+        period: 30
+      readiness:
+        type: tcp
+        initialDelay: 5
+        period: 10
+    env:
+      STATION_ID: MIPS-BS-001
+      STATION_NAME: Virtual-5G-Station-001
+      API_GATEWAY_URL: http://api-gateway:8080
+    envFromSecrets:
+      AUTH_ADMIN_PASSWORD:
+        secret: auth-credentials
+        key: admin-password
+
+  anomaly-simulator:
+    enabled: true
+    imageTag: "1.0.1"
+    replicas: 1
+    tier: testing
+    component: simulator
+    resourcePreset: standard
+    securityPreset: relaxed
+    port: 8099
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+    env:
+      DEVICE_SIMULATOR_URL: http://device-simulator:8098
+      AI_DIAGNOSTIC_URL: http://ai-diagnostic:9091
+      STATION_ID: "1"
+      STATION_NAME: BS-001
+      ANOMALY_CHECK_INTERVAL: "30"
+      CONTROL_API_PORT: "8099"
+    envFromSecrets:
+      SECURITY_INTERNAL_SECRET:
+        secret: security-internal-secret
+        key: secret
+
+# =============================================================================
+# DATABASES
+# =============================================================================
+databases:
+  postgres:
+    enabled: true
+    image: postgres:18-alpine
+    port: 5432
+    storage: 10Gi
+    dataPath: /var/lib/postgresql/data
+    resources:
+      requests:
+        cpu: 500m
+        memory: 256Mi
+      limits:
+        cpu: 1500m
+        memory: 768Mi
+    probe:
+      command: ["pg_isready", "-U", "postgres"]
+      livenessInitialDelay: 30
+      readinessInitialDelay: 5
+    env:
+      POSTGRES_MULTIPLE_DATABASES: basestationdb,notificationdb,authdb
+    envFromSecrets:
+      POSTGRES_USER:
+        secret: postgres-secrets
+        key: username
+      POSTGRES_PASSWORD:
+        secret: postgres-secrets
+        key: password
+    # High Availability via CloudNativePG operator
+    # Requires: kubectl apply -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-1.25.1.yaml
+    ha:
+      enabled: false
+      instances: 3
+      primaryUpdateStrategy: unsupervised
+      monitoring:
+        enabled: true
+      backup:
+        retentionPolicy: "30d"
+
+  mongodb:
+    enabled: true
+    image: "mongo:8.2"
+    port: 27017
+    storage: 20Gi
+    dataPath: /data/db
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    probe:
+      command: ["mongosh", "--eval", "db.adminCommand('ping')"]
+      livenessInitialDelay: 30
+      readinessInitialDelay: 5
+    envFromSecrets:
+      MONGO_INITDB_ROOT_USERNAME:
+        secret: mongodb-secret
+        key: username
+      MONGO_INITDB_ROOT_PASSWORD:
+        secret: mongodb-secret
+        key: password
+
+  redis:
+    enabled: true
+    image: "redis:8-alpine"
+    port: 6379
+    storage: 2Gi
+    dataPath: /data
+    resources:
+      requests:
+        cpu: 250m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 128Mi
+    probe:
+      command: ["redis-cli", "ping"]
+      livenessInitialDelay: 10
+      readinessInitialDelay: 5
+
+  rabbitmq:
+    enabled: true
+    image: "rabbitmq:4-management-alpine"
+    port: 5672
+    managementPort: 15672
+    storage: 5Gi
+    dataPath: /var/lib/rabbitmq
+    resources:
+      requests:
+        cpu: 250m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    probe:
+      command: ["rabbitmq-diagnostics", "ping"]
+      livenessInitialDelay: 30
+      readinessInitialDelay: 10
+    envFromSecrets:
+      RABBITMQ_DEFAULT_USER:
+        secret: rabbitmq-secret
+        key: username
+      RABBITMQ_DEFAULT_PASS:
+        secret: rabbitmq-secret
+        key: password
+
+# =============================================================================
+# MONITORING (toggleable)
+# =============================================================================
+monitoring:
+  enabled: true
+
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    port: 9090
+    storage: 20Gi
+    serviceType: NodePort
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    port: 3000
+    storage: 5Gi
+    serviceType: NodePort
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+
+  zipkin:
+    image: openzipkin/zipkin:2.24
+    port: 9411
+    storage: 10Gi
+    serviceType: NodePort
+    resources:
+      requests:
+        cpu: 250m
+        memory: 768Mi
+      limits:
+        cpu: 1000m
+        memory: 1536Mi
+
+  loki:
+    image: grafana/loki:2.9.3
+    httpPort: 3100
+    grpcPort: 9096
+    storage: 30Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+  promtail:
+    image: grafana/promtail:2.9.3
+    port: 9080
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+# =============================================================================
+# INGRESS
+# =============================================================================
+ingress:
+  enabled: true
+  className: nginx
+  mode: single-domain
+  host: basestation.local
+  apiHost: api.basestation.local
+  tlsSecretName: basestation-tls
+
+# =============================================================================
+# PRODUCTION ENHANCEMENTS (toggleable)
+# =============================================================================
+production:
+  enabled: false
+
+  hpa:
+    api-gateway:
+      min: 2
+      max: 10
+      cpuTarget: 70
+      memoryTarget: 80
+      aggressiveScaling: true
+    auth-service:
+      min: 2
+      max: 5
+      cpuTarget: 70
+    monitoring-service:
+      min: 2
+      max: 8
+      cpuTarget: 70
+      memoryTarget: 80
+    base-station-service:
+      min: 2
+      max: 5
+      cpuTarget: 70
+    notification-service:
+      min: 1
+      max: 3
+      cpuTarget: 70
+
+  pdb:
+    - name: api-gateway-pdb
+      app: api-gateway
+      minAvailable: 1
+    - name: auth-service-pdb
+      app: auth-service
+      minAvailable: 1
+    - name: monitoring-service-pdb
+      app: monitoring-service
+      minAvailable: 1
+    - name: postgres-pdb
+      app: postgres
+      minAvailable: 1
+    - name: mongodb-pdb
+      app: mongodb
+      minAvailable: 1
+
+  resourceQuota:
+    requests:
+      cpu: "20"
+      memory: 40Gi
+    limits:
+      cpu: "40"
+      memory: 80Gi
+    pvcs: "10"
+    pods: "50"
+
+  limitRange:
+    default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    maxPvc: 20Gi
+
+  priorityClasses:
+    - name: basestation-critical
+      value: 1000000
+      globalDefault: false
+      description: Critical base station platform services
+    - name: basestation-high
+      value: 100000
+      globalDefault: false
+      description: High priority base station services
+    - name: basestation-normal
+      value: 10000
+      globalDefault: true
+      description: Normal priority base station services
+
+# =============================================================================
+# BACKUPS (toggleable)
+# =============================================================================
+backups:
+  enabled: false
+  storage: 50Gi
+  retentionDays: 30
+
+  postgres:
+    schedule: "0 2 * * *"
+    databases:
+      - authdb
+      - basestationdb
+      - notificationdb
+
+  mongodb:
+    schedule: "30 2 * * *"
+
+  verification:
+    schedule: "0 3 * * 0"
+
+# =============================================================================
+# NETWORK POLICIES (toggleable)
+# =============================================================================
+networkPolicies:
+  enabled: false
+
+# =============================================================================
+# ISTIO (toggleable)
+# =============================================================================
+istio:
+  enabled: false

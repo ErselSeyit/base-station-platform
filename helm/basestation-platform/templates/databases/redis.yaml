@@ -1,0 +1,81 @@
+{{- $db := .Values.databases.redis }}
+{{- if $db.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "redis") | nindent 4 }}
+    tier: database
+    component: redis
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        tier: database
+        component: redis
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: redis
+          image: {{ $db.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $db.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml $db.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml (index .Values.securityPresets "relaxed") | nindent 12 }}
+          livenessProbe:
+            exec:
+              command:
+                {{- toYaml $db.probe.command | nindent 16 }}
+            initialDelaySeconds: {{ $db.probe.livenessInitialDelay }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                {{- toYaml $db.probe.command | nindent 16 }}
+            initialDelaySeconds: {{ $db.probe.readinessInitialDelay }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: {{ $db.dataPath }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: redis-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "redis") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - port: {{ $db.port }}
+      targetPort: {{ $db.port }}
+      protocol: TCP
+{{- end }}

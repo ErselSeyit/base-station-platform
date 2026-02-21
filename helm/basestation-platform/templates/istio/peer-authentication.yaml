@@ -1,0 +1,41 @@
+{{- if .Values.istio.enabled }}
+---
+# ========== NAMESPACE-WIDE STRICT mTLS ==========
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: {{ .Release.Namespace }}
+spec:
+  mtls:
+    mode: STRICT
+---
+# ========== API GATEWAY PERMISSIVE mTLS ==========
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: api-gateway-permissive
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  mtls:
+    mode: PERMISSIVE
+  portLevelMtls:
+    8080:
+      mode: PERMISSIVE
+---
+# ========== FRONTEND PERMISSIVE mTLS ==========
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: frontend-permissive
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  mtls:
+    mode: PERMISSIVE
+{{- end }}

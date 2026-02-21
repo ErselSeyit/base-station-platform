@@ -1,0 +1,15 @@
+{{- if .Values.production.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: basestation-quota
+  namespace: {{ .Release.Namespace }}
+spec:
+  hard:
+    requests.cpu: {{ .Values.production.resourceQuota.requests.cpu | quote }}
+    requests.memory: {{ .Values.production.resourceQuota.requests.memory }}
+    limits.cpu: {{ .Values.production.resourceQuota.limits.cpu | quote }}
+    limits.memory: {{ .Values.production.resourceQuota.limits.memory }}
+    persistentvolumeclaims: {{ .Values.production.resourceQuota.pvcs | quote }}
+    pods: {{ .Values.production.resourceQuota.pods | quote }}
+{{- end }}

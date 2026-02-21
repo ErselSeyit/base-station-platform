@@ -1,0 +1,86 @@
+{{- $db := .Values.databases.postgres }}
+{{- if and $db.enabled (default false (dig "ha" "enabled" false $db)) }}
+# CloudNativePG Cluster for PostgreSQL High Availability
+# Requires the CloudNativePG operator to be installed in the cluster:
+#   kubectl apply -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-1.25.1.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-cluster
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "postgres-cluster") | nindent 4 }}
+    tier: database
+    component: postgres
+spec:
+  instances: {{ $db.ha.instances | default 3 }}
+  imageName: ghcr.io/cloudnative-pg/postgresql:{{ regexReplaceAll "-alpine$" $db.image "" | trimPrefix "postgres:" }}
+
+  primaryUpdateStrategy: {{ $db.ha.primaryUpdateStrategy | default "unsupervised" }}
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "256MB"
+      effective_cache_size: "512MB"
+      work_mem: "4MB"
+      maintenance_work_mem: "64MB"
+      wal_level: "replica"
+      max_wal_senders: "10"
+      max_replication_slots: "10"
+
+  bootstrap:
+    initdb:
+      database: basestationdb
+      owner: app
+      secret:
+        name: postgres-secrets
+      postInitSQL:
+        - CREATE DATABASE notificationdb OWNER app
+        - CREATE DATABASE authdb OWNER app
+
+  storage:
+    size: {{ $db.storage }}
+    {{- if .Values.global.storageClass }}
+    storageClass: {{ .Values.global.storageClass }}
+    {{- end }}
+
+  resources:
+    {{- toYaml $db.resources | nindent 4 }}
+
+  {{- if $db.ha.monitoring.enabled | default false }}
+  monitoring:
+    enablePodMonitor: true
+  {{- end }}
+
+  {{- if $db.ha.backup }}
+  backup:
+    retentionPolicy: {{ $db.ha.backup.retentionPolicy | default "30d" }}
+  {{- end }}
+
+  # Affinity: spread replicas across nodes
+  affinity:
+    topologyKey: kubernetes.io/hostname
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                  - linux
+
+---
+# Service pointing to the CNPG cluster's read-write endpoint
+# This keeps the same service name so existing services don't need reconfiguration
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "postgres") | nindent 4 }}
+spec:
+  type: ExternalName
+  externalName: postgres-cluster-rw.{{ .Release.Namespace }}.svc.cluster.local
+{{- end }}

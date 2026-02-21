@@ -1,0 +1,6 @@
+apiVersion: v2
+name: basestation-platform
+description: Base Station Operations & Maintenance Platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

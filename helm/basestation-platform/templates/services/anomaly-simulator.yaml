@@ -1,0 +1,6 @@
+{{- $svc := index .Values.services "anomaly-simulator" }}
+{{- if $svc.enabled }}
+{{ include "basestation.deployment" (dict "root" . "name" "anomaly-simulator" "svc" $svc) }}
+---
+{{ include "basestation.service" (dict "root" . "name" "anomaly-simulator" "svc" $svc) }}
+{{- end }}

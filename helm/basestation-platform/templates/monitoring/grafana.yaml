@@ -1,0 +1,110 @@
+{{- if .Values.monitoring.enabled }}
+{{- $graf := .Values.monitoring.grafana }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: {{ .Release.Namespace }}
+data:
+  datasources.yaml: |
+    {{ .Files.Get "files/grafana-datasources.yml" | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: {{ .Release.Namespace }}
+data:
+  dashboard.yml: |
+    {{ .Files.Get "files/grafana-dashboard-provider.yml" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "grafana") | nindent 4 }}
+    tier: monitoring
+    component: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+        tier: monitoring
+        component: grafana
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: grafana
+          image: {{ $graf.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $graf.port }}
+              protocol: TCP
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-secret
+                  key: password
+            - name: GF_INSTALL_PLUGINS
+              value: "grafana-piechart-panel"
+          resources:
+            {{- toYaml $graf.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml (index .Values.securityPresets "relaxed") | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ $graf.port }}
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ $graf.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/grafana
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-pvc
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "grafana") | nindent 4 }}
+spec:
+  type: {{ $graf.serviceType | default "ClusterIP" }}
+  selector:
+    app: grafana
+  ports:
+    - port: {{ $graf.port }}
+      targetPort: {{ $graf.port }}
+      protocol: TCP
+      name: http
+{{- end }}

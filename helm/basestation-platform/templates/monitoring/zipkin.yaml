@@ -1,0 +1,77 @@
+{{- if .Values.monitoring.enabled }}
+{{- $zip := .Values.monitoring.zipkin }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zipkin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "zipkin") | nindent 4 }}
+    tier: monitoring
+    component: zipkin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zipkin
+  template:
+    metadata:
+      labels:
+        app: zipkin
+        tier: monitoring
+        component: zipkin
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: zipkin
+          image: {{ $zip.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $zip.port }}
+              protocol: TCP
+          env:
+            - name: STORAGE_TYPE
+              value: "mem"
+            - name: JAVA_OPTS
+              value: "-Xms512m -Xmx1024m"
+          resources:
+            {{- toYaml $zip.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml (index .Values.securityPresets "relaxed") | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ $zip.port }}
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ $zip.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /zipkin/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: zipkin-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zipkin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "basestation.labels" (dict "root" . "name" "zipkin") | nindent 4 }}
+spec:
+  type: {{ $zip.serviceType | default "ClusterIP" }}
+  selector:
+    app: zipkin
+  ports:
+    - port: {{ $zip.port }}
+      targetPort: {{ $zip.port }}
+      protocol: TCP
+      name: http
+{{- end }}

@@ -1,0 +1,26 @@
+Base Station Platform has been deployed to namespace: {{ .Release.Namespace }}
+
+Components deployed:
+  - Application services (auth, base-station, monitoring, notification, api-gateway, ai-diagnostic, frontend)
+  - Databases (PostgreSQL, MongoDB, Redis, RabbitMQ)
+{{- if .Values.monitoring.enabled }}
+  - Monitoring stack (Prometheus, Grafana, Zipkin, Loki, Promtail)
+{{- end }}
+{{- if .Values.production.enabled }}
+  - Production features (HPAs, PDBs, ResourceQuotas, PriorityClasses)
+{{- end }}
+{{- if .Values.backups.enabled }}
+  - Backup CronJobs (PostgreSQL, MongoDB, verification)
+{{- end }}
+{{- if .Values.networkPolicies.enabled }}
+  - Network policies (zero-trust)
+{{- end }}
+{{- if .Values.istio.enabled }}
+  - Istio service mesh (mTLS, authorization policies)
+{{- end }}
+
+Check pod status:
+  kubectl get pods -n {{ .Release.Namespace }}
+
+View logs:
+  kubectl logs -n {{ .Release.Namespace }} <pod-name> --tail=100
