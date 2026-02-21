@@ -1,95 +1,70 @@
 # Base Station Operations & Maintenance Platform
 
 ```mermaid
-graph LR
-    User[Browser]
-    Ingress[NGINX Ingress<br/>basestation.local]
+graph TB
+    User([Browser]) --> Ingress
 
-    subgraph FRONTEND
-        FE[Frontend<br/>React/nginx :3000]
+    subgraph Ingress Layer
+        Ingress[NGINX Ingress<br/>basestation.local]
     end
 
-    subgraph GATEWAY
-        GW[API Gateway<br/>:8080]
+    Ingress -->|"/ "| FE
+    Ingress -->|"/api"| FE
+    Ingress -->|"/ws"| MS
+
+    subgraph Cloud Platform
+        FE[Frontend<br/>React · nginx · :3000] -->|"/api proxy"| GW[API Gateway · :8080]
+
+        GW --> AS[Auth Service · :8084]
+        GW --> BS[Base Station · :8081]
+        GW --> MS[Monitoring · :8082]
+        GW --> NS[Notification · :8083]
+
+        MS -->|diagnose| AI[AI Diagnostic<br/>Python · :9091]
+        MS -.->|publish| RMQ
+        RMQ -.->|subscribe| NS
     end
 
-    subgraph SERVICES["Application Services"]
-        AS[Auth<br/>:8084]
-        BS[Base Station<br/>:8081]
-        MS[Monitoring<br/>:8082]
-        NS[Notification<br/>:8083]
+    subgraph Edge Layer
+        EB[Edge Bridge · Go] --> GW
+        DS[Device Simulator · :9999] --> EB
+        FS[Fault Orchestrator · :8099] --> DS
+        FS -->|validate| AI
     end
 
-    subgraph AI["AI Engine"]
-        AID[AI Diagnostic<br/>Python :9091]
+    subgraph Data Layer
+        AS & BS & NS --> PG[(PostgreSQL · :5432)]
+        MS --> MDB[(MongoDB · :27017)]
+        GW --> REDIS[(Redis · :6379)]
+        RMQ[(RabbitMQ · :5672)]
     end
 
-    subgraph EDGE["Edge Layer"]
-        EB[Edge Bridge<br/>Go]
-        DS[Device Simulator<br/>:9999]
-        FS[Fault Orchestrator<br/>:8099]
+    subgraph Observability
+        PROM[Prometheus · :9090] -.->|scrape| GW & AS & BS & MS & NS
+        GRAF[Grafana · :3001] -.-> PROM
+        GRAF -.-> LOKI[Loki · :3100]
+        ZIP[Zipkin · :9411] -.->|traces| MS
     end
 
-    subgraph DATA["Data Layer"]
-        PG[(PostgreSQL<br/>:5432)]
-        MDB[(MongoDB<br/>:27017)]
-        REDIS[(Redis<br/>:6379)]
-        RMQ[(RabbitMQ<br/>:5672)]
-    end
-
-    subgraph OBS["Observability"]
-        PROM[Prometheus<br/>:9090]
-        GRAF[Grafana<br/>:3001]
-        ZIP[Zipkin<br/>:9411]
-        LOKI[Loki<br/>:3100]
-    end
-
-    User --> Ingress
-    Ingress -->|/| FE
-    Ingress -->|/api| FE
-    Ingress -->|/ws| MS
-    FE -->|/api proxy| GW
-
-    GW --> AS & BS & MS & NS
-    GW --> REDIS
-
-    AS --> PG
-    BS --> PG
-    NS --> PG
-    MS --> MDB
-
-    MS -.-> RMQ
-    RMQ -.-> NS
-    MS --> AID
-
-    EB --> GW
-    DS --> EB
-    FS --> DS
-    FS --> AID
-
-    PROM -.-> GW & AS & BS & MS & NS
-    GRAF -.-> PROM & LOKI
-    ZIP -.-> MS
-
-    style Ingress fill:#e65100,color:#fff
-    style GW fill:#1976d2,color:#fff
-    style FE fill:#4caf50,color:#fff
-    style AS fill:#ff9800,color:#fff
-    style BS fill:#9c27b0,color:#fff
-    style MS fill:#f44336,color:#fff
-    style NS fill:#00bcd4,color:#fff
-    style AID fill:#667eea,color:#fff
-    style EB fill:#ff9800,color:#fff
-    style DS fill:#795548,color:#fff
-    style FS fill:#795548,color:#fff
-    style PG fill:#316192,color:#fff
-    style MDB fill:#47a248,color:#fff
-    style REDIS fill:#dc382d,color:#fff
-    style RMQ fill:#ff6f00,color:#fff
-    style PROM fill:#e6522c,color:#fff
-    style GRAF fill:#f46800,color:#fff
-    style ZIP fill:#4a90d9,color:#fff
-    style LOKI fill:#2c3e50,color:#fff
+    style Ingress fill:#e65100,color:#fff,stroke:#e65100
+    style FE fill:#4caf50,color:#fff,stroke:#4caf50
+    style GW fill:#1976d2,color:#fff,stroke:#1976d2
+    style AS fill:#ff9800,color:#fff,stroke:#ff9800
+    style BS fill:#7b1fa2,color:#fff,stroke:#7b1fa2
+    style MS fill:#d32f2f,color:#fff,stroke:#d32f2f
+    style NS fill:#00838f,color:#fff,stroke:#00838f
+    style AI fill:#667eea,color:#fff,stroke:#667eea
+    style EB fill:#ef6c00,color:#fff,stroke:#ef6c00
+    style DS fill:#5d4037,color:#fff,stroke:#5d4037
+    style FS fill:#5d4037,color:#fff,stroke:#5d4037
+    style PG fill:#336791,color:#fff,stroke:#336791
+    style MDB fill:#47a248,color:#fff,stroke:#47a248
+    style REDIS fill:#dc382d,color:#fff,stroke:#dc382d
+    style RMQ fill:#ff6f00,color:#fff,stroke:#ff6f00
+    style PROM fill:#e6522c,color:#fff,stroke:#e6522c
+    style GRAF fill:#f46800,color:#fff,stroke:#f46800
+    style LOKI fill:#2c3e50,color:#fff,stroke:#2c3e50
+    style ZIP fill:#4a90d9,color:#fff,stroke:#4a90d9
 ```
 
 <div align="center">
