@@ -8,13 +8,10 @@ on:
 
 permissions:
   contents: read
-  packages: write
   security-events: write
 
 env:
   JAVA_VERSION: '21'
-  REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository }}
 
 jobs:
   # ============================================
@@ -152,50 +149,3 @@ jobs:
       - name: Template renders without errors
         run: helm template basestation helm/basestation-platform > /dev/null
 
-  # ============================================
-  # Build Docker Images
-  # ============================================
-  docker:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      packages: write
-
-    strategy:
-      matrix:
-        service:
-          - api-gateway
-          - base-station-service
-          - monitoring-service
-          - notification-service
-          - auth-service
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Build JAR
-        run: mvn clean package -DskipTests -pl ${{ matrix.service }} -am -B
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
-        run: |
-          IMAGE_NAME=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest" | tr '[:upper:]' '[:lower:]')
-          docker build -f ${{ matrix.service }}/Dockerfile -t $IMAGE_NAME .
-          docker push $IMAGE_NAME
