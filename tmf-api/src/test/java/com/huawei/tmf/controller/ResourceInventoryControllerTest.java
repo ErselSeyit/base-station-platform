@@ -30,6 +30,7 @@ import java.util.*;
  */
 @WebMvcTest(ResourceInventoryController.class)
 @Import(TestSecurityConfig.class)
+@SuppressWarnings("null") // Mockito stubs and MockMvc return types are validated by test framework
 class ResourceInventoryControllerTest {
 
     @Autowired

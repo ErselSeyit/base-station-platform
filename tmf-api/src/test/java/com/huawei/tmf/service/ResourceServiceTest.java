@@ -15,13 +15,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.MongoTemplate;
 
-import java.time.Instant;
 import java.util.*;
 
 /**
  * Unit tests for ResourceService.
  */
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null") // Mockito stubs are validated by test framework
 class ResourceServiceTest {
 
     @Mock
