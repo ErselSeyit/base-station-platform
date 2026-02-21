@@ -1,0 +1,42 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '18px', 'fontFamily': 'Arial' }}}%%
+flowchart TB
+    subgraph CLOUD["CLOUD"]
+        FE[Frontend\nReact :3000]
+        GW[API Gateway\n:8080]
+
+        AUTH[Auth Service\n:8084]
+        BS[Base Station\n:8081]
+        MON[Monitoring\n:8082]
+        NOTIF[Notification\n:8083]
+
+        AI[AI Diagnostic\nPython :9091]
+
+        PG[(PostgreSQL)]
+        MONGO[(MongoDB)]
+        REDIS[(Redis)]
+        RMQ[(RabbitMQ)]
+    end
+
+    subgraph EDGE["EDGE"]
+        BRIDGE[Edge Bridge\nGo]
+        DEV1[MIPS Device]
+        DEV2[ARM Device]
+    end
+
+    FE --> GW
+    GW --> AUTH & BS & MON & NOTIF
+
+    AUTH & BS & NOTIF --> PG
+    MON --> MONGO
+    GW --> REDIS
+    MON <--> RMQ
+    RMQ --> NOTIF & AI
+    MON <--> AI
+
+    BRIDGE --> MON
+    DEV1 & DEV2 --> BRIDGE
+
+    style FE fill:#4CAF50,color:#fff
+    style GW fill:#2196F3,color:#fff
+    style AI fill:#9C27B0,color:#fff
+    style BRIDGE fill:#FF9800,color:#fff

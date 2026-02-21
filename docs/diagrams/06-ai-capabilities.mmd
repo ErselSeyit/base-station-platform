@@ -1,0 +1,25 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '18px' }}}%%
+flowchart LR
+    subgraph DETECT["DETECTION"]
+        D1[Anomaly Detection]
+        D2[Alarm Correlation]
+        D3[Predictive Maintenance]
+    end
+
+    subgraph ANALYZE["ANALYSIS"]
+        A1[Root Cause Analysis]
+        A2[Digital Twin]
+        A3[Traffic Prediction]
+    end
+
+    subgraph ACTION["ACTION"]
+        C1[Self-Healing]
+        C2[SON Functions]
+        C3[Rollback Engine]
+    end
+
+    DETECT --> ANALYZE --> ACTION
+
+    style D1 fill:#2196F3,color:#fff
+    style A1 fill:#9C27B0,color:#fff
+    style C1 fill:#4CAF50,color:#fff

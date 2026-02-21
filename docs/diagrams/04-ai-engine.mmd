@@ -1,0 +1,25 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '18px' }}}%%
+flowchart TB
+    subgraph INPUT["Input Protocols"]
+        TCP[TCP :9090]
+        HTTP[HTTP :9091]
+        MQTT[MQTT]
+        WS[WebSocket]
+    end
+
+    subgraph ENGINE["Diagnostic Engine"]
+        RULES[Rule-Based\n30+ Rules]
+        LLM[Ollama LLM\nLLaMA/Mistral]
+        LEARN[Learning Engine]
+    end
+
+    subgraph OUTPUT["Output"]
+        SOL[Solution\nAction + Commands\nConfidence Score]
+    end
+
+    INPUT --> ENGINE --> OUTPUT
+
+    style RULES fill:#4CAF50,color:#fff
+    style LLM fill:#9C27B0,color:#fff
+    style LEARN fill:#2196F3,color:#fff
+    style SOL fill:#FF9800,color:#fff

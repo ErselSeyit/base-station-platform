@@ -1,0 +1,31 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px' }}}%%
+flowchart TB
+    subgraph APP["Application Services (7)"]
+        direction LR
+        FE[frontend :3000]
+        GW[api-gateway :8080]
+        AUTH[auth :8084]
+        BS[base-station :8081]
+        MON[monitoring :8082]
+        NOTIF[notification :8083]
+        AI[ai-diagnostic :9091]
+    end
+
+    subgraph DB["Databases (4)"]
+        direction LR
+        PG[(PostgreSQL :5432)]
+        MONGO[(MongoDB :27017)]
+        REDIS[(Redis :6379)]
+        RMQ[(RabbitMQ :5672)]
+    end
+
+    subgraph OBS["Observability (3)"]
+        direction LR
+        PROM[Prometheus :9090]
+        GRAF[Grafana :3001]
+        ZIP[Zipkin :9411]
+    end
+
+    style FE fill:#4CAF50,color:#fff
+    style GW fill:#2196F3,color:#fff
+    style AI fill:#9C27B0,color:#fff

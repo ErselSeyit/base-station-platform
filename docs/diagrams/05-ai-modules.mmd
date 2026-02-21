@@ -1,0 +1,28 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px' }}}%%
+flowchart TB
+    subgraph L1["Layer 1: Protocol Adapters"]
+        direction LR
+        P1[TCP] ~~~ P2[HTTP] ~~~ P3[MQTT] ~~~ P4[WebSocket] ~~~ P5[Serial] ~~~ P6[gRPC]
+    end
+
+    subgraph L2["Layer 2: Core Engine"]
+        direction LR
+        E1[Rule-Based] ~~~ E2[Ollama LLM] ~~~ E3[Learning Engine]
+    end
+
+    subgraph L3["Layer 3: Analysis Modules"]
+        direction LR
+        A1[Anomaly Detection] ~~~ A2[Predictive Maintenance] ~~~ A3[Root Cause Analysis]
+        A4[Alarm Correlation] ~~~ A5[SON Functions] ~~~ A6[Self-Healing]
+    end
+
+    subgraph L4["Layer 4: Advanced"]
+        direction LR
+        V1[Digital Twin] ~~~ V2[Traffic Prediction] ~~~ V3[Generative AI]
+    end
+
+    L1 --> L2 --> L3 --> L4
+
+    style E1 fill:#4CAF50,color:#fff
+    style E2 fill:#9C27B0,color:#fff
+    style A6 fill:#FF9800,color:#fff

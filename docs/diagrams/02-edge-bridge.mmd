@@ -1,0 +1,50 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px' }}}%%
+flowchart TB
+    DEV[Physical Devices<br/>MIPS / ARM]
+
+    subgraph CLIB["C Protocol Library"]
+        C1[Binary Serialization]
+        C2[HMAC-SHA256]
+        C3[Auto-Reconnect]
+    end
+
+    subgraph TRANSPORT["Transport Layer"]
+        T1[Serial / UART]
+        T2[TCP Socket]
+        T3[TLS / mTLS]
+    end
+
+    subgraph PROTOCOLS["Protocol Adapters"]
+        P1[SNMP]
+        P2[MQTT]
+        P3[Modbus]
+        P4[NETCONF]
+        P5[O-RAN]
+    end
+
+    CLOUD[Cloud Platform<br/>Monitoring Service]
+
+    DEV --> CLIB
+    CLIB --> T1
+    T1 --> T2
+    T2 --> T3
+    T3 --> P1
+    T3 --> P2
+    T3 --> P3
+    T3 --> P4
+    T3 --> P5
+    P1 & P2 & P3 & P4 & P5 --> CLOUD
+
+    style DEV fill:#64748B,color:#fff
+    style C1 fill:#EF4444,color:#fff
+    style C2 fill:#EF4444,color:#fff
+    style C3 fill:#EF4444,color:#fff
+    style T1 fill:#64748B,color:#fff
+    style T2 fill:#64748B,color:#fff
+    style T3 fill:#64748B,color:#fff
+    style P1 fill:#3B82F6,color:#fff
+    style P2 fill:#3B82F6,color:#fff
+    style P3 fill:#3B82F6,color:#fff
+    style P4 fill:#3B82F6,color:#fff
+    style P5 fill:#3B82F6,color:#fff
+    style CLOUD fill:#10B981,color:#fff

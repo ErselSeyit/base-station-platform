@@ -1,0 +1,19 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px' }}}%%
+flowchart LR
+    DEV[Physical Device] -->|Binary Protocol| EB[Edge Bridge]
+    EB -->|JSON Metrics| MON[Monitoring Service]
+    MON -->|Threshold Exceeded| RMQ[RabbitMQ]
+    RMQ -->|Alert Event| AI[AI Diagnostic]
+    AI -->|Solution| MON
+    MON -->|Commands| EB
+    EB -->|Execute| DEV
+    RMQ -->|Notification| NOTIF[Notification Service]
+    AI -->|Resolution Event| RMQ
+    RMQ -->|Mark Resolved| NOTIF
+
+    style DEV fill:#607D8B,color:#fff
+    style EB fill:#FF9800,color:#fff
+    style MON fill:#2196F3,color:#fff
+    style AI fill:#9C27B0,color:#fff
+    style RMQ fill:#E91E63,color:#fff
+    style NOTIF fill:#4CAF50,color:#fff
