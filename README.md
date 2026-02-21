@@ -2,35 +2,35 @@
 
 ```mermaid
 graph TD
-    User([Browser]) --> Ingress[NGINX Ingress · basestation.local]
-    Ingress --> FE[Frontend · React/nginx · :3000]
+    User([Browser]) --> Ingress[NGINX Ingress]
+    Ingress --> FE[Frontend<br/>:3000]
 
-    FS[Fault Orchestrator · :8099] --> DS[Device Simulator · :9999]
-    DS --> EB[Edge Bridge · Go]
+    FS[Fault Orch<br/>:8099] --> DS[Device Sim<br/>:9999]
+    DS --> EB[Edge Bridge<br/>Go]
 
-    FE --> GW[API Gateway · :8080]
+    FE --> GW[API Gateway<br/>:8080]
     EB --> GW
 
-    GW --> REDIS[(Redis · :6379)]
-    GW --> AS[Auth · :8084]
-    GW --> BS[Base Station · :8081]
-    GW --> NS[Notification · :8083]
-    GW --> MS[Monitoring · :8082]
+    GW --> REDIS[(Redis<br/>:6379)]
+    GW --> AS[Auth<br/>:8084]
+    GW --> BS[Base Station<br/>:8081]
+    GW --> NS[Notification<br/>:8083]
+    GW --> MS[Monitoring<br/>:8082]
 
-    AS --> PG[(PostgreSQL · :5432)]
+    AS --> PG[(PostgreSQL<br/>:5432)]
     BS --> PG
     NS --> PG
-    MS --> MDB[(MongoDB · :27017)]
-    MS --> AI[AI Diagnostic · Python · :9091]
+    MS --> MDB[(MongoDB<br/>:27017)]
+    MS --> AI[AI Diagnostic<br/>:9091]
     MS --> REDIS
-    MS -.-> RMQ[(RabbitMQ · :5672)]
+    MS -.-> RMQ[(RabbitMQ<br/>:5672)]
     RMQ -.-> NS
     FS --> AI
-    AS & BS & NS & MS -.-> ZIP[Zipkin · :9411]
+    AS & BS & NS & MS -.-> ZIP[Zipkin<br/>:9411]
 
-    MS -.-> PROM[Prometheus · :9090]
-    PROM -.-> GRAF[Grafana · :3001]
-    GRAF -.-> LOKI[Loki · :3100]
+    MS -.-> PROM[Prometheus<br/>:9090]
+    PROM -.-> GRAF[Grafana<br/>:3001]
+    GRAF -.-> LOKI[Loki<br/>:3100]
 
     style Ingress fill:#e65100,color:#fff
     style FE fill:#4caf50,color:#fff
