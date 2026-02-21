@@ -82,6 +82,41 @@ public class RabbitMQConfig {
                 .noargs();
     }
 
+    // ========================================
+    // THRESHOLD CONFIG MESSAGING
+    // ========================================
+
+    /**
+     * Exchange for threshold configuration updates.
+     * Used to broadcast config changes to all services.
+     */
+    @Bean
+    public Exchange thresholdConfigExchange() {
+        return new TopicExchange(MessagingConstants.THRESHOLD_CONFIG_EXCHANGE, true, false);
+    }
+
+    /**
+     * Queue for receiving threshold config updates.
+     * Services subscribe to this queue to invalidate local caches.
+     */
+    @Bean
+    public Queue thresholdConfigQueue() {
+        return QueueBuilder.durable(MessagingConstants.THRESHOLD_CONFIG_QUEUE)
+                .build();
+    }
+
+    /**
+     * Binding for threshold config queue.
+     */
+    @Bean
+    public Binding thresholdConfigBinding() {
+        return BindingBuilder
+                .bind(thresholdConfigQueue())
+                .to(thresholdConfigExchange())
+                .with(MessagingConstants.THRESHOLD_CONFIG_UPDATED_ROUTING_KEY)
+                .noargs();
+    }
+
     @Bean
     @NonNull
     public Jackson2JsonMessageConverter messageConverter() {

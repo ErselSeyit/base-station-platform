@@ -274,7 +274,7 @@ public class MonitoringController {
                 service.recordMetric(dto);
                 recorded++;
             } catch (IllegalArgumentException e) {
-                String errorMsg = "Invalid metric type: " + entry.getType();
+                String errorMsg = "Failed to process metric " + entry.getType() + ": " + e.getMessage();
                 log.warn("Failed to record metric at index {}: {}", i, errorMsg);
                 errors.add(new BatchRecordError(i, entry.getType(), errorMsg));
             } catch (Exception e) {

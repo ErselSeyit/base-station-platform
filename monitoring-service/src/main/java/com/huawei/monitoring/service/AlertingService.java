@@ -18,7 +18,9 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import com.huawei.common.constants.DiagnosticConstants;
+import com.huawei.common.constants.MessagingConstants;
 import com.huawei.common.dto.AlertEvent;
+import com.huawei.common.dto.DiagnosticResolutionEvent;
 import com.huawei.monitoring.client.DiagnosticClient;
 import com.huawei.monitoring.config.RabbitMQConfig;
 import com.huawei.monitoring.dto.MetricDataDTO;
@@ -44,10 +46,16 @@ public class AlertingService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertingService.class);
 
+    // Unit suffix constant (S1192 - avoid duplicated literals)
+    private static final String UNIT_DBM = " dBm)";
+
     private final Map<String, AlertRule> rules = new ConcurrentHashMap<>();
 
     // Track active alerts to prevent duplicates: key = "stationId-ruleId"
     private final Map<String, ActiveAlert> activeAlerts = new ConcurrentHashMap<>();
+
+    // Track in-flight diagnoses to prevent duplicate async calls: key = problemId
+    private final Set<String> inFlightDiagnoses = ConcurrentHashMap.newKeySet();
 
     /**
      * Represents an active (unresolved) alert.
@@ -56,7 +64,8 @@ public class AlertingService {
             String ruleId,
             Long stationId,
             Instant triggeredAt,
-            Double lastValue
+            Double lastValue,
+            String problemId
     ) {}
     @Nullable private final RabbitTemplate rabbitTemplate;
     @Nullable private final DiagnosticClient diagnosticClient;
@@ -124,7 +133,7 @@ public class AlertingService {
                         .operator(AlertRule.Operator.LESS_THAN)
                         .threshold(thresholdConfig.getSignalWeak())
                         .severity(AlertSeverity.WARNING)
-                        .message("Signal strength below acceptable level (" + (int) thresholdConfig.getSignalWeak() + " dBm)")
+                        .message("Signal strength below acceptable level (" + (int) thresholdConfig.getSignalWeak() + UNIT_DBM)
                         .build()));
 
         // Memory warning
@@ -283,7 +292,7 @@ public class AlertingService {
                         .operator(AlertRule.Operator.GREATER_THAN)
                         .threshold(thresholdConfig.getInterferenceWarning())
                         .severity(AlertSeverity.WARNING)
-                        .message("Interference level elevated (" + (int) thresholdConfig.getInterferenceWarning() + " dBm)")
+                        .message("Interference level elevated (" + (int) thresholdConfig.getInterferenceWarning() + UNIT_DBM)
                         .build()));
 
         addRule(Objects.requireNonNull(AlertRule.builder()
@@ -293,7 +302,7 @@ public class AlertingService {
                         .operator(AlertRule.Operator.GREATER_THAN)
                         .threshold(thresholdConfig.getInterferenceCritical())
                         .severity(AlertSeverity.CRITICAL)
-                        .message("Interference level critical (" + (int) thresholdConfig.getInterferenceCritical() + " dBm)")
+                        .message("Interference level critical (" + (int) thresholdConfig.getInterferenceCritical() + UNIT_DBM)
                         .build()));
     }
 
@@ -362,18 +371,44 @@ public class AlertingService {
 
     /**
      * Resolves an active alert when the condition returns to normal.
+     * Publishes a resolution event to notification-service so the corresponding
+     * notification is marked as RESOLVED in the database.
      */
     private void resolveAlert(String alertKey, MetricDataDTO metric) {
         ActiveAlert resolved = activeAlerts.remove(alertKey);
-        if (resolved != null) {
-            AlertRule rule = rules.get(resolved.ruleId());
-            String ruleName = rule != null ? rule.getName() : resolved.ruleId();
-            log.info("RESOLVED [{}] Alert cleared for station {} - {} (value now: {}, was: {})",
-                    ruleName,
-                    resolved.stationId(),
-                    rule != null ? rule.getMessage() : "condition normalized",
-                    metric.getValue(),
-                    resolved.lastValue());
+        if (resolved == null) {
+            return;
+        }
+
+        AlertRule rule = rules.get(resolved.ruleId());
+        String ruleName = rule != null ? rule.getName() : resolved.ruleId();
+        log.info("RESOLVED [{}] Alert cleared for station {} - {} (value now: {}, was: {})",
+                ruleName,
+                resolved.stationId(),
+                rule != null ? rule.getMessage() : "condition normalized",
+                metric.getValue(),
+                resolved.lastValue());
+
+        // Publish resolution event so notification-service marks the notification as resolved
+        RabbitTemplate template = this.rabbitTemplate;
+        if (template != null && resolved.problemId() != null) {
+            try {
+                DiagnosticResolutionEvent event = DiagnosticResolutionEvent.success(
+                        "alert-auto-resolve",
+                        resolved.problemId(),
+                        resolved.stationId(),
+                        resolved.ruleId(),
+                        "alert-auto-resolve");
+                template.convertAndSend(
+                        RabbitMQConfig.ALERTS_EXCHANGE,
+                        MessagingConstants.DIAGNOSTIC_RESOLVED_ROUTING_KEY,
+                        event);
+                log.info("Published alert resolution event for problemId={}, station={}",
+                        resolved.problemId(), resolved.stationId());
+            } catch (AmqpException e) {
+                log.warn("Failed to publish alert resolution event for problemId={}: {}",
+                        resolved.problemId(), e.getMessage());
+            }
         }
     }
 
@@ -393,13 +428,17 @@ public class AlertingService {
             return;
         }
 
-        // Register this alert as active
+        // Generate problemId early so it can be stored in ActiveAlert for resolution
+        String problemId = generateProblemId(rule.getId());
+
+        // Register this alert as active (with problemId for resolution tracking)
         String key = alertKey(stationId, Objects.requireNonNull(rule.getId()));
         activeAlerts.put(Objects.requireNonNull(key), new ActiveAlert(
                 Objects.requireNonNull(rule.getId()),
                 stationId,
                 Objects.requireNonNull(Instant.now()),
-                Objects.requireNonNull(metric.getValue())
+                Objects.requireNonNull(metric.getValue()),
+                problemId
         ));
 
         log.warn("ALERT [{}] {}: {} for station {} (value: {}, threshold: {})",
@@ -416,8 +455,6 @@ public class AlertingService {
         // Send alert event to notification service via RabbitMQ
         if (template != null) {
             try {
-                // Generate problemId for linking alerts to diagnostic sessions
-                String problemId = generateProblemId(rule.getId());
 
                 // Convert enums to strings for cross-service compatibility
                 // Use Optional.map() instead of ternary null checks
@@ -498,6 +535,12 @@ public class AlertingService {
             return;
         }
 
+        // Prevent duplicate in-flight async diagnoses for the same problem
+        if (!inFlightDiagnoses.add(actualProblemId)) {
+            log.debug("Skipping duplicate diagnosis for {} — already in flight", actualProblemId);
+            return;
+        }
+
         log.info("Initiating AI diagnosis for session {} (alert={})", actualProblemId, alert.getAlertRuleId());
 
         client.diagnoseAsync(alert, actualProblemId)
@@ -513,13 +556,19 @@ public class AlertingService {
                     } catch (Exception e) {
                         log.error("Error in handleDiagnosisResult for {}: {}", actualProblemId, e.getMessage(), e);
                         markSessionFailed(sessionService, actualProblemId, "Handler error: " + e.getMessage());
+                    } finally {
+                        inFlightDiagnoses.remove(actualProblemId);
                     }
                 })
                 .exceptionally(ex -> {
-                    log.error("Diagnostic request failed for alert {} (session={}): {}",
-                            alert.getAlertRuleId(), actualProblemId, ex.getMessage(), ex);
-                    // Mark session as FAILED to prevent it being stuck in DETECTED state
-                    markSessionFailed(sessionService, actualProblemId, "Diagnosis failed: " + ex.getMessage());
+                    try {
+                        log.error("Diagnostic request failed for alert {} (session={}): {}",
+                                alert.getAlertRuleId(), actualProblemId, ex.getMessage(), ex);
+                        // Mark session as FAILED to prevent it being stuck in DETECTED state
+                        markSessionFailed(sessionService, actualProblemId, "Diagnosis failed: " + ex.getMessage());
+                    } finally {
+                        inFlightDiagnoses.remove(actualProblemId);
+                    }
                     return null;
                 });
     }

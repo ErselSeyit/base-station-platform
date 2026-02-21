@@ -26,6 +26,11 @@ public class RedisConfig {
      */
     public static final String METRICS_CACHE = "metrics";
 
+    /**
+     * Cache name for threshold configurations.
+     */
+    public static final String THRESHOLD_CACHE = "thresholdConfigs";
+
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         // Configure ObjectMapper to handle Java 8 date/time types
@@ -48,9 +53,17 @@ public class RedisConfig {
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(serializer))
                 .disableCachingNullValues();
 
+        // Threshold config cache - 24 hour TTL (configs rarely change, invalidated via RabbitMQ)
+        RedisCacheConfiguration thresholdConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofHours(24))
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(serializer))
+                .disableCachingNullValues();
+
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withCacheConfiguration(METRICS_CACHE, metricsConfig)
+                .withCacheConfiguration(THRESHOLD_CACHE, thresholdConfig)
                 .build();
     }
 }

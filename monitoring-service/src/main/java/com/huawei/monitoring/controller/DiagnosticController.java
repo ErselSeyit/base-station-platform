@@ -45,6 +45,7 @@ public class DiagnosticController {
     }
 
     private static final int MAX_RECENT_LIMIT = 200;
+    private static final String FIELD_SESSION_ID = "sessionId";
 
     /**
      * Get all diagnostic sessions.
@@ -77,7 +78,7 @@ public class DiagnosticController {
             @org.springframework.data.web.PageableDefault(size = 20, sort = "createdAt",
                 direction = org.springframework.data.domain.Sort.Direction.DESC)
             org.springframework.data.domain.Pageable pageable) {
-        return ResponseEntity.ok(sessionService.getSessionsPagedByStatus(status, pageable));
+        return ResponseEntity.ok(sessionService.getSessionsPagedByStatus(status, pageable)); // NOSONAR S4449 - Spring @Nullable used
     }
 
     /**
@@ -233,14 +234,64 @@ public class DiagnosticController {
                             log.info("Auto-feedback recorded for session {} based on command result", sessionId);
                             Map<String, Object> response = new java.util.HashMap<>();
                             response.put(KEY_STATUS, "recorded");
-                            response.put("sessionId", sessionId);
+                            response.put(FIELD_SESSION_ID, sessionId);
                             response.put("wasEffective", notification.success());
                             return ResponseEntity.ok(response);
                         })
                         .orElseGet(() -> {
                             Map<String, Object> response = new java.util.HashMap<>();
                             response.put(KEY_STATUS, "session_not_found");
-                            response.put("sessionId", sessionId);
+                            response.put(FIELD_SESSION_ID, sessionId);
+                            return ResponseEntity.ok(response);
+                        }),
+                ValidationMessages.RESPONSE_NULL_MESSAGE);
+    }
+
+    /**
+     * Receive healing execution result from ai-diagnostic self-healing service.
+     * Looks up the diagnostic session by problemId and auto-submits feedback.
+     */
+    @PostMapping("/by-problem/{problemId}/healing-result")
+    public ResponseEntity<Map<String, Object>> receiveHealingResult(
+            @PathVariable String problemId,
+            @Valid @RequestBody HealingResultNotification notification) {
+
+        log.info("Received healing result for problem {}: success={}",
+                problemId, notification.success());
+
+        Optional<DiagnosticSession> sessionOpt = sessionService.getSessionByProblemId(problemId);
+        if (sessionOpt.isEmpty()) {
+            log.warn("No session found for problem ID: {}", problemId);
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put(KEY_STATUS, "session_not_found");
+            response.put("problemId", problemId);
+            return ResponseEntity.ok(response);
+        }
+
+        String sessionId = Objects.requireNonNull(sessionOpt.get().getId(), "Session ID must not be null");
+        String outcomeDetail = Objects.toString(notification.output(), "");
+        return Objects.requireNonNull(
+                sessionService.submitFeedback(
+                                sessionId,
+                                notification.success(),
+                                notification.success() ? 5 : 1,
+                                "Auto-feedback from self-healing execution",
+                                notification.success()
+                                        ? "Healing action succeeded: " + outcomeDetail
+                                        : "Healing action failed: " + outcomeDetail,
+                                "system-healing")
+                        .map(session -> {
+                            log.info("Healing feedback recorded for session {} (problem {})", sessionId, problemId);
+                            Map<String, Object> response = new java.util.HashMap<>();
+                            response.put(KEY_STATUS, "recorded");
+                            response.put(FIELD_SESSION_ID, sessionId);
+                            response.put("wasEffective", notification.success());
+                            return ResponseEntity.ok(response);
+                        })
+                        .orElseGet(() -> {
+                            Map<String, Object> response = new java.util.HashMap<>();
+                            response.put(KEY_STATUS, "feedback_failed");
+                            response.put(FIELD_SESSION_ID, sessionId);
                             return ResponseEntity.ok(response);
                         }),
                 ValidationMessages.RESPONSE_NULL_MESSAGE);
@@ -271,5 +322,14 @@ public class DiagnosticController {
             String problemCode,
             @NotNull Boolean success,
             Integer returnCode
+    ) {}
+
+    /**
+     * Notification from ai-diagnostic self-healing service about healing action result.
+     */
+    public record HealingResultNotification(
+            @NotNull Boolean success,
+            String actionId,
+            String output
     ) {}
 }

@@ -19,7 +19,17 @@ public enum MetricUnit {
     HOURS("h"),
     MILLISECONDS("ms"),
     COUNT("count"),
-    RATIO("ratio");
+    RATIO("ratio"),
+    VOLTS("V"),
+    AMPS("A"),
+    KWH("kWh"),
+    DEGREES("°"),
+    KMH("km/h"),
+    MM("mm"),
+    CM("cm"),
+    PPM("ppm"),
+    UGM3("µg/m³"),
+    MHZ("MHz");
 
     private final String unit;
 
@@ -81,6 +91,69 @@ public enum MetricUnit {
         // Carrier Aggregation
         METRIC_TYPE_UNITS.put(MetricType.CA_DL_THROUGHPUT, MBPS);
         METRIC_TYPE_UNITS.put(MetricType.CA_UL_THROUGHPUT, MBPS);
+
+        // Power & Energy Metrics
+        METRIC_TYPE_UNITS.put(MetricType.UTILITY_VOLTAGE_L1, VOLTS);
+        METRIC_TYPE_UNITS.put(MetricType.UTILITY_VOLTAGE_L2, VOLTS);
+        METRIC_TYPE_UNITS.put(MetricType.UTILITY_VOLTAGE_L3, VOLTS);
+        METRIC_TYPE_UNITS.put(MetricType.POWER_FACTOR, RATIO);
+        METRIC_TYPE_UNITS.put(MetricType.GENERATOR_FUEL_LEVEL, PERCENTAGE);
+        METRIC_TYPE_UNITS.put(MetricType.GENERATOR_RUNTIME, HOURS);
+        METRIC_TYPE_UNITS.put(MetricType.BATTERY_SOC, PERCENTAGE);
+        METRIC_TYPE_UNITS.put(MetricType.BATTERY_DOD, PERCENTAGE);
+        METRIC_TYPE_UNITS.put(MetricType.BATTERY_CELL_TEMP_MIN, CELSIUS);
+        METRIC_TYPE_UNITS.put(MetricType.BATTERY_CELL_TEMP_MAX, CELSIUS);
+        METRIC_TYPE_UNITS.put(MetricType.SOLAR_PANEL_VOLTAGE, VOLTS);
+        METRIC_TYPE_UNITS.put(MetricType.SOLAR_CHARGE_CURRENT, AMPS);
+        METRIC_TYPE_UNITS.put(MetricType.SITE_POWER_KWH, KWH);
+
+        // Environmental & Safety Metrics
+        METRIC_TYPE_UNITS.put(MetricType.WIND_SPEED, KMH);
+        METRIC_TYPE_UNITS.put(MetricType.WIND_DIRECTION, DEGREES);
+        METRIC_TYPE_UNITS.put(MetricType.PRECIPITATION, MM);
+        METRIC_TYPE_UNITS.put(MetricType.LIGHTNING_DISTANCE, COUNT);
+        METRIC_TYPE_UNITS.put(MetricType.TILT_ANGLE, DEGREES);
+        METRIC_TYPE_UNITS.put(MetricType.VIBRATION_LEVEL, COUNT);
+        METRIC_TYPE_UNITS.put(MetricType.WATER_LEVEL, CM);
+        METRIC_TYPE_UNITS.put(MetricType.PM25_LEVEL, UGM3);
+        METRIC_TYPE_UNITS.put(MetricType.SMOKE_DETECTED, COUNT);
+        METRIC_TYPE_UNITS.put(MetricType.CO_LEVEL, PPM);
+        METRIC_TYPE_UNITS.put(MetricType.DOOR_STATUS, COUNT);
+        METRIC_TYPE_UNITS.put(MetricType.MOTION_DETECTED, COUNT);
+
+        // Transport/Backhaul Metrics
+        METRIC_TYPE_UNITS.put(MetricType.FIBER_RX_POWER, DBM);
+        METRIC_TYPE_UNITS.put(MetricType.FIBER_TX_POWER, DBM);
+        METRIC_TYPE_UNITS.put(MetricType.FIBER_BER, RATIO);
+        METRIC_TYPE_UNITS.put(MetricType.FIBER_OSNR, DB);
+        METRIC_TYPE_UNITS.put(MetricType.MW_RSL, DBM);
+        METRIC_TYPE_UNITS.put(MetricType.MW_SNR, DB);
+        METRIC_TYPE_UNITS.put(MetricType.MW_MODULATION, COUNT);
+        METRIC_TYPE_UNITS.put(MetricType.ETH_UTILIZATION, PERCENTAGE);
+        METRIC_TYPE_UNITS.put(MetricType.ETH_ERRORS, COUNT);
+        METRIC_TYPE_UNITS.put(MetricType.ETH_LATENCY, MILLISECONDS);
+        METRIC_TYPE_UNITS.put(MetricType.PTP_OFFSET, MILLISECONDS);
+        METRIC_TYPE_UNITS.put(MetricType.GPS_SATELLITES, COUNT);
+
+        // Advanced Radio Metrics
+        METRIC_TYPE_UNITS.put(MetricType.BEAM_WEIGHT_MAG, RATIO);
+        METRIC_TYPE_UNITS.put(MetricType.BEAM_WEIGHT_PHASE, DEGREES);
+        METRIC_TYPE_UNITS.put(MetricType.PRECODING_RANK, COUNT);
+        METRIC_TYPE_UNITS.put(MetricType.PIM_LEVEL, DBM);
+        METRIC_TYPE_UNITS.put(MetricType.CO_CHANNEL_INTERFERENCE, DBM);
+        METRIC_TYPE_UNITS.put(MetricType.OCCUPIED_BANDWIDTH, MHZ);
+        METRIC_TYPE_UNITS.put(MetricType.ACLR, DB);
+        METRIC_TYPE_UNITS.put(MetricType.GTP_THROUGHPUT, MBPS);
+        METRIC_TYPE_UNITS.put(MetricType.PACKET_DELAY, MILLISECONDS);
+        METRIC_TYPE_UNITS.put(MetricType.RRC_SETUP_SUCCESS, PERCENTAGE);
+        METRIC_TYPE_UNITS.put(MetricType.PAGING_SUCCESS, PERCENTAGE);
+
+        // Network Slicing Metrics
+        METRIC_TYPE_UNITS.put(MetricType.SLICE_THROUGHPUT, MBPS);
+        METRIC_TYPE_UNITS.put(MetricType.SLICE_LATENCY, MILLISECONDS);
+        METRIC_TYPE_UNITS.put(MetricType.SLICE_PACKET_LOSS, PERCENTAGE);
+        METRIC_TYPE_UNITS.put(MetricType.SLICE_PRB_UTIL, PERCENTAGE);
+        METRIC_TYPE_UNITS.put(MetricType.SLICE_SLA_COMPLIANCE, PERCENTAGE);
     }
 
     /**

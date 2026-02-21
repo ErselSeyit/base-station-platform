@@ -7,7 +7,7 @@
 
     <parent>
         <groupId>com.huawei</groupId>
-        <artifactId>base-station-platform</artifactId>
+        <artifactId>basestation-platform</artifactId>
         <version>1.0.0</version>
     </parent>
 
@@ -71,7 +71,21 @@
             <groupId>net.logstash.logback</groupId>
             <artifactId>logstash-logback-encoder</artifactId>
         </dependency>
-        
+
+        <!-- Distributed Tracing with Zipkin -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.zipkin.reporter2</groupId>
+            <artifactId>zipkin-reporter-brave</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -109,6 +123,12 @@
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Spring Cloud Contract for API contract testing -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-contract-verifier</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -123,6 +143,20 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <!-- Spring Cloud Contract Plugin -->
+            <plugin>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-contract-maven-plugin</artifactId>
+                <version>${spring-cloud-contract.version}</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <testFramework>JUNIT5</testFramework>
+                    <baseClassForTests>
+                        com.huawei.monitoring.contract.MonitoringContractTestBase
+                    </baseClassForTests>
+                    <contractsDirectory>src/test/resources/contracts</contractsDirectory>
+                </configuration>
             </plugin>
         </plugins>
     </build>

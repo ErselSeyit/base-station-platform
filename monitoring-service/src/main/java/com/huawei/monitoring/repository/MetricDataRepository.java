@@ -2,6 +2,7 @@ package com.huawei.monitoring.repository;
 
 import com.huawei.monitoring.model.MetricData;
 import com.huawei.monitoring.model.MetricType;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
@@ -103,5 +104,19 @@ public interface MetricDataRepository extends MongoRepository<MetricData, String
      */
     @Query(value = "{ 'stationId': { $in: ?0 } }", sort = "{ 'timestamp': -1 }")
     List<MetricData> findByStationIdInOrderByTimestampDesc(List<Long> stationIds);
+
+    // ========================================================================
+    // Paginated overloads for production use
+    // ========================================================================
+
+    Page<MetricData> findByStationId(Long stationId, Pageable pageable);
+
+    Page<MetricData> findByStationIdAndMetricType(Long stationId, MetricType metricType, Pageable pageable);
+
+    @Query("{ 'stationId': ?0, 'timestamp': { $gte: ?1, $lte: ?2 } }")
+    Page<MetricData> findMetricsByStationAndTimeRange(Long stationId, LocalDateTime start, LocalDateTime end, Pageable pageable);
+
+    @Query("{ 'metricType': ?0, 'value': { $gt: ?1 } }")
+    Page<MetricData> findMetricsAboveThreshold(MetricType metricType, Double threshold, Pageable pageable);
 }
 

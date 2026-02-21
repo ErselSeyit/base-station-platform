@@ -14,11 +14,18 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 
 /**
  * Service for managing learned patterns from diagnostic feedback.
@@ -32,14 +39,18 @@ public class LearningPatternService {
 
     private static final int MAX_LEARNING_RETRIES = 3;
     private static final int MIN_SAMPLES_FOR_RELIABLE_CONFIDENCE = 5;
+    private static final String FIELD_PROBLEM_CODE = "problemCode";
 
     private final LearnedPatternRepository patternRepository;
     private final DiagnosticSessionRepository sessionRepository;
+    private final MongoTemplate mongoTemplate;
 
     public LearningPatternService(LearnedPatternRepository patternRepository,
-                                  DiagnosticSessionRepository sessionRepository) {
+                                  DiagnosticSessionRepository sessionRepository,
+                                  MongoTemplate mongoTemplate) {
         this.patternRepository = patternRepository;
         this.sessionRepository = sessionRepository;
+        this.mongoTemplate = mongoTemplate;
     }
 
     /**
@@ -140,40 +151,30 @@ public class LearningPatternService {
     }
 
     /**
-     * Gets an existing pattern or creates a new one with pre-processing to prevent duplicates.
+     * Gets an existing pattern or creates a new one using atomic MongoDB upsert.
      *
-     * Algorithm:
-     * 1. First check: Query for existing pattern
-     * 2. If not found: Create and save new pattern
-     * 3. On DuplicateKeyException: Re-fetch (another thread created it)
-     * 4. Verify: Final check to ensure pattern exists
-     *
-     * This pre-processing approach minimizes duplicate creation attempts by checking
-     * existence before save, while still handling race conditions gracefully.
+     * Uses findAndModify with upsert=true for atomicity — no race condition
+     * possible between check and insert. If the document exists, it is returned
+     * unchanged. If not, it is created in a single operation.
      */
     private LearnedPattern getOrCreatePattern(String problemCode, String category) {
-        // Pre-processing: Check if pattern already exists BEFORE attempting creation
-        Optional<LearnedPattern> existing = patternRepository.findByProblemCode(problemCode);
-        if (existing.isPresent()) {
-            log.debug("Found existing learning pattern for {}", problemCode);
-            return existing.get();
-        }
+        Query query = new Query(Criteria.where(FIELD_PROBLEM_CODE).is(problemCode));
+        Update update = new Update()
+                .setOnInsert(FIELD_PROBLEM_CODE, problemCode)
+                .setOnInsert("category", category)
+                .setOnInsert("adjustedConfidence", 0.85)
+                .setOnInsert("resolvedCount", 0)
+                .setOnInsert("failedCount", 0)
+                .setOnInsert("lastUpdated", LocalDateTime.now())
+                .setOnInsert("successfulSolutions", List.of())
+                .setOnInsert("failedSolutions", List.of());
 
-        // Pattern doesn't exist, create it
-        log.info("Creating new learning pattern for {} (category={})", problemCode, category);
-        LearnedPattern newPattern = new LearnedPattern(problemCode, category);
+        FindAndModifyOptions options = FindAndModifyOptions.options()
+                .upsert(true)
+                .returnNew(true);
 
-        try {
-            LearnedPattern saved = patternRepository.save(newPattern);
-            log.info("Successfully created learning pattern for {}", problemCode);
-            return Objects.requireNonNull(saved);
-        } catch (DuplicateKeyException e) {
-            // Race condition: Another thread created the pattern between our check and save
-            log.debug("Concurrent creation detected for pattern {}, fetching existing", problemCode);
-            return patternRepository.findByProblemCode(problemCode)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Pattern " + problemCode + " should exist after DuplicateKeyException"));
-        }
+        LearnedPattern pattern = mongoTemplate.findAndModify(query, update, options, LearnedPattern.class);
+        return Objects.requireNonNull(pattern, "Upsert should always return a document");
     }
 
     /**
@@ -184,7 +185,13 @@ public class LearningPatternService {
      * @return true if confidence was adjusted, false otherwise
      */
     public boolean adjustConfidenceFromPattern(AISolution solution, String problemCode) {
-        Optional<LearnedPattern> patternOpt = patternRepository.findByProblemCode(problemCode);
+        Optional<LearnedPattern> patternOpt;
+        try {
+            patternOpt = patternRepository.findByProblemCode(problemCode);
+        } catch (org.springframework.dao.IncorrectResultSizeDataAccessException e) {
+            log.warn("Multiple LearnedPattern documents for '{}' — skipping confidence adjustment", problemCode);
+            return false;
+        }
         if (patternOpt.isEmpty()) {
             return false;
         }
@@ -229,7 +236,7 @@ public class LearningPatternService {
         stats.put("learnedPatterns", patterns.size());
         stats.put("topPatterns", patterns.stream()
                 .map(p -> Map.of(
-                        "problemCode", p.getProblemCode(),
+                        FIELD_PROBLEM_CODE, p.getProblemCode(),
                         "successRate", p.getSuccessRate(),
                         "totalCases", p.getResolvedCount() + p.getFailedCount(),
                         "adjustedConfidence", p.getAdjustedConfidence()

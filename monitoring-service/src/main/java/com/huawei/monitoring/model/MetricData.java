@@ -21,7 +21,7 @@ public class MetricData {
     private MetricType metricType;
     private Double value;
     private String unit;
-    @Indexed
+    @Indexed(name = "idx_ttl_cleanup", expireAfter = "90d") // 90-day retention
     private LocalDateTime timestamp;
     private String status;
 

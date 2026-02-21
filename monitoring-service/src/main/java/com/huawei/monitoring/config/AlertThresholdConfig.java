@@ -45,9 +45,9 @@ public class AlertThresholdConfig {
     private double throughputLow = 50.0;
     private double throughputCritical = 20.0;
 
-    // Power consumption thresholds (watts)
-    private double powerHigh = 500.0;
-    private double powerCritical = 700.0;
+    // Power consumption thresholds (watts) — macro cell 5G sites consume 1.5-3 kW normally
+    private double powerHigh = 2500.0;
+    private double powerCritical = 3000.0;
 
     // Handover success rate (percentage) - alert when below
     private double handoverWarning = 95.0;

@@ -54,6 +54,12 @@ management:
     export:
       prometheus:
         enabled: true
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLE_PROBABILITY:0.1}
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_TRACING_ENDPOINT:http://zipkin:9411/api/v2/spans}
 
 websocket:
   allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://frontend:80}

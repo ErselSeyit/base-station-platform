@@ -214,8 +214,13 @@ public class DiagnosticSessionService {
                 diagnosis.getReasoning()
         );
 
-        // Check for learned pattern adjustments
-        learningPatternService.adjustConfidenceFromPattern(solution, Objects.requireNonNull(session.getProblemCode()));
+        // Check for learned pattern adjustments (best-effort — diagnosis proceeds on failure)
+        try {
+            learningPatternService.adjustConfidenceFromPattern(solution, Objects.requireNonNull(session.getProblemCode()));
+        } catch (Exception e) {
+            log.warn("Failed to adjust confidence for {}: {}. Using original confidence.",
+                    session.getProblemCode(), e.getMessage());
+        }
 
         session.markDiagnosed(solution);
         log.info("Marked session {} as DIAGNOSED with confidence={}", problemId, solution.getConfidence());
@@ -434,7 +439,7 @@ public class DiagnosticSessionService {
      */
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<DiagnosticSession> getSessionsPagedByStatus(
-            DiagnosticStatus status,
+            @Nullable DiagnosticStatus status,
             org.springframework.data.domain.Pageable pageable) {
         if (status == null) {
             return sessionRepository.findBy(pageable);
@@ -611,14 +616,14 @@ public class DiagnosticSessionService {
     // ========================================
 
     /** Sessions stuck in DETECTED for longer than this are considered stale. */
-    private static final long STALE_SESSION_THRESHOLD_MINUTES = 5;
+    private static final long STALE_SESSION_THRESHOLD_MINUTES = 2;
 
     /**
      * Scheduled task to clean up stale diagnostic sessions.
-     * Runs every 2 minutes to find sessions stuck in DETECTED status and marks them as FAILED.
+     * Runs every 30 seconds to find sessions stuck in DETECTED status and marks them as FAILED.
      * This prevents sessions from being stuck indefinitely due to AI service failures.
      */
-    @Scheduled(fixedRate = 120_000) // Run every 2 minutes
+    @Scheduled(fixedRate = 30_000) // Run every 30 seconds for faster cleanup
     @Transactional
     public void cleanupStaleSessions() {
         LocalDateTime threshold = LocalDateTime.now().minusMinutes(STALE_SESSION_THRESHOLD_MINUTES);
