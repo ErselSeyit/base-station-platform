@@ -13,15 +13,25 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install Flask for control API
+RUN pip install --no-cache-dir flask
+
 # Copy protocol implementation and device simulator
 COPY mips_device.py .
 
 # Expose the binary protocol port
 EXPOSE 9999
 
-# Station ID configurable via environment
+# Configurable via environment
 ENV STATION_ID=MIPS-BS-001
+ENV DEVICE_PORT=9999
+ENV CONTROL_PORT=8098
+# TLS (optional): set TLS_CERT and TLS_KEY to enable
+ENV TLS_CERT=""
+ENV TLS_KEY=""
+ENV TLS_CA=""
 
 # Run the device simulator with proper protocol server
-ENTRYPOINT ["python", "-u", "mips_device.py"]
-CMD ["--port", "9999"]
+# Shell form to expand environment variables; TLS args omitted when empty
+CMD python -u mips_device.py --station-id "$STATION_ID" --port "$DEVICE_PORT" --control-port "$CONTROL_PORT" \
+    ${TLS_CERT:+--tls-cert "$TLS_CERT"} ${TLS_KEY:+--tls-key "$TLS_KEY"} ${TLS_CA:+--tls-ca "$TLS_CA"}

@@ -385,15 +385,5 @@ class VisionService:
 
 
 # Singleton instance with thread-safe initialization
-_vision_service: Optional[VisionService] = None
-_vision_service_lock = threading.Lock()
-
-
-def get_vision_service() -> VisionService:
-    """Get or create singleton VisionService instance (thread-safe)."""
-    global _vision_service
-    if _vision_service is None:
-        with _vision_service_lock:
-            if _vision_service is None:  # Double-check locking
-                _vision_service = VisionService()
-    return _vision_service
+from .utils.singleton import singleton_factory
+get_vision_service = singleton_factory(VisionService)

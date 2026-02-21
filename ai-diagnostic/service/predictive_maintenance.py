@@ -17,29 +17,27 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
-from enum import Enum
 import statistics
 import threading
 
 import numpy as np
 
+from .utils import (
+    HealthStatus,
+    PredictionConfidence,
+    calculate_combined_health,
+    determine_health_status,
+    health_to_probability,
+    assess_metric_with_issue,
+)
+from .utils.thresholds import (
+    FanThresholds,
+    TemperatureThresholds,
+    BatteryThresholds,
+    FiberThresholds,
+)
+
 logger = logging.getLogger(__name__)
-
-
-class HealthStatus(Enum):
-    """Component health status."""
-    HEALTHY = "healthy"
-    DEGRADED = "degraded"
-    WARNING = "warning"
-    CRITICAL = "critical"
-    FAILED = "failed"
-
-
-class PredictionConfidence(Enum):
-    """Confidence level of predictions."""
-    HIGH = "high"        # >80% confidence
-    MEDIUM = "medium"    # 50-80% confidence
-    LOW = "low"          # <50% confidence
 
 
 @dataclass
@@ -135,51 +133,13 @@ class PredictiveMaintenanceService:
     - Temperature anomaly detection
     - Power supply health monitoring
     - Component health scoring
+
+    Thresholds are imported from utils.thresholds:
+    - FanThresholds, TemperatureThresholds, BatteryThresholds, FiberThresholds
     """
 
-    # Thresholds for fan health
-    FAN_HEALTHY_RPM_MIN = 2000
-    FAN_WARNING_RPM_MIN = 1500
-    FAN_CRITICAL_RPM_MIN = 1000
-    FAN_RPM_VARIATION_THRESHOLD = 0.15  # 15% variation is concerning
-    FAN_DEGRADATION_SLOPE_THRESHOLD = -10  # RPM/hour decline
-
-    # Thresholds for temperature
-    TEMP_HEALTHY_MAX = 55  # Celsius
-    TEMP_WARNING_MAX = 65
-    TEMP_CRITICAL_MAX = 75
-
-    # Thresholds for power
+    # Power threshold (not in shared thresholds)
     VOLTAGE_TOLERANCE = 0.05  # 5% tolerance
-
-    # Thresholds for battery health
-    BATTERY_SOC_HEALTHY_MIN = 80  # %
-    BATTERY_SOC_WARNING_MIN = 50
-    BATTERY_SOC_CRITICAL_MIN = 20
-    BATTERY_DOD_HEALTHY_MAX = 50  # % depth of discharge
-    BATTERY_DOD_WARNING_MAX = 70
-    BATTERY_DOD_CRITICAL_MAX = 85
-    BATTERY_TEMP_HEALTHY_MAX = 35  # Celsius
-    BATTERY_TEMP_WARNING_MAX = 45
-    BATTERY_TEMP_CRITICAL_MAX = 55
-    BATTERY_CYCLE_HEALTHY_MAX = 500  # cycles
-    BATTERY_CYCLE_WARNING_MAX = 800
-    BATTERY_CYCLE_CRITICAL_MAX = 1000
-    BATTERY_CAPACITY_DEGRADATION_THRESHOLD = 0.1  # 10% capacity loss
-
-    # Thresholds for fiber transport
-    FIBER_RX_POWER_HEALTHY_MIN = -20  # dBm
-    FIBER_RX_POWER_WARNING_MIN = -25
-    FIBER_RX_POWER_CRITICAL_MIN = -30
-    FIBER_TX_POWER_HEALTHY_MIN = -5
-    FIBER_TX_POWER_WARNING_MIN = -8
-    FIBER_TX_POWER_CRITICAL_MIN = -10
-    FIBER_BER_HEALTHY_MAX = 1e-12  # Bit Error Rate
-    FIBER_BER_WARNING_MAX = 1e-9
-    FIBER_BER_CRITICAL_MAX = 1e-6
-    FIBER_OSNR_HEALTHY_MIN = 25  # dB
-    FIBER_OSNR_WARNING_MIN = 18
-    FIBER_OSNR_CRITICAL_MIN = 12
 
     # Minimum data points for analysis
     MIN_DATA_POINTS = 10
@@ -275,20 +235,16 @@ class PredictiveMaintenanceService:
         trend = self._analyze_trend(data_points)
         current_temp = data_points[-1].value
 
-        # Assess health
-        if current_temp >= self.TEMP_CRITICAL_MAX:
-            health_status = HealthStatus.CRITICAL
-        elif current_temp >= self.TEMP_WARNING_MAX:
-            health_status = HealthStatus.WARNING
-        elif current_temp >= self.TEMP_HEALTHY_MAX:
-            health_status = HealthStatus.DEGRADED
-        else:
-            health_status = HealthStatus.HEALTHY
+        # Assess health using threshold class
+        health_factor = TemperatureThresholds.AMBIENT.get_health_factor(
+            current_temp, higher_is_worse=True
+        )
+        health_status = determine_health_status(health_factor)
 
         # Check for rising temperature trend
         if trend.direction == "increasing" and trend.slope > 0.5:  # >0.5°C/hour
             probability = min(0.9, 0.3 + trend.slope * 0.2)
-            hours_to_critical = (self.TEMP_CRITICAL_MAX - current_temp) / trend.slope if trend.slope > 0 else None
+            hours_to_critical = (TemperatureThresholds.CRITICAL_MAX - current_temp) / trend.slope if trend.slope > 0 else None
             ttf = timedelta(hours=hours_to_critical) if hours_to_critical and hours_to_critical > 0 else None
         else:
             probability = 0.1 if health_status != HealthStatus.HEALTHY else 0.0
@@ -318,18 +274,14 @@ class PredictiveMaintenanceService:
         station_id: str,
         analysis_window: timedelta = timedelta(hours=24)
     ) -> Optional[FailurePrediction]:
-        """Analyze power supply voltage and current for anomalies."""
+        """Analyze power supply voltage for anomalies."""
         voltage_key = f"{station_id}:VOLTAGE"
-        current_key = f"{station_id}:CURRENT"
-
         voltage_data = self._get_recent_data(voltage_key, analysis_window)
-        current_data = self._get_recent_data(current_key, analysis_window)
 
         if len(voltage_data) < self.MIN_DATA_POINTS:
             return None
 
         voltage_trend = self._analyze_trend(voltage_data)
-        current_trend = self._analyze_trend(current_data) if current_data else None
 
         # Check for voltage instability
         voltage_variation = voltage_trend.std_dev / voltage_trend.mean if voltage_trend.mean > 0 else 0
@@ -407,86 +359,20 @@ class PredictiveMaintenanceService:
         current_cycles = cycle_data[-1].value if cycle_data else 0
 
         # Multi-factor health assessment
-        health_factors = []
-        issues = []
+        health_factors, issues = self._assess_battery_metrics(
+            current_soc, current_dod, current_temp, current_cycles,
+            bool(dod_trend), bool(temp_trend), soc_trend
+        )
 
-        # Factor 1: State of Charge assessment
-        if current_soc < self.BATTERY_SOC_CRITICAL_MIN:
-            health_factors.append(0.2)
-            issues.append(f"Critical SOC: {current_soc:.1f}%")
-        elif current_soc < self.BATTERY_SOC_WARNING_MIN:
-            health_factors.append(0.5)
-            issues.append(f"Low SOC: {current_soc:.1f}%")
-        elif current_soc < self.BATTERY_SOC_HEALTHY_MIN:
-            health_factors.append(0.8)
-        else:
-            health_factors.append(1.0)
-
-        # Factor 2: Depth of Discharge stress
-        if dod_trend:
-            if current_dod > self.BATTERY_DOD_CRITICAL_MAX:
-                health_factors.append(0.3)
-                issues.append(f"Critical DOD: {current_dod:.1f}%")
-            elif current_dod > self.BATTERY_DOD_WARNING_MAX:
-                health_factors.append(0.6)
-                issues.append(f"High DOD: {current_dod:.1f}%")
-            elif current_dod > self.BATTERY_DOD_HEALTHY_MAX:
-                health_factors.append(0.8)
-            else:
-                health_factors.append(1.0)
-
-        # Factor 3: Temperature stress
-        if temp_trend:
-            if current_temp > self.BATTERY_TEMP_CRITICAL_MAX:
-                health_factors.append(0.2)
-                issues.append(f"Critical temperature: {current_temp:.1f}°C")
-            elif current_temp > self.BATTERY_TEMP_WARNING_MAX:
-                health_factors.append(0.5)
-                issues.append(f"High temperature: {current_temp:.1f}°C")
-            elif current_temp > self.BATTERY_TEMP_HEALTHY_MAX:
-                health_factors.append(0.8)
-            else:
-                health_factors.append(1.0)
-
-        # Factor 4: Cycle count degradation
-        if current_cycles > 0:
-            if current_cycles > self.BATTERY_CYCLE_CRITICAL_MAX:
-                health_factors.append(0.3)
-                issues.append(f"High cycle count: {current_cycles:.0f}")
-            elif current_cycles > self.BATTERY_CYCLE_WARNING_MAX:
-                health_factors.append(0.6)
-                issues.append(f"Elevated cycles: {current_cycles:.0f}")
-            elif current_cycles > self.BATTERY_CYCLE_HEALTHY_MAX:
-                health_factors.append(0.8)
-            else:
-                health_factors.append(1.0)
-
-        # Factor 5: SOC trend degradation (capacity fade indicator)
-        if soc_trend.direction == "decreasing" and soc_trend.slope < -0.5:
-            # SOC declining faster than normal charging/usage
-            health_factors.append(0.6)
-            issues.append(f"Capacity fade detected: {abs(soc_trend.slope):.2f}%/hr decline")
-
-        # Calculate combined health score
-        combined_health = sum(health_factors) / len(health_factors) if health_factors else 1.0
-
-        # Determine health status
-        if combined_health < 0.4:
-            health_status = HealthStatus.CRITICAL
-        elif combined_health < 0.6:
-            health_status = HealthStatus.WARNING
-        elif combined_health < 0.8:
-            health_status = HealthStatus.DEGRADED
-        else:
-            health_status = HealthStatus.HEALTHY
-
-        # Calculate failure probability
-        probability = 1.0 - combined_health
+        # Calculate combined health and determine status
+        combined_health = calculate_combined_health(health_factors)
+        health_status = determine_health_status(combined_health)
+        probability = health_to_probability(combined_health)
 
         # Estimate time to failure based on capacity degradation
         ttf = None
         if soc_trend.direction == "decreasing" and soc_trend.slope < -0.1:
-            hours_to_critical = (current_soc - self.BATTERY_SOC_CRITICAL_MIN) / abs(soc_trend.slope)
+            hours_to_critical = (current_soc - BatteryThresholds.SOC_CRITICAL_MIN) / abs(soc_trend.slope)
             if hours_to_critical > 0:
                 ttf = timedelta(hours=hours_to_critical)
 
@@ -517,6 +403,135 @@ class PredictiveMaintenanceService:
             data_points_analyzed=len(soc_data),
             analysis_window=analysis_window
         )
+
+    def _assess_battery_metrics(
+        self,
+        soc: float,
+        dod: float,
+        temp: float,
+        cycles: float,
+        has_dod: bool,
+        has_temp: bool,
+        soc_trend: TrendAnalysis
+    ) -> Tuple[List[float], List[str]]:
+        """Assess battery health factors and collect issues."""
+        health_factors = []
+        issues = []
+
+        # SOC assessment (lower is worse)
+        h, issue = assess_metric_with_issue(
+            soc, BatteryThresholds.SOC_CRITICAL_MIN,
+            BatteryThresholds.SOC_WARNING_MIN, BatteryThresholds.SOC_HEALTHY_MIN,
+            "SOC", "%", higher_is_worse=False
+        )
+        health_factors.append(h)
+        if issue:
+            issues.append(issue)
+
+        # DOD assessment (higher is worse)
+        if has_dod:
+            h, issue = assess_metric_with_issue(
+                dod, BatteryThresholds.DOD_CRITICAL_MAX,
+                BatteryThresholds.DOD_WARNING_MAX, BatteryThresholds.DOD_HEALTHY_MAX,
+                "DOD", "%", higher_is_worse=True
+            )
+            health_factors.append(h)
+            if issue:
+                issues.append(issue)
+
+        # Temperature assessment (higher is worse)
+        if has_temp:
+            h, issue = assess_metric_with_issue(
+                temp, BatteryThresholds.TEMP_CRITICAL_MAX,
+                BatteryThresholds.TEMP_WARNING_MAX, BatteryThresholds.TEMP_HEALTHY_MAX,
+                "temperature", "°C", higher_is_worse=True
+            )
+            health_factors.append(h)
+            if issue:
+                issues.append(issue)
+
+        # Cycle count assessment (higher is worse)
+        if cycles > 0:
+            h, issue = assess_metric_with_issue(
+                cycles, BatteryThresholds.CYCLE_CRITICAL_MAX,
+                BatteryThresholds.CYCLE_WARNING_MAX, BatteryThresholds.CYCLE_HEALTHY_MAX,
+                "cycle count", "", higher_is_worse=True
+            )
+            health_factors.append(h)
+            if issue:
+                issues.append(issue)
+
+        # SOC trend degradation (capacity fade indicator)
+        if soc_trend.direction == "decreasing" and soc_trend.slope < -0.5:
+            health_factors.append(0.6)
+            issues.append(f"Capacity fade: {abs(soc_trend.slope):.2f}%/hr decline")
+
+        return health_factors, issues
+
+    def _assess_fiber_metrics(
+        self,
+        rx_power: float,
+        tx_power: float,
+        ber: float,
+        osnr: float,
+        has_tx: bool,
+        has_ber: bool,
+        has_osnr: bool,
+        rx_trend: TrendAnalysis
+    ) -> Tuple[List[float], List[str]]:
+        """Assess fiber transport health factors and collect issues."""
+        health_factors = []
+        issues = []
+
+        # RX Power assessment (lower is worse for power)
+        h, issue = assess_metric_with_issue(
+            rx_power, FiberThresholds.RX_POWER_CRITICAL_MIN,
+            FiberThresholds.RX_POWER_WARNING_MIN, FiberThresholds.RX_POWER_HEALTHY_MIN,
+            "RX power", " dBm", higher_is_worse=False
+        )
+        health_factors.append(h)
+        if issue:
+            issues.append(issue)
+
+        # TX Power assessment
+        if has_tx:
+            h, issue = assess_metric_with_issue(
+                tx_power, FiberThresholds.TX_POWER_CRITICAL_MIN,
+                FiberThresholds.TX_POWER_WARNING_MIN, FiberThresholds.TX_POWER_HEALTHY_MIN,
+                "TX power", " dBm", higher_is_worse=False
+            )
+            health_factors.append(h)
+            if issue:
+                issues.append(issue)
+
+        # BER assessment (higher is worse)
+        if has_ber and ber > 0:
+            h, issue = assess_metric_with_issue(
+                ber, FiberThresholds.BER_CRITICAL_MAX,
+                FiberThresholds.BER_WARNING_MAX, FiberThresholds.BER_HEALTHY_MAX,
+                "BER", "", higher_is_worse=True
+            )
+            health_factors.append(h)
+            if issue:
+                issues.append(issue)
+
+        # OSNR assessment (lower is worse)
+        if has_osnr:
+            h, issue = assess_metric_with_issue(
+                osnr, FiberThresholds.OSNR_CRITICAL_MIN,
+                FiberThresholds.OSNR_WARNING_MIN, FiberThresholds.OSNR_HEALTHY_MIN,
+                "OSNR", " dB", higher_is_worse=False
+            )
+            health_factors.append(h)
+            if issue:
+                issues.append(issue)
+
+        # RX power degradation trend
+        if rx_trend.direction == "decreasing" and rx_trend.slope < -0.1:
+            health_factors.append(0.6)
+            issues.append(f"RX power declining: {abs(rx_trend.slope):.2f} dBm/hr")
+
+        return health_factors, issues
 
     def analyze_fiber_transport(
         self,
@@ -562,85 +577,21 @@ class PredictiveMaintenanceService:
         current_ber = ber_data[-1].value if ber_data else 0
         current_osnr = osnr_data[-1].value if osnr_data else 30
 
-        health_factors = []
-        issues = []
+        # Multi-factor health assessment
+        health_factors, issues = self._assess_fiber_metrics(
+            current_rx, current_tx, current_ber, current_osnr,
+            bool(tx_trend), bool(ber_trend), bool(osnr_trend), rx_trend
+        )
 
-        # Factor 1: RX Power assessment
-        if current_rx < self.FIBER_RX_POWER_CRITICAL_MIN:
-            health_factors.append(0.2)
-            issues.append(f"Critical RX power: {current_rx:.1f} dBm")
-        elif current_rx < self.FIBER_RX_POWER_WARNING_MIN:
-            health_factors.append(0.5)
-            issues.append(f"Low RX power: {current_rx:.1f} dBm")
-        elif current_rx < self.FIBER_RX_POWER_HEALTHY_MIN:
-            health_factors.append(0.8)
-        else:
-            health_factors.append(1.0)
-
-        # Factor 2: TX Power assessment
-        if tx_trend:
-            if current_tx < self.FIBER_TX_POWER_CRITICAL_MIN:
-                health_factors.append(0.3)
-                issues.append(f"Critical TX power: {current_tx:.1f} dBm")
-            elif current_tx < self.FIBER_TX_POWER_WARNING_MIN:
-                health_factors.append(0.6)
-                issues.append(f"Low TX power: {current_tx:.1f} dBm")
-            elif current_tx < self.FIBER_TX_POWER_HEALTHY_MIN:
-                health_factors.append(0.8)
-            else:
-                health_factors.append(1.0)
-
-        # Factor 3: BER assessment (lower is better)
-        if ber_trend and current_ber > 0:
-            if current_ber > self.FIBER_BER_CRITICAL_MAX:
-                health_factors.append(0.2)
-                issues.append(f"Critical BER: {current_ber:.2e}")
-            elif current_ber > self.FIBER_BER_WARNING_MAX:
-                health_factors.append(0.5)
-                issues.append(f"High BER: {current_ber:.2e}")
-            elif current_ber > self.FIBER_BER_HEALTHY_MAX:
-                health_factors.append(0.8)
-            else:
-                health_factors.append(1.0)
-
-        # Factor 4: OSNR assessment (higher is better)
-        if osnr_trend:
-            if current_osnr < self.FIBER_OSNR_CRITICAL_MIN:
-                health_factors.append(0.2)
-                issues.append(f"Critical OSNR: {current_osnr:.1f} dB")
-            elif current_osnr < self.FIBER_OSNR_WARNING_MIN:
-                health_factors.append(0.5)
-                issues.append(f"Low OSNR: {current_osnr:.1f} dB")
-            elif current_osnr < self.FIBER_OSNR_HEALTHY_MIN:
-                health_factors.append(0.8)
-            else:
-                health_factors.append(1.0)
-
-        # Factor 5: Power degradation trend
-        if rx_trend.direction == "decreasing" and rx_trend.slope < -0.1:
-            # RX power declining - potential fiber degradation
-            health_factors.append(0.6)
-            issues.append(f"RX power declining: {abs(rx_trend.slope):.2f} dBm/hr")
-
-        # Calculate combined health
-        combined_health = sum(health_factors) / len(health_factors) if health_factors else 1.0
-
-        # Determine health status
-        if combined_health < 0.4:
-            health_status = HealthStatus.CRITICAL
-        elif combined_health < 0.6:
-            health_status = HealthStatus.WARNING
-        elif combined_health < 0.8:
-            health_status = HealthStatus.DEGRADED
-        else:
-            health_status = HealthStatus.HEALTHY
-
-        probability = 1.0 - combined_health
+        # Calculate combined health and determine status
+        combined_health = calculate_combined_health(health_factors)
+        health_status = determine_health_status(combined_health)
+        probability = health_to_probability(combined_health)
 
         # Estimate time to failure
         ttf = None
         if rx_trend.direction == "decreasing" and rx_trend.slope < -0.05:
-            hours_to_critical = (current_rx - self.FIBER_RX_POWER_CRITICAL_MIN) / abs(rx_trend.slope)
+            hours_to_critical = (current_rx - FiberThresholds.RX_POWER_CRITICAL_MIN) / abs(rx_trend.slope)
             if hours_to_critical > 0:
                 ttf = timedelta(hours=hours_to_critical)
 
@@ -675,14 +626,14 @@ class PredictiveMaintenanceService:
     def _get_battery_recommendation(
         self,
         status: HealthStatus,
-        issues: List[str],
+        _issues: List[str],  # Reserved for issue-specific recommendations
         cycle_count: float
     ) -> str:
         """Get recommended action for battery issues."""
         if status == HealthStatus.CRITICAL:
             return "URGENT: Battery replacement required. Risk of power failure"
         elif status == HealthStatus.WARNING:
-            if cycle_count > self.BATTERY_CYCLE_WARNING_MAX:
+            if cycle_count > BatteryThresholds.CYCLE_WARNING_MAX:
                 return "Schedule battery replacement within 30 days due to cycle degradation"
             return "Monitor battery closely. Schedule inspection within 1 week"
         elif status == HealthStatus.DEGRADED:
@@ -834,7 +785,7 @@ class PredictiveMaintenanceService:
         return TrendAnalysis(
             direction=direction,
             slope=slope,
-            r_squared=max(0, min(1, r_squared)),
+            r_squared=float(max(0, min(1, r_squared))),
             mean=mean_val,
             std_dev=std_dev,
             min_value=min(values),
@@ -844,15 +795,15 @@ class PredictiveMaintenanceService:
 
     def _assess_fan_health_status(self, current_rpm: float, trend: TrendAnalysis) -> HealthStatus:
         """Assess fan health status based on RPM and trend."""
-        if current_rpm < self.FAN_CRITICAL_RPM_MIN:
+        if current_rpm < FanThresholds.CRITICAL_RPM_MIN:
             return HealthStatus.CRITICAL
-        elif current_rpm < self.FAN_WARNING_RPM_MIN:
+        elif current_rpm < FanThresholds.WARNING_RPM_MIN:
             return HealthStatus.WARNING
-        elif current_rpm < self.FAN_HEALTHY_RPM_MIN:
+        elif current_rpm < FanThresholds.HEALTHY_RPM_MIN:
             return HealthStatus.DEGRADED
         elif trend.direction == "erratic":
             return HealthStatus.WARNING
-        elif trend.direction == "decreasing" and trend.slope < self.FAN_DEGRADATION_SLOPE_THRESHOLD:
+        elif trend.direction == "decreasing" and trend.slope < FanThresholds.DEGRADATION_SLOPE:
             return HealthStatus.DEGRADED
         else:
             return HealthStatus.HEALTHY
@@ -867,17 +818,17 @@ class PredictiveMaintenanceService:
         ttf = None
 
         # Base probability from current RPM
-        if current_rpm < self.FAN_CRITICAL_RPM_MIN:
+        if current_rpm < FanThresholds.CRITICAL_RPM_MIN:
             probability = 0.9
-        elif current_rpm < self.FAN_WARNING_RPM_MIN:
+        elif current_rpm < FanThresholds.WARNING_RPM_MIN:
             probability = 0.6
-        elif current_rpm < self.FAN_HEALTHY_RPM_MIN:
+        elif current_rpm < FanThresholds.HEALTHY_RPM_MIN:
             probability = 0.3
 
         # Adjust for trend
         if trend.direction == "decreasing" and trend.slope < 0:
             # Calculate hours until critical RPM
-            hours_to_critical = (current_rpm - self.FAN_CRITICAL_RPM_MIN) / abs(trend.slope)
+            hours_to_critical = (current_rpm - FanThresholds.CRITICAL_RPM_MIN) / abs(trend.slope)
             if hours_to_critical > 0:
                 ttf = timedelta(hours=hours_to_critical)
                 # Higher probability if failure imminent
@@ -892,7 +843,7 @@ class PredictiveMaintenanceService:
 
         # High variation is concerning
         cv = trend.std_dev / trend.mean if trend.mean > 0 else 0
-        if cv > self.FAN_RPM_VARIATION_THRESHOLD:
+        if cv > FanThresholds.VARIATION_THRESHOLD:
             probability = max(probability, 0.4)
 
         return min(1.0, probability), ttf
@@ -910,7 +861,7 @@ class PredictiveMaintenanceService:
         self,
         status: HealthStatus,
         trend: TrendAnalysis,
-        probability: float
+        _probability: float  # Reserved for future use
     ) -> str:
         """Generate human-readable prediction text for fan status."""
         if status == HealthStatus.CRITICAL:
@@ -927,7 +878,7 @@ class PredictiveMaintenanceService:
     def _get_fan_recommendation(
         self,
         status: HealthStatus,
-        trend: TrendAnalysis,
+        _trend: TrendAnalysis,  # Reserved for trend-based recommendations
         probability: float
     ) -> str:
         """Get recommended action for fan issues."""
@@ -957,15 +908,5 @@ class PredictiveMaintenanceService:
 
 
 # Singleton instance with thread-safe initialization
-_maintenance_service: Optional[PredictiveMaintenanceService] = None
-_maintenance_service_lock = threading.Lock()
-
-
-def get_predictive_maintenance_service() -> PredictiveMaintenanceService:
-    """Get or create singleton PredictiveMaintenanceService instance (thread-safe)."""
-    global _maintenance_service
-    if _maintenance_service is None:
-        with _maintenance_service_lock:
-            if _maintenance_service is None:  # Double-check locking
-                _maintenance_service = PredictiveMaintenanceService()
-    return _maintenance_service
+from .utils.singleton import singleton_factory
+get_predictive_maintenance_service = singleton_factory(PredictiveMaintenanceService)

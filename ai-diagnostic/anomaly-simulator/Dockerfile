@@ -3,7 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Install dependencies
-RUN pip install --no-cache-dir requests
+RUN pip install --no-cache-dir requests flask
 
 # Copy protocol and simulator
 COPY device_protocol.py .

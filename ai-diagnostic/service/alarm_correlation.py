@@ -453,18 +453,8 @@ class AlarmCorrelationService:
 
 
 # Singleton instance with thread-safe initialization
-_alarm_service: Optional[AlarmCorrelationService] = None
-_alarm_service_lock = threading.Lock()
-
-
-def get_alarm_correlation_service() -> AlarmCorrelationService:
-    """Get or create singleton AlarmCorrelationService instance (thread-safe)."""
-    global _alarm_service
-    if _alarm_service is None:
-        with _alarm_service_lock:
-            if _alarm_service is None:  # Double-check locking
-                _alarm_service = AlarmCorrelationService()
-    return _alarm_service
+from .utils.singleton import singleton_factory
+get_alarm_correlation_service = singleton_factory(AlarmCorrelationService)
 
 
 def parse_alarm_from_dict(data: Dict[str, Any]) -> Alarm:

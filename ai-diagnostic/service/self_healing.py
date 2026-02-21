@@ -14,6 +14,7 @@ Features:
 """
 
 import logging
+import os
 import threading
 import time
 from typing import Dict, Any, List, Optional, Callable
@@ -22,6 +23,10 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from collections import defaultdict, deque
 import json
+import hmac as hmac_mod
+import hashlib
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +159,7 @@ class SelfHealingService:
         self,
         device_client: Optional[Any] = None,
         son_callback: Optional[Callable] = None,
+        diagnostic_callback: Optional[Callable] = None,
         max_concurrent_actions: int = 5
     ):
         """
@@ -162,10 +168,12 @@ class SelfHealingService:
         Args:
             device_client: Client for communicating with devices
             son_callback: Callback to notify SON service of results
+            diagnostic_callback: Callback to report AI diagnostic healing results to monitoring service
             max_concurrent_actions: Max parallel actions per station
         """
         self.device_client = device_client
         self.son_callback = son_callback
+        self.diagnostic_callback = diagnostic_callback
         self.max_concurrent = max_concurrent_actions
 
         # Action queues and tracking
@@ -221,6 +229,41 @@ class SelfHealingService:
             Status dict with action_id and whether it was queued/executed
         """
         with self._lock:
+            # Deduplication: skip if an action for the same source is already
+            # pending or executing (prevents duplicate healing for the same problem)
+            for existing in self.pending_actions.values():
+                if (existing.source_id == action.source_id
+                        and existing.station_id == action.station_id):
+                    logger.info(
+                        "Skipping duplicate action for source_id=%s station=%s "
+                        "(existing action %s already pending)",
+                        action.source_id, action.station_id, existing.id,
+                    )
+                    return {
+                        "action_id": action.id,
+                        "status": "skipped_duplicate",
+                        "existing_action_id": existing.id,
+                        "auto_execute": False,
+                        "risk_level": action.risk_level.value,
+                        "requires_approval": True,
+                    }
+            for existing in self.executing_actions.values():
+                if (existing.source_id == action.source_id
+                        and existing.station_id == action.station_id):
+                    logger.info(
+                        "Skipping duplicate action for source_id=%s station=%s "
+                        "(existing action %s already executing)",
+                        action.source_id, action.station_id, existing.id,
+                    )
+                    return {
+                        "action_id": action.id,
+                        "status": "skipped_duplicate",
+                        "existing_action_id": existing.id,
+                        "auto_execute": False,
+                        "risk_level": action.risk_level.value,
+                        "requires_approval": True,
+                    }
+
             self.pending_actions[action.id] = action
             self.stats["total_actions"] += 1
 
@@ -272,7 +315,7 @@ class SelfHealingService:
         """Cancel a pending action."""
         with self._lock:
             if action_id in self.pending_actions:
-                action = self.pending_actions.pop(action_id)
+                self.pending_actions.pop(action_id)
                 logger.info(f"Action {action_id} cancelled: {reason}")
                 return {
                     "action_id": action_id,
@@ -296,7 +339,7 @@ class SelfHealingService:
     ) -> List[Dict[str, Any]]:
         """Get execution history."""
         with self._lock:
-            results = self.completed_results[-limit:]
+            results = list(self.completed_results)[-limit:]
             if station_id:
                 # Filter by station (need to look up action)
                 filtered = []
@@ -515,6 +558,10 @@ class SelfHealingService:
             else:
                 success, output = self._execute_generic(action)
 
+            # For AI diagnostic actions: suppress anomaly and verify metrics
+            if success and action.source == "ai-diagnostic":
+                success, output = self._post_healing_check(action, output)
+
             result.completed_at = datetime.now(timezone.utc)
             result.output = output
 
@@ -546,16 +593,39 @@ class SelfHealingService:
                 self.completed_results.append(result)
                 # deque maxlen automatically keeps only last 1000 results
 
-            # Notify SON service if applicable
-            if action.source == "son" and self.son_callback:
-                try:
-                    self.son_callback(
-                        action.source_id,
-                        result.status == ExecutionStatus.SUCCESS,
-                        result.output or result.error
-                    )
-                except Exception as e:
-                    logger.error(f"SON callback failed: {e}")
+            self._notify_source(action, result)
+
+    def _post_healing_check(self, action: HealingAction, output: str) -> tuple[bool, str]:
+        """Verify metrics returned to normal after healing command was sent.
+
+        The command flow already handles fault clearing:
+          base-station-service → edge-bridge → EXECUTE_COMMAND → device-simulator
+        So we only need to verify that metrics actually improved.
+        """
+        verified, verify_msg = self._verify_metrics(action)
+        if not verified:
+            logger.info("Post-healing verification FAILED for %s: %s", action.id, verify_msg)
+            return False, verify_msg
+
+        logger.info("Post-healing verification PASSED for %s: %s", action.id, verify_msg)
+        return True, output
+
+    def _notify_source(self, action: HealingAction, result: 'ExecutionResult'):
+        """Send callback notification to the action's originating service."""
+        succeeded = result.status == ExecutionStatus.SUCCESS
+        message = result.output or result.error or ""
+
+        if action.source == "son" and self.son_callback:
+            try:
+                self.son_callback(action.source_id, succeeded, message)
+            except Exception as e:
+                logger.error(f"SON callback failed: {e}")
+
+        if action.source == "ai-diagnostic" and self.diagnostic_callback:
+            try:
+                self.diagnostic_callback(action.source_id, succeeded, message)
+            except Exception as e:
+                logger.error(f"Diagnostic callback failed: {e}")
 
     def _execute_generic(self, action: HealingAction) -> tuple[bool, str]:
         """Generic action execution (placeholder for real implementation)."""
@@ -564,44 +634,45 @@ class SelfHealingService:
         return True, f"Executed {action.action_type.value} on {action.station_id}"
 
     def _execute_parameter_change(self, action: HealingAction) -> tuple[bool, str]:
-        """Execute a parameter change action."""
+        """Execute a parameter change by creating a command via base-station-service.
+
+        The command flows: base-station-service → edge-bridge → device-simulator.
+        Device-simulator receives SET_PARAMETER with {action: "clear_fault", fault_type: ...}
+        and clears the injected fault, restoring normal metrics.
+        """
         params = action.parameters
         problem_code = params.get('problem_code', 'unknown')
-        commands = params.get('commands', [])
-        expected = params.get('expected_outcome', '')
 
-        logger.info("=== AUTO-HEALING EXECUTION ===")
-        logger.info(f"  Station: {action.station_id}")
-        logger.info(f"  Problem: {problem_code}")
-        logger.info(f"  Description: {action.description}")
-        if commands:
-            logger.info("  Commands to execute:")
-            for cmd in commands:
-                logger.info(f"    > {cmd}")
-        if expected:
-            logger.info(f"  Expected outcome: {expected}")
-        logger.info("==============================")
+        logger.info("=== AUTO-HEALING: PARAMETER CHANGE via COMMAND API ===")
+        logger.info("  Station: %s", action.station_id)
+        logger.info("  Problem: %s", problem_code)
+        logger.info("  Description: %s", action.description)
+        logger.info("=====================================================")
 
-        if self.device_client:
-            # Real implementation would use device_client to execute commands
-            pass
-
-        return True, f"Executed healing for {problem_code}: {action.description}"
+        return self._create_device_command(
+            action=action,
+            command_type="SET_PARAMETER",
+            command_params={
+                "action": "clear_fault",
+                "fault_type": problem_code,
+            },
+        )
 
     def _execute_service_restart(self, action: HealingAction) -> tuple[bool, str]:
-        """Execute a service restart action."""
+        """Execute a service restart by creating a RESTART command via base-station-service."""
         params = action.parameters
         problem_code = params.get('problem_code', 'unknown')
 
-        logger.info("=== AUTO-HEALING: SERVICE RESTART ===")
-        logger.info(f"  Station: {action.station_id}")
-        logger.info(f"  Problem: {problem_code}")
-        logger.info(f"  Description: {action.description}")
-        logger.info("======================================")
+        logger.info("=== AUTO-HEALING: SERVICE RESTART via COMMAND API ===")
+        logger.info("  Station: %s", action.station_id)
+        logger.info("  Problem: %s", problem_code)
+        logger.info("====================================================")
 
-        # Simulate restart with delay
-        time.sleep(2)
-        return True, f"Service restarted on {action.station_id} for {problem_code}"
+        return self._create_device_command(
+            action=action,
+            command_type="RESTART",
+            command_params={"component": "radio"},
+        )
 
     def _execute_load_balance(self, action: HealingAction) -> tuple[bool, str]:
         """Execute a load balancing action."""
@@ -628,6 +699,151 @@ class SelfHealingService:
         """Execute an alarm suppression action."""
         logger.info(f"Suppressing alarms for {action.station_id}")
         return True, f"Alarms suppressed for maintenance on {action.station_id}"
+
+    def _get_service_auth_headers(self) -> Dict[str, str]:
+        """Build auth headers for service-to-service calls to Java backend."""
+        headers = {
+            "X-User-Name": "system-healing",
+            "X-User-Role": "SERVICE",
+            "Content-Type": "application/json",
+        }
+        internal_secret = os.environ.get("SECURITY_INTERNAL_SECRET", "")
+        if internal_secret:
+            ts_ms = int(time.time() * 1000)
+            payload = f"system-healing:SERVICE:{ts_ms}"
+            sig = hmac_mod.new(
+                internal_secret.encode(), payload.encode(), hashlib.sha256
+            ).hexdigest()
+            headers["X-Internal-Auth"] = f"{sig}.{payload}"
+        return headers
+
+    def _create_device_command(
+        self,
+        action: HealingAction,
+        command_type: str,
+        command_params: Dict[str, str],
+    ) -> tuple[bool, str]:
+        """Create a device command via base-station-service REST API.
+
+        The command is picked up by edge-bridge, sent to device-simulator via
+        binary protocol, and the result flows back through the same path.
+
+        POST /api/v1/stations/{stationId}/commands/ai
+        """
+        base_station_url = os.environ.get(
+            "BASE_STATION_SERVICE_URL", "http://base-station-service:8081"
+        )
+
+        # Parse station number (action.station_id may be "1" or "STATION-1")
+        station_num = action.station_id
+        if station_num.startswith("STATION-"):
+            station_num = station_num.split("-", 1)[1]
+
+        problem_code = action.parameters.get("problem_code", "unknown")
+        confidence = action.parameters.get("confidence")
+        risk_level = action.risk_level.value
+
+        # Convert params to Map<String, String> (Java expects string values)
+        str_params = {k: str(v) for k, v in command_params.items()}
+
+        request_body = {
+            "diagnosticSessionId": action.source_id,
+            "problemCode": problem_code,
+            "commandType": command_type,
+            "params": str_params,
+            "confidence": confidence,
+            "riskLevel": risk_level,
+        }
+
+        url = f"{base_station_url}/api/v1/stations/{station_num}/commands/ai"
+        logger.info("Creating device command: POST %s", url)
+        logger.info("  Body: %s", json.dumps(request_body))
+
+        try:
+            resp = requests.post(
+                url,
+                json=request_body,
+                headers=self._get_service_auth_headers(),
+                timeout=10,
+            )
+            if resp.status_code == 201:
+                cmd = resp.json()
+                cmd_id = cmd.get("id", "?")
+                cmd_status = cmd.get("status", "?")
+                logger.info(
+                    "Command created: id=%s status=%s type=%s",
+                    cmd_id, cmd_status, command_type,
+                )
+                return True, f"Command {cmd_id} created ({cmd_status})"
+
+            logger.warning(
+                "Failed to create command: HTTP %d — %s",
+                resp.status_code, resp.text[:300],
+            )
+            return False, f"Command creation failed: HTTP {resp.status_code}"
+        except requests.RequestException as e:
+            logger.error("Error creating device command: %s", e)
+            return False, f"Command creation error: {e}"
+
+    # Configurable delay (seconds) before post-healing metric check
+    _VERIFY_DELAY = int(os.environ.get("HEALING_VERIFY_DELAY", "5"))
+
+    def _verify_metrics(self, action: HealingAction) -> tuple[bool, str]:
+        """Query monitoring service to verify the metric actually improved."""
+        params = action.parameters
+        metric_type = params.get("metric_type")
+        threshold = params.get("threshold")
+        higher_is_worse = params.get("higher_is_worse")
+
+        if not metric_type or threshold is None or higher_is_worse is None:
+            return True, "No metric verification info available"
+
+        # Parse station number from "STATION-1" format
+        station_num = action.station_id
+        if station_num.startswith("STATION-"):
+            station_num = station_num.split("-", 1)[1]
+
+        # Wait for at least one fresh metric reading
+        time.sleep(self._VERIFY_DELAY)
+
+        monitoring_url = os.environ.get(
+            "MONITORING_SERVICE_URL", "http://monitoring-service:8082"
+        )
+        url = f"{monitoring_url}/api/v1/metrics/station/{station_num}/type/{metric_type}"
+
+        try:
+            headers = self._get_service_auth_headers()
+            resp = requests.get(url, headers=headers, timeout=10)
+            if not resp.ok:
+                logger.warning("Metric verification query failed: HTTP %s", resp.status_code)
+                return True, f"Verification skipped (HTTP {resp.status_code})"
+
+            metrics = resp.json()
+            if not metrics:
+                return True, "No metrics returned for verification"
+
+            latest = metrics[-1] if isinstance(metrics, list) else metrics
+            current_value = latest.get("value")
+            if current_value is None:
+                return True, "No value in latest metric"
+
+            if higher_is_worse:
+                still_bad = current_value > threshold
+            else:
+                still_bad = current_value < threshold
+
+            if still_bad:
+                return False, (
+                    f"Metric {metric_type} still abnormal: "
+                    f"{current_value} vs threshold {threshold}"
+                )
+            return True, (
+                f"Metric {metric_type} verified normal: "
+                f"{current_value} vs threshold {threshold}"
+            )
+        except Exception as e:
+            logger.warning("Metric verification error: %s", e)
+            return True, f"Verification skipped ({e})"
 
     def _perform_rollback(self, action: HealingAction, result: ExecutionResult):
         """Perform rollback after failed action."""
@@ -656,12 +872,18 @@ _healing_service: Optional[SelfHealingService] = None
 _healing_service_lock = threading.Lock()
 
 
-def get_self_healing_service() -> SelfHealingService:
+def get_self_healing_service(
+    diagnostic_callback: Optional[Callable] = None,
+) -> SelfHealingService:
     """Get or create singleton SelfHealingService instance (thread-safe)."""
     global _healing_service
     if _healing_service is None:
         with _healing_service_lock:
             if _healing_service is None:  # Double-check locking
-                _healing_service = SelfHealingService()
+                _healing_service = SelfHealingService(
+                    diagnostic_callback=diagnostic_callback
+                )
                 _healing_service.start()
+    elif diagnostic_callback and not _healing_service.diagnostic_callback:
+        _healing_service.diagnostic_callback = diagnostic_callback
     return _healing_service

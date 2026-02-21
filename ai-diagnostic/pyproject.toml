@@ -1,0 +1,18 @@
+[project]
+name = "ai-diagnostic"
+version = "1.0.0"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["service"]
+omit = ["service/diagnostic_service.py"]
+
+[tool.coverage.report]
+show_missing = true

@@ -664,7 +664,7 @@ def main():
     parser.add_argument("--host", default="localhost", help="AI diagnostic service host")
     parser.add_argument("--port", type=int, default=9090, help="AI diagnostic service port")
     parser.add_argument("--protocol-port", type=int, default=8888, help="Device protocol server port")
-    parser.add_argument("--interval", type=float, default=5.0, help="Simulation interval in seconds")
+    parser.add_argument("--interval", type=float, default=3.0, help="Simulation interval in seconds")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
     args = parser.parse_args()

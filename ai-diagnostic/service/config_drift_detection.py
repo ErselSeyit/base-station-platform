@@ -373,9 +373,7 @@ class ConfigDriftDetectionService:
         baseline_value: Any
     ) -> Optional[str]:
         """Get remediation command if available."""
-        if drift_type == DriftType.PARAM_REMOVED:
-            return f"set {param} {baseline_value}"
-        elif drift_type == DriftType.VALUE_CHANGED:
+        if drift_type in (DriftType.PARAM_REMOVED, DriftType.VALUE_CHANGED):
             return f"set {param} {baseline_value}"
         return None
 
@@ -476,15 +474,5 @@ class ConfigDriftDetectionService:
 
 
 # Singleton instance with thread-safe initialization
-_config_service: Optional[ConfigDriftDetectionService] = None
-_config_service_lock = threading.Lock()
-
-
-def get_config_drift_service() -> ConfigDriftDetectionService:
-    """Get or create singleton ConfigDriftDetectionService instance (thread-safe)."""
-    global _config_service
-    if _config_service is None:
-        with _config_service_lock:
-            if _config_service is None:  # Double-check locking
-                _config_service = ConfigDriftDetectionService()
-    return _config_service
+from .utils.singleton import singleton_factory
+get_config_drift_service = singleton_factory(ConfigDriftDetectionService)

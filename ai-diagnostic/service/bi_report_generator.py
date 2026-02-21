@@ -11,21 +11,23 @@ import logging
 import os
 import requests
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict
 
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for server use
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.patches import Rectangle, Circle
 import matplotlib.patches as mpatches
 from matplotlib.gridspec import GridSpec
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Modern RNG (replaces deprecated np.random functions)
-_rng = np.random.default_rng(42)
+# Shared RNG for reproducibility
+from .utils.rng import get_rng
+_rng = get_rng()
 
 # Professional color palette
 COLORS = {
@@ -162,14 +164,14 @@ class BIReportGenerator:
 
     def _add_header(self, fig, title: str, subtitle: str = ""):
         """Add professional header to page"""
-        header_ax = fig.add_axes([0, 0.92, 1, 0.08])
+        header_ax = fig.add_axes((0, 0.92, 1, 0.08))
         header_ax.set_xlim(0, 1)
         header_ax.set_ylim(0, 1)
         header_ax.axis('off')
 
         gradient = np.linspace(0, 1, 100).reshape(1, -1)
         header_ax.imshow(gradient, extent=[0, 1, 0, 1], aspect='auto',
-                        cmap=plt.cm.Blues, alpha=0.3)
+                        cmap="Blues", alpha=0.3)
 
         header_ax.text(0.03, 0.6, title, fontsize=26, fontweight='bold',
                       color=COLORS["dark"], va='center')
@@ -183,7 +185,7 @@ class BIReportGenerator:
 
     def _add_footer(self, fig, page_num: int):
         """Add footer with page number and timestamp"""
-        footer_ax = fig.add_axes([0, 0, 1, 0.035])
+        footer_ax = fig.add_axes((0, 0, 1, 0.035))
         footer_ax.set_xlim(0, 1)
         footer_ax.set_ylim(0, 1)
         footer_ax.axis('off')
@@ -199,12 +201,12 @@ class BIReportGenerator:
     def create_title_page(self, pdf: PdfPages):
         """Create title page"""
         fig = plt.figure(figsize=(11, 8.5))
-        ax = fig.add_axes([0, 0, 1, 1])
+        ax = fig.add_axes((0, 0, 1, 1))
         ax.axis('off')
 
         y = np.linspace(0, 1, 100)
         gradient = y.reshape(-1, 1)
-        ax.imshow(gradient, extent=[0, 1, 0, 1], aspect='auto',
+        ax.imshow(gradient, extent=(0, 1, 0, 1), aspect='auto',
                  cmap='Blues', alpha=0.15, origin='lower')
 
         ax.text(0.5, 0.65, "Base Station Platform", fontsize=42, fontweight='bold',
@@ -213,7 +215,7 @@ class BIReportGenerator:
                ha='center', va='center', color=COLORS["primary"], fontweight='medium')
         ax.axhline(y=0.47, xmin=0.3, xmax=0.7, color=COLORS["primary"], linewidth=3)
 
-        info_box = plt.Rectangle((0.25, 0.2), 0.5, 0.2, fill=True,
+        info_box = Rectangle((0.25, 0.2), 0.5, 0.2, fill=True,
                                   facecolor=COLORS["light"], edgecolor=COLORS["secondary"],
                                   linewidth=1.5, alpha=0.9)
         ax.add_patch(info_box)
@@ -253,11 +255,11 @@ class BIReportGenerator:
 
         return {
             "health_score": (online_count / total_stations) * 100,
-            "avg_cpu": np.mean(metrics_by_type.get("CPU_USAGE", [0])),
-            "avg_temp": np.mean(metrics_by_type.get("TEMPERATURE", [45])),
-            "avg_signal": np.mean(metrics_by_type.get("SIGNAL_STRENGTH", [-60])),
-            "total_throughput": sum(metrics_by_type.get("DATA_THROUGHPUT", [0])),
-            "avg_memory": np.mean(metrics_by_type.get("MEMORY_USAGE", [0])),
+            "avg_cpu": float(np.mean(metrics_by_type.get("CPU_USAGE", [0]))),
+            "avg_temp": float(np.mean(metrics_by_type.get("TEMPERATURE", [45]))),
+            "avg_signal": float(np.mean(metrics_by_type.get("SIGNAL_STRENGTH", [-60]))),
+            "total_throughput": float(sum(metrics_by_type.get("DATA_THROUGHPUT", [0]))),
+            "avg_memory": float(np.mean(metrics_by_type.get("MEMORY_USAGE", [0]))),
         }
 
     def create_executive_summary(self, pdf: PdfPages):
@@ -290,7 +292,7 @@ class BIReportGenerator:
             ax = fig.add_subplot(gs[i // 3, i % 3])
             ax.axis('off')
 
-            card = plt.Rectangle((0.05, 0.1), 0.9, 0.8, fill=True,
+            card = Rectangle((0.05, 0.1), 0.9, 0.8, fill=True,
                                  facecolor=COLORS["white"], edgecolor=color,
                                  linewidth=2, alpha=1, transform=ax.transAxes)
             ax.add_patch(card)
@@ -324,7 +326,7 @@ class BIReportGenerator:
                 autotext.set_fontweight('bold')
                 autotext.set_fontsize(10)
 
-            centre_circle = plt.Circle((0, 0), 0.35, fc='white')
+            centre_circle = Circle((0, 0), 0.35, fc='white')
             ax.add_patch(centre_circle)
             ax.text(0, 0, f"{len(self.stations)}\nStations", ha='center', va='center',
                    fontsize=14, fontweight='bold', color=COLORS["dark"])
@@ -500,11 +502,11 @@ class BIReportGenerator:
         metrics_by_station = self._aggregate_metrics_by_station()
 
         # CPU Usage
-        cpu_data = {k: np.mean(v.get("CPU_USAGE", [0])) for k, v in metrics_by_station.items() if v.get("CPU_USAGE")}
+        cpu_data = {k: float(np.mean(v.get("CPU_USAGE", [0]))) for k, v in metrics_by_station.items() if v.get("CPU_USAGE")}
         self._create_usage_bar_chart(fig.add_subplot(gs[0, 0]), cpu_data, "CPU Usage by Station", 60, 80, True)
 
         # Memory Usage
-        mem_data = {k: np.mean(v.get("MEMORY_USAGE", [0])) for k, v in metrics_by_station.items() if v.get("MEMORY_USAGE")}
+        mem_data = {k: float(np.mean(v.get("MEMORY_USAGE", [0]))) for k, v in metrics_by_station.items() if v.get("MEMORY_USAGE")}
         self._create_usage_bar_chart(fig.add_subplot(gs[0, 1]), mem_data, "Memory Usage by Station", 70, 85)
 
         # Temperature Distribution
@@ -618,17 +620,17 @@ class BIReportGenerator:
         metrics_by_station = self._aggregate_metrics_by_station()
 
         # Throughput
-        throughput = {k: np.mean(v.get("DATA_THROUGHPUT", [0])) for k, v in metrics_by_station.items() if v.get("DATA_THROUGHPUT")}
+        throughput = {k: float(np.mean(v.get("DATA_THROUGHPUT", [0]))) for k, v in metrics_by_station.items() if v.get("DATA_THROUGHPUT")}
         self._create_simple_bar_chart(fig.add_subplot(gs[0, 0]), throughput,
                                       "Data Throughput by Station", "Throughput (Mbps)", COLORS["info"])
 
         # Connections
-        connections = {k: np.mean(v.get("CONNECTION_COUNT", [0])) for k, v in metrics_by_station.items() if v.get("CONNECTION_COUNT")}
+        connections = {k: float(np.mean(v.get("CONNECTION_COUNT", [0]))) for k, v in metrics_by_station.items() if v.get("CONNECTION_COUNT")}
         self._create_simple_bar_chart(fig.add_subplot(gs[0, 1]), connections,
                                       "Connected Devices by Station", "Connections", COLORS["accent2"], 1)
 
         # Uptime
-        uptime = {k: np.mean(v.get("UPTIME", [99])) for k, v in metrics_by_station.items() if v.get("UPTIME")}
+        uptime = {k: float(np.mean(v.get("UPTIME", [99]))) for k, v in metrics_by_station.items() if v.get("UPTIME")}
         self._create_uptime_chart(fig.add_subplot(gs[1, 0]), uptime)
 
         # Metrics Summary Table
@@ -765,7 +767,7 @@ class BIReportGenerator:
         fig = plt.figure(figsize=(11, 8.5))
         self._add_header(fig, "Geographic Distribution", "Station Locations")
 
-        ax = fig.add_axes([0.1, 0.15, 0.8, 0.7])
+        ax = fig.add_axes((0.1, 0.15, 0.8, 0.7))
 
         lats, lons, names, statuses = [], [], [], []
         for s in self.stations:
@@ -851,7 +853,7 @@ class BIReportGenerator:
                 return "FAIL", COLORS["danger"]
 
     def _draw_gauge(self, ax, value: float, min_val: float, max_val: float,
-                    label: str, unit: str, threshold: float = None):
+                    label: str, unit: str, threshold: Optional[float] = None):
         """Draw a speedometer-style gauge chart."""
         ax.set_xlim(-1.5, 1.5)
         ax.set_ylim(-0.2, 1.3)
@@ -909,7 +911,7 @@ class BIReportGenerator:
         ax.axis('off')
 
         # Background card
-        card = plt.Rectangle((0.05, 0.05), 0.9, 0.9, fill=True,
+        card = Rectangle((0.05, 0.05), 0.9, 0.9, fill=True,
                              facecolor=COLORS["white"], edgecolor=COLORS["secondary"],
                              linewidth=1, alpha=0.9)
         ax.add_patch(card)
@@ -919,11 +921,11 @@ class BIReportGenerator:
                         "FAIL": COLORS["danger"], "N/A": COLORS["secondary"]}
         light_color = status_colors.get(status, COLORS["secondary"])
 
-        circle = plt.Circle((0.5, 0.7), 0.15, color=light_color, ec='white', linewidth=2)
+        circle = Circle((0.5, 0.7), 0.15, color=light_color, ec='white', linewidth=2)
         ax.add_patch(circle)
 
         # Glow effect
-        glow = plt.Circle((0.5, 0.7), 0.18, color=light_color, alpha=0.3)
+        glow = Circle((0.5, 0.7), 0.18, color=light_color, alpha=0.3)
         ax.add_patch(glow)
 
         # Text
@@ -974,7 +976,7 @@ class BIReportGenerator:
             values = metrics_agg.get(metric_type, [])
 
             if values:
-                avg_val = np.mean(values)
+                avg_val = float(np.mean(values))
                 status, _ = self._get_ssv_status(metric_type, avg_val)
                 unit = self.SSV_THRESHOLDS[metric_type]["unit"]
                 value_str = f"{avg_val:.1f} {unit}"
@@ -987,12 +989,12 @@ class BIReportGenerator:
         # Summary box
         total_kpis = len([k for k in kpi_display if metrics_agg.get(k[0])])
         passed = sum(1 for k, _, _ in kpi_display if metrics_agg.get(k) and
-                    self._get_ssv_status(k, np.mean(metrics_agg[k]))[0] == "PASS")
+                    self._get_ssv_status(k, float(np.mean(metrics_agg[k])))[0] == "PASS")
         warned = sum(1 for k, _, _ in kpi_display if metrics_agg.get(k) and
-                    self._get_ssv_status(k, np.mean(metrics_agg[k]))[0] == "WARN")
+                    self._get_ssv_status(k, float(np.mean(metrics_agg[k])))[0] == "WARN")
         failed = total_kpis - passed - warned
 
-        summary_ax = fig.add_axes([0.3, 0.02, 0.4, 0.05])
+        summary_ax = fig.add_axes((0.3, 0.02, 0.4, 0.05))
         summary_ax.axis('off')
         summary_ax.text(0.5, 0.5,
                        f"SSV Summary: {passed} PASS | {warned} WARN | {failed} FAIL",
@@ -1030,7 +1032,7 @@ class BIReportGenerator:
         for i, (metric_type, label, min_v, max_v, thresh, unit) in enumerate(gauge_configs):
             ax = fig.add_subplot(gs[i // 2, i % 2])
             values = metrics_agg.get(metric_type, [])
-            value = np.mean(values) if values else 0
+            value = float(np.mean(values)) if values else 0.0
             self._draw_gauge(ax, value, min_v, max_v, label, unit, thresh)
 
         self._add_footer(fig, 9)
@@ -1038,7 +1040,8 @@ class BIReportGenerator:
         plt.close(fig)
 
     def _create_heatmap(self, ax, data: np.ndarray, row_labels: list, col_labels: list,
-                        title: str, cmap: str = 'RdYlGn', vmin: float = None, vmax: float = None):
+                        title: str, cmap: str = 'RdYlGn', vmin: Optional[float] = None,
+                        vmax: Optional[float] = None):
         """Create a heatmap visualization."""
         if data.size == 0:
             ax.text(0.5, 0.5, MSG_NO_DATA, ha='center', va='center',
@@ -1068,6 +1071,21 @@ class BIReportGenerator:
         cbar = plt.colorbar(im, ax=ax, shrink=0.8)
         cbar.ax.tick_params(labelsize=11)
 
+    def _build_sector_data(self, station_ids: List[str],
+                           station_metrics: Dict[str, Dict[str, List[float]]],
+                           metric_type: str, n_sectors: int = 3) -> np.ndarray:
+        """Build sector data matrix with simulated sector variation."""
+        data = np.zeros((len(station_ids), n_sectors))
+        data[:] = np.nan
+
+        for i, sid in enumerate(station_ids):
+            values = station_metrics[sid].get(metric_type, [])
+            if values:
+                avg = np.mean(values)
+                for j in range(n_sectors):
+                    data[i, j] = avg + _rng.uniform(-3, 3)
+        return data
+
     def create_sector_heatmap(self, pdf: PdfPages):
         """Create sector-level RSRP/SINR heatmap page."""
         fig = plt.figure(figsize=(11, 8.5))
@@ -1076,40 +1094,22 @@ class BIReportGenerator:
         gs = GridSpec(2, 2, figure=fig, left=0.1, right=0.9, top=0.85, bottom=0.1,
                      hspace=0.4, wspace=0.35)
 
-        # Group metrics by station (simulating sectors as metrics per station)
-        station_metrics = defaultdict(lambda: defaultdict(list))
-        for m in self.metrics:
-            sid = str(m.get("stationId", "?"))
-            mtype = m.get("metricType", "")
-            value = m.get("value")
-            if value is not None:
-                station_metrics[sid][mtype].append(float(value))
+        station_metrics = self._aggregate_metrics_by_station()
+        station_ids = list(station_metrics.keys())[:6]
+        sectors = ["Sector 1", "Sector 2", "Sector 3"]
 
-        station_ids = list(station_metrics.keys())[:6]  # Max 6 stations
-
-        # Build data matrices
-        for idx, (metric_type, title, cmap, vmin, vmax) in enumerate([
+        metric_configs = [
             ("RSRP_NR3500", "RSRP NR3500 (dBm)", "RdYlGn", -100, -60),
             ("SINR_NR3500", "SINR NR3500 (dB)", "RdYlGn", 0, 35),
             ("RSRP_NR700", "RSRP NR700 (dBm)", "RdYlGn", -100, -40),
             ("SINR_NR700", "SINR NR700 (dB)", "RdYlGn", 0, 30),
-        ]):
+        ]
+
+        for idx, (metric_type, title, cmap, vmin, vmax) in enumerate(metric_configs):
             ax = fig.add_subplot(gs[idx // 2, idx % 2])
 
             if station_ids:
-                # Simulate 3 sectors per station
-                sectors = ["Sector 1", "Sector 2", "Sector 3"]
-                data = np.zeros((len(station_ids), len(sectors)))
-                data[:] = np.nan
-
-                for i, sid in enumerate(station_ids):
-                    values = station_metrics[sid].get(metric_type, [])
-                    if values:
-                        avg = np.mean(values)
-                        # Simulate sector variation
-                        for j in range(3):
-                            data[i, j] = avg + _rng.uniform(-3, 3)
-
+                data = self._build_sector_data(station_ids, station_metrics, metric_type)
                 self._create_heatmap(ax, data, station_ids, sectors, title, cmap, vmin, vmax)
             else:
                 ax.text(0.5, 0.5, "No sector data", ha='center', va='center',
@@ -1120,63 +1120,65 @@ class BIReportGenerator:
         pdf.savefig(fig, facecolor='white')
         plt.close(fig)
 
+    def _build_ssv_row(self, sid: str, station_metrics: Dict[str, Dict[str, List[float]]]
+                       ) -> Tuple[List[str], List[str]]:
+        """Build a single SSV scorecard row with values and colors."""
+        row = [f"Station {sid}"]
+        row_colors = [COLORS["light"]]
+        overall_pass = True
+        overall_warn = False
+
+        ssv_metrics = ["DL_THROUGHPUT_NR3500", "UL_THROUGHPUT_NR3500",
+                       "LATENCY_PING", "TX_IMBALANCE"]
+
+        for metric_type in ssv_metrics:
+            values = station_metrics[sid].get(metric_type, [])
+            if values:
+                avg = float(np.mean(values))
+                status, color = self._get_ssv_status(metric_type, avg)
+                unit = self.SSV_THRESHOLDS.get(metric_type, {}).get("unit", "")
+                row.append(f"{avg:.1f} {unit}")
+                row_colors.append(color + "60")
+                if status == "FAIL":
+                    overall_pass = False
+                elif status == "WARN":
+                    overall_warn = True
+            else:
+                row.append("-")
+                row_colors.append(COLORS["light"])
+
+        # Overall status
+        overall_text, overall_color = self._get_overall_ssv_status(overall_pass, overall_warn)
+        row.append(overall_text)
+        row_colors.append(overall_color)
+
+        return row, row_colors
+
+    def _get_overall_ssv_status(self, overall_pass: bool, overall_warn: bool
+                                ) -> Tuple[str, str]:
+        """Determine overall SSV status text and color."""
+        if overall_pass and not overall_warn:
+            return "✓ PASS", COLORS["success"] + "60"
+        elif overall_pass:
+            return "⚠ WARN", COLORS["warning"] + "60"
+        return "✗ FAIL", COLORS["danger"] + "60"
+
     def create_ssv_scorecard(self, pdf: PdfPages):
         """Create SSV compliance scorecard page."""
         fig = plt.figure(figsize=(11, 8.5))
         self._add_header(fig, "SSV Compliance Scorecard", "Site Verification Status")
 
-        # Main table area
-        ax = fig.add_axes([0.08, 0.12, 0.84, 0.72])
+        ax = fig.add_axes((0.08, 0.12, 0.84, 0.72))
         ax.axis('off')
 
-        # Aggregate metrics by station
-        station_metrics = defaultdict(lambda: defaultdict(list))
-        for m in self.metrics:
-            sid = str(m.get("stationId", "?"))
-            mtype = m.get("metricType", "")
-            value = m.get("value")
-            if value is not None:
-                station_metrics[sid][mtype].append(float(value))
+        station_metrics = self._aggregate_metrics_by_station()
 
-        # Build scorecard data
         headers = ["Station", "DL 3500", "UL 3500", "Latency", "TX Imbal", "Overall"]
-        cell_colors = []
         table_data = []
+        cell_colors = []
 
         for sid in list(station_metrics.keys())[:10]:
-            row = [f"Station {sid}"]
-            row_colors = [COLORS["light"]]
-            overall_pass = True
-            overall_warn = False
-
-            for metric_type in ["DL_THROUGHPUT_NR3500", "UL_THROUGHPUT_NR3500",
-                               "LATENCY_PING", "TX_IMBALANCE"]:
-                values = station_metrics[sid].get(metric_type, [])
-                if values:
-                    avg = np.mean(values)
-                    status, color = self._get_ssv_status(metric_type, avg)
-                    unit = self.SSV_THRESHOLDS.get(metric_type, {}).get("unit", "")
-                    row.append(f"{avg:.1f} {unit}")
-                    row_colors.append(color + "60")
-                    if status == "FAIL":
-                        overall_pass = False
-                    elif status == "WARN":
-                        overall_warn = True
-                else:
-                    row.append("-")
-                    row_colors.append(COLORS["light"])
-
-            # Overall status
-            if overall_pass and not overall_warn:
-                row.append("✓ PASS")
-                row_colors.append(COLORS["success"] + "60")
-            elif overall_pass:
-                row.append("⚠ WARN")
-                row_colors.append(COLORS["warning"] + "60")
-            else:
-                row.append("✗ FAIL")
-                row_colors.append(COLORS["danger"] + "60")
-
+            row, row_colors = self._build_ssv_row(sid, station_metrics)
             table_data.append(row)
             cell_colors.append(row_colors)
 
@@ -1198,7 +1200,7 @@ class BIReportGenerator:
                    ha='center', va='center', fontsize=14, color=COLORS["secondary"])
 
         # Legend
-        legend_ax = fig.add_axes([0.1, 0.02, 0.8, 0.06])
+        legend_ax = fig.add_axes((0.1, 0.02, 0.8, 0.06))
         legend_ax.axis('off')
         legend_items = [
             (COLORS["success"], "PASS: Meets SSV criteria"),
@@ -1207,7 +1209,7 @@ class BIReportGenerator:
         ]
         for i, (color, text) in enumerate(legend_items):
             x = 0.15 + i * 0.3
-            legend_ax.add_patch(plt.Rectangle((x - 0.02, 0.3), 0.035, 0.4,
+            legend_ax.add_patch(Rectangle((x - 0.02, 0.3), 0.035, 0.4,
                                               facecolor=color, edgecolor='white'))
             legend_ax.text(x + 0.025, 0.5, text, fontsize=12, va='center', fontweight='medium')
 

@@ -321,44 +321,61 @@ class FrameParser:
                 messages.append(msg)
         return messages
 
+    def _handle_idle(self, byte: int) -> None:
+        if byte == HEADER_BYTE0:
+            self.buffer = bytearray([byte])
+            self.state = 'HEADER1'
+
+    def _handle_header1(self, byte: int) -> None:
+        if byte == HEADER_BYTE1:
+            self.buffer.append(byte)
+            self.state = 'LENGTH'
+        elif byte == HEADER_BYTE0:
+            self.buffer = bytearray([byte])
+        else:
+            self.state = 'IDLE'
+
+    def _handle_length(self, byte: int) -> None:
+        self.buffer.append(byte)
+        if len(self.buffer) == 4:
+            self.payload_len = struct.unpack('>H', self.buffer[2:4])[0]
+            self.state = 'IDLE' if self.payload_len > MAX_PAYLOAD_SIZE else 'TYPE'
+
+    def _handle_type(self, byte: int) -> None:
+        self.buffer.append(byte)
+        self.state = 'SEQUENCE'
+
+    def _handle_sequence(self, byte: int) -> None:
+        self.buffer.append(byte)
+        self.state = 'PAYLOAD' if self.payload_len > 0 else 'CRC'
+
+    def _handle_payload(self, byte: int) -> None:
+        self.buffer.append(byte)
+        if len(self.buffer) >= HEADER_SIZE + self.payload_len:
+            self.state = 'CRC'
+
+    def _handle_crc(self, byte: int) -> Optional[Message]:
+        self.buffer.append(byte)
+        if len(self.buffer) >= HEADER_SIZE + self.payload_len + CRC_SIZE:
+            return self._verify_and_extract()
+        return None
+
     def _parse_byte(self, byte: int) -> Optional[Message]:
-        if self.state == 'IDLE':
-            if byte == HEADER_BYTE0:
-                self.buffer = bytearray([byte])
-                self.state = 'HEADER1'
-        elif self.state == 'HEADER1':
-            if byte == HEADER_BYTE1:
-                self.buffer.append(byte)
-                self.state = 'LENGTH'
-            elif byte == HEADER_BYTE0:
-                self.buffer = bytearray([byte])
-            else:
-                self.state = 'IDLE'
-        elif self.state == 'LENGTH':
-            self.buffer.append(byte)
-            if len(self.buffer) == 4:
-                self.payload_len = struct.unpack('>H', self.buffer[2:4])[0]
-                if self.payload_len > MAX_PAYLOAD_SIZE:
-                    self.state = 'IDLE'
-                else:
-                    self.state = 'TYPE'
-        elif self.state == 'TYPE':
-            self.buffer.append(byte)
-            self.state = 'SEQUENCE'
-        elif self.state == 'SEQUENCE':
-            self.buffer.append(byte)
-            if self.payload_len > 0:
-                self.state = 'PAYLOAD'
-            else:
-                self.state = 'CRC'
-        elif self.state == 'PAYLOAD':
-            self.buffer.append(byte)
-            if len(self.buffer) >= HEADER_SIZE + self.payload_len:
-                self.state = 'CRC'
-        elif self.state == 'CRC':
-            self.buffer.append(byte)
-            if len(self.buffer) >= HEADER_SIZE + self.payload_len + CRC_SIZE:
-                return self._verify_and_extract()
+        handlers = {
+            'IDLE': self._handle_idle,
+            'HEADER1': self._handle_header1,
+            'LENGTH': self._handle_length,
+            'TYPE': self._handle_type,
+            'SEQUENCE': self._handle_sequence,
+            'PAYLOAD': self._handle_payload,
+        }
+
+        if self.state == 'CRC':
+            return self._handle_crc(byte)
+
+        handler = handlers.get(self.state)
+        if handler:
+            handler(byte)
         return None
 
     def _verify_and_extract(self) -> Optional[Message]:
@@ -441,7 +458,7 @@ class DeviceProtocolServer:
 
     def _accept_loop(self):
         """Accept incoming connections"""
-        while self.running:
+        while self.running and self.server_socket:
             try:
                 client_socket, addr = self.server_socket.accept()
                 logger.info(f"Edge bridge connected from {addr}")

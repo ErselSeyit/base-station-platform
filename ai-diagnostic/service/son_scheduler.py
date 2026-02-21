@@ -327,10 +327,12 @@ _son_scheduler: Optional[SONScheduler] = None
 def get_son_scheduler(
     monitoring_url: str = "http://monitoring-service:8082",
     auth_user: str = "admin",
-    auth_password: str = "AdminPass12345!",
+    auth_password: str = "",
     interval_seconds: int = 300,
 ) -> SONScheduler:
     """Get or create the SON scheduler singleton."""
+    if not auth_password:
+        raise ValueError("auth_password is required - set CLOUD_PASSWORD environment variable")
     global _son_scheduler
     if _son_scheduler is None:
         _son_scheduler = SONScheduler(

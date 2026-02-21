@@ -24,6 +24,9 @@ pillow>=10.0.0                  # Image handling
 # Machine Learning (NEW - Alarm Correlation)
 scikit-learn>=1.3.0            # Clustering, anomaly detection
 
+# Metrics
+prometheus-client>=0.21.0     # Prometheus metrics endpoint
+
 # Optional - Install based on your needs:
 # paho-mqtt>=1.6.1     # MQTT IoT protocol
 # websockets>=10.0     # WebSocket support

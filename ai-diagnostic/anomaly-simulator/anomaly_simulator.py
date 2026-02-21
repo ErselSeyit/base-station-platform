@@ -1,51 +1,44 @@
 #!/usr/bin/env python3
 """
-Anomaly Simulator - Generates realistic base station anomalies for testing AI diagnostics.
+Fault Orchestrator (formerly Anomaly Simulator)
 
-This simulator periodically injects anomalous metrics that trigger the AI diagnostic
-system, allowing real-time demonstration of problem detection and solution generation.
+Periodically injects fault scenarios into the device-simulator via its control API.
+The device-simulator then generates anomalous metrics that flow through the binary
+protocol → edge-bridge → monitoring-service pipeline, triggering real alerts and
+AI diagnostics.
 
-Supports both:
-- HTTP API (direct to monitoring-service)
-- Binary protocol (via edge-bridge/device-simulator protocol)
+Architecture:
+  fault-orchestrator → POST /api/inject → device-simulator (port 8098)
+  device-simulator → binary protocol → edge-bridge → HTTP → monitoring-service
+  fault-orchestrator → POST /diagnose → ai-diagnostic (triggers AI session)
 """
 
-import json
 import random
-import socket
-import struct
 import time
 import logging
 import hmac
 import hashlib
 import os
+import threading
 import requests
-from datetime import datetime
-from datetime import timezone
-from typing import Dict, List, Optional
-
-# Import binary protocol
-from device_protocol import (
-    MessageType, MetricType, Metric, Message,
-    build_frame, FrameParser, encode_metrics
-)
+from datetime import datetime, timezone
+from typing import Dict, Optional
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger('anomaly-simulator')
+logger = logging.getLogger('fault-orchestrator')
 
-# Configuration
-MONITORING_SERVICE_URL = "http://monitoring-service:8082"
+# Configuration defaults
+DEVICE_SIMULATOR_URL = "http://device-simulator:8098"
 AI_DIAGNOSTIC_URL = "http://ai-diagnostic:9091"
-DEVICE_PROTOCOL_HOST = "device-simulator"
-DEVICE_PROTOCOL_PORT = 9999
 STATION_ID = 1
 STATION_NAME = "BS-001"
 
-# Anomaly scenarios with their problem codes and metric patterns
+# Anomaly scenarios with their problem codes and metric patterns.
 # These map to problem codes in DiagnosticSessionService.metricTypeToProblemCode()
+# and to FAULT_SCENARIOS in device-simulator's mips_device.py.
 ANOMALY_SCENARIOS = [
     {
         "name": "CPU Overheat",
@@ -53,13 +46,11 @@ ANOMALY_SCENARIOS = [
         "category": "THERMAL",
         "severity": "critical",
         "metrics": {
-            "CPU_USAGE": (92, 99),      # High CPU
-            "TEMPERATURE": (82, 95),     # High temp
-            "MEMORY_USAGE": (60, 75),    # Normal-ish memory
+            "CPU_USAGE": (92, 99),
+            "TEMPERATURE": (82, 95),
         },
         "message": "CPU temperature exceeded safe operating threshold",
-        "duration_seconds": 60,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
     {
         "name": "Memory Pressure",
@@ -67,13 +58,11 @@ ANOMALY_SCENARIOS = [
         "category": "RESOURCE",
         "severity": "critical",
         "metrics": {
-            "MEMORY_USAGE": (96, 99),    # Critical memory
-            "CPU_USAGE": (70, 85),       # Elevated CPU
-            "TEMPERATURE": (55, 65),     # Slightly elevated temp
+            "MEMORY_USAGE": (96, 99),
+            "CPU_USAGE": (70, 85),
         },
         "message": "System memory critically low, risk of OOM",
-        "duration_seconds": 45,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
     {
         "name": "Signal Degradation",
@@ -81,13 +70,12 @@ ANOMALY_SCENARIOS = [
         "category": "RF",
         "severity": "warning",
         "metrics": {
-            "SIGNAL_STRENGTH": (-105, -95),  # Weak signal (below -100 threshold)
-            "RSRP_NR3500": (-110, -100),     # Poor RSRP
-            "SINR_NR3500": (2, 8),           # Low SINR
+            "SIGNAL_STRENGTH": (-105, -95),
+            "RSRP_NR3500": (-110, -100),
+            "SINR_NR3500": (2, 8),
         },
         "message": "RF signal quality degraded below acceptable threshold",
-        "duration_seconds": 60,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
     {
         "name": "High Latency",
@@ -95,12 +83,11 @@ ANOMALY_SCENARIOS = [
         "category": "NETWORK",
         "severity": "critical",
         "metrics": {
-            "LATENCY_PING": (110, 200),      # Critical latency (>100ms threshold)
-            "DATA_THROUGHPUT": (30, 45),     # Reduced throughput
+            "LATENCY_PING": (110, 200),
+            "DATA_THROUGHPUT": (30, 45),
         },
         "message": "Network latency exceeded critical threshold",
-        "duration_seconds": 60,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
     {
         "name": "High Power Consumption",
@@ -108,12 +95,11 @@ ANOMALY_SCENARIOS = [
         "category": "POWER",
         "severity": "critical",
         "metrics": {
-            "POWER_CONSUMPTION": (720, 900),  # Critical power (>700W threshold)
-            "TEMPERATURE": (72, 82),          # Elevated temp
+            "POWER_CONSUMPTION": (3100, 3500),
+            "TEMPERATURE": (72, 82),
         },
         "message": "Power consumption exceeded critical threshold",
-        "duration_seconds": 45,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
     {
         "name": "High Interference",
@@ -121,13 +107,12 @@ ANOMALY_SCENARIOS = [
         "category": "RF",
         "severity": "warning",
         "metrics": {
-            "INTERFERENCE_LEVEL": (-68, -60),  # High interference (>-70 dBm threshold)
-            "SINR_NR3500": (-2, 5),            # Very low SINR
+            "INTERFERENCE_LEVEL": (-68, -60),
+            "SINR_NR3500": (-2, 5),
             "SINR_NR700": (0, 6),
         },
         "message": "High RF interference detected on NR bands",
-        "duration_seconds": 60,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
     {
         "name": "High Block Error Rate",
@@ -135,12 +120,11 @@ ANOMALY_SCENARIOS = [
         "category": "RF",
         "severity": "critical",
         "metrics": {
-            "INITIAL_BLER": (32, 50),         # Critical BLER (>30% threshold)
-            "SINR_NR3500": (3, 8),             # Degraded SINR
+            "INITIAL_BLER": (32, 50),
+            "SINR_NR3500": (3, 8),
         },
         "message": "Block error rate exceeded critical threshold",
-        "duration_seconds": 60,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
     {
         "name": "Low Battery",
@@ -148,12 +132,10 @@ ANOMALY_SCENARIOS = [
         "category": "POWER",
         "severity": "critical",
         "metrics": {
-            "BATTERY_SOC": (5, 9),             # Critical battery (<10% threshold)
-            "POWER_CONSUMPTION": (400, 500),   # Normal power draw
+            "BATTERY_SOC": (5, 9),
         },
         "message": "Battery state of charge critically low",
-        "duration_seconds": 45,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
     {
         "name": "Low Throughput",
@@ -161,12 +143,11 @@ ANOMALY_SCENARIOS = [
         "category": "NETWORK",
         "severity": "critical",
         "metrics": {
-            "DATA_THROUGHPUT": (15, 19),      # Critical throughput (<20 Mbps threshold)
-            "LATENCY_PING": (40, 60),         # Elevated latency
+            "DATA_THROUGHPUT": (15, 19),
+            "LATENCY_PING": (40, 60),
         },
         "message": "Data throughput critically low",
-        "duration_seconds": 60,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
     {
         "name": "Handover Failure",
@@ -174,63 +155,60 @@ ANOMALY_SCENARIOS = [
         "category": "NETWORK",
         "severity": "critical",
         "metrics": {
-            "HANDOVER_SUCCESS_RATE": (85, 89),  # Critical rate (<90% threshold)
-            "SIGNAL_STRENGTH": (-90, -80),      # Borderline signal
+            "HANDOVER_SUCCESS_RATE": (85, 89),
+            "SIGNAL_STRENGTH": (-90, -80),
         },
         "message": "Handover success rate below critical threshold",
-        "duration_seconds": 60,
-        "probability": 0.10,
+        "duration_seconds": 120,
     },
 ]
 
 
-class AnomalySimulator:
-    """Simulates anomalies and sends them to monitoring + AI diagnostic services."""
+class DeviceTarget:
+    """Represents a device-simulator target for fault injection."""
 
-    # Map metric type strings to protocol MetricType enum
-    METRIC_TYPE_MAP = {
-        "CPU_USAGE": MetricType.CPU_USAGE,
-        "MEMORY_USAGE": MetricType.MEMORY_USAGE,
-        "TEMPERATURE": MetricType.TEMPERATURE,
-        "POWER_CONSUMPTION": MetricType.POWER_CONSUMPTION,
-        "SIGNAL_STRENGTH": MetricType.SIGNAL_STRENGTH,
-        "DL_THROUGHPUT_NR3500": MetricType.DL_THROUGHPUT_NR3500,
-        "UL_THROUGHPUT_NR3500": MetricType.UL_THROUGHPUT_NR3500,
-        "RSRP_NR3500": MetricType.RSRP_NR3500,
-        "SINR_NR3500": MetricType.SINR_NR3500,
-        "DL_THROUGHPUT_NR700": MetricType.DL_THROUGHPUT_NR700,
-        "UL_THROUGHPUT_NR700": MetricType.UL_THROUGHPUT_NR700,
-        "RSRP_NR700": MetricType.RSRP_NR700,
-        "SINR_NR700": MetricType.SINR_NR700,
-        "LATENCY_PING": MetricType.LATENCY_PING,
-        "TX_IMBALANCE": MetricType.TX_IMBALANCE,
-        "INITIAL_BLER": MetricType.INITIAL_BLER,
-        "BATTERY_SOC": MetricType.BATTERY_SOC,
-        "DATA_THROUGHPUT": MetricType.DATA_THROUGHPUT,
-        "HANDOVER_SUCCESS_RATE": MetricType.HANDOVER_SUCCESS_RATE,
-        "INTERFERENCE_LEVEL": MetricType.INTERFERENCE_LEVEL,
-    }
-
-    def __init__(self, monitoring_url: str, diagnostic_url: str, station_id: int, station_name: str,
-                 internal_secret: str = "", protocol_host: str = "", protocol_port: int = 9999,
-                 use_protocol: bool = False):
-        self.monitoring_url = monitoring_url
-        self.diagnostic_url = diagnostic_url
+    def __init__(self, url: str, station_id: int, station_name: str):
+        self.url = url
         self.station_id = station_id
         self.station_name = station_name
-        self.internal_secret = internal_secret
         self.active_anomaly: Optional[Dict] = None
         self.anomaly_end_time: float = 0
+
+
+class FaultOrchestrator:
+    """Orchestrates fault injection into device-simulator(s) and triggers AI diagnostics.
+
+    Supports multiple device-simulator targets. When multiple targets are configured,
+    faults are injected in round-robin across all devices.
+
+    Instead of generating metrics directly (old approach), this orchestrator:
+    1. Calls device-simulator's control API to inject faults
+    2. Device-simulator generates anomalous metrics via binary protocol
+    3. Edge-bridge collects and uploads to monitoring-service
+    4. Triggers AI diagnostic session for the injected fault
+    """
+
+    def __init__(self, device_simulator_url: str, diagnostic_url: str,
+                 station_id: int, station_name: str, internal_secret: str = "",
+                 extra_targets: Optional[list] = None):
+        self.diagnostic_url = diagnostic_url
+        self.internal_secret = internal_secret
         self.problem_counter = 0
         self.session = requests.Session()
-        # Rotate through anomalies instead of random selection
         self.anomaly_index = 0
-        # Binary protocol configuration
-        self.protocol_host = protocol_host
-        self.protocol_port = protocol_port
-        self.use_protocol = use_protocol
-        self.protocol_socket: Optional[socket.socket] = None
-        self.protocol_sequence = 0
+
+        # Build target list: primary + any extras
+        self.targets = [DeviceTarget(device_simulator_url, station_id, station_name)]
+        for t in (extra_targets or []):
+            self.targets.append(DeviceTarget(t["url"], t["station_id"], t["station_name"]))
+        self.target_index = 0
+
+        # Backwards-compatible single-target properties
+        self.device_simulator_url = device_simulator_url
+        self.station_id = station_id
+        self.station_name = station_name
+        self.active_anomaly: Optional[Dict] = None
+        self.anomaly_end_time: float = 0
 
     def _compute_hmac(self, payload: str) -> str:
         """Compute HMAC-SHA256 signature for internal auth."""
@@ -243,204 +221,133 @@ class AnomalySimulator:
     def _get_auth_headers(self) -> Dict[str, str]:
         """Get auth headers with HMAC signature for service-to-service auth."""
         headers = {
-            "X-User-Name": "anomaly-simulator",
+            "X-User-Name": "fault-orchestrator",
             "X-User-Role": "SERVICE",
             "Content-Type": "application/json"
         }
-
-        # Add HMAC signature if internal secret is configured
         if self.internal_secret:
             timestamp = int(time.time() * 1000)
-            payload = f"anomaly-simulator:SERVICE:{timestamp}"
+            payload = f"fault-orchestrator:SERVICE:{timestamp}"
             signature = self._compute_hmac(payload)
             headers["X-Internal-Auth"] = f"{signature}.{payload}"
-
         return headers
 
-    def generate_metric_value(self, metric_type: str, anomaly: Optional[Dict] = None) -> float:
-        """Generate a metric value, either normal or anomalous."""
-        # Normal ranges - values that won't trigger alerts
-        normal_ranges = {
-            "CPU_USAGE": (15, 45),
-            "MEMORY_USAGE": (40, 65),
-            "TEMPERATURE": (35, 55),
-            "POWER_CONSUMPTION": (200, 450),        # Normal: <500W warning threshold
-            "SIGNAL_STRENGTH": (-75, -55),          # Normal: >-100 dBm threshold
-            "DL_THROUGHPUT_NR3500": (800, 1400),
-            "UL_THROUGHPUT_NR3500": (60, 100),
-            "RSRP_NR3500": (-85, -70),
-            "SINR_NR3500": (12, 25),
-            "DL_THROUGHPUT_NR700": (50, 90),
-            "UL_THROUGHPUT_NR700": (15, 35),
-            "RSRP_NR700": (-90, -75),
-            "SINR_NR700": (8, 18),
-            "LATENCY_PING": (5, 25),                # Normal: <50ms warning threshold
-            "TX_IMBALANCE": (0.5, 2.0),
-            # New metrics for extended AI diagnostics
-            "INITIAL_BLER": (1, 10),                # Normal: <15% warning threshold
-            "BATTERY_SOC": (60, 95),                # Normal: >20% warning threshold
-            "DATA_THROUGHPUT": (80, 200),           # Normal: >50 Mbps warning threshold
-            "HANDOVER_SUCCESS_RATE": (96, 99),      # Normal: >95% warning threshold
-            "INTERFERENCE_LEVEL": (-95, -85),       # Normal: <-80 dBm warning threshold
-        }
-
-        # Check if this metric should be anomalous
-        if anomaly and metric_type in anomaly.get("metrics", {}):
-            low, high = anomaly["metrics"][metric_type]
-            return random.uniform(low, high)
-
-        # Normal value
-        if metric_type in normal_ranges:
-            low, high = normal_ranges[metric_type]
-            return random.uniform(low, high)
-
-        return random.uniform(0, 100)
-
-    def get_unit(self, metric_type: str) -> str:
-        """Get the unit for a metric type."""
-        units = {
-            "CPU_USAGE": "%",
-            "MEMORY_USAGE": "%",
-            "TEMPERATURE": "°C",
-            "POWER_CONSUMPTION": "W",
-            "SIGNAL_STRENGTH": "dBm",
-            "DL_THROUGHPUT_NR3500": "Mbps",
-            "UL_THROUGHPUT_NR3500": "Mbps",
-            "RSRP_NR3500": "dBm",
-            "SINR_NR3500": "dB",
-            "DL_THROUGHPUT_NR700": "Mbps",
-            "UL_THROUGHPUT_NR700": "Mbps",
-            "RSRP_NR700": "dBm",
-            "SINR_NR700": "dB",
-            "LATENCY_PING": "ms",
-            "TX_IMBALANCE": "dB",
-            # New metrics for extended AI diagnostics
-            "INITIAL_BLER": "%",
-            "BATTERY_SOC": "%",
-            "DATA_THROUGHPUT": "Mbps",
-            "HANDOVER_SUCCESS_RATE": "%",
-            "INTERFERENCE_LEVEL": "dBm",
-        }
-        return units.get(metric_type, "")
-
-    def select_anomaly(self) -> Optional[Dict]:
+    def select_anomaly(self) -> Dict:
         """Select the next anomaly in rotation (cycles through all types)."""
-        # Always return the next anomaly in sequence
         scenario = ANOMALY_SCENARIOS[self.anomaly_index]
         self.anomaly_index = (self.anomaly_index + 1) % len(ANOMALY_SCENARIOS)
         return scenario
 
-    def _connect_protocol(self) -> bool:
-        """Connect to device-simulator via binary protocol."""
-        if self.protocol_socket:
-            return True
-        try:
-            self.protocol_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.protocol_socket.settimeout(5.0)
-            self.protocol_socket.connect((self.protocol_host, self.protocol_port))
-            logger.info(f"Connected to device protocol at {self.protocol_host}:{self.protocol_port}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to connect to device protocol: {e}")
-            self.protocol_socket = None
-            return False
+    def _select_target(self) -> DeviceTarget:
+        """Select the next target in round-robin rotation."""
+        target = self.targets[self.target_index]
+        self.target_index = (self.target_index + 1) % len(self.targets)
+        return target
 
-    def _send_protocol_metrics(self, metrics: List[Metric]) -> bool:
-        """Send metrics via binary protocol."""
-        if not self._connect_protocol():
-            return False
-
-        try:
-            self.protocol_sequence = (self.protocol_sequence + 1) % 256
-            payload = encode_metrics(metrics)
-            msg = Message(MessageType.METRICS_EVENT, self.protocol_sequence, payload)
-            frame = build_frame(msg)
-            self.protocol_socket.sendall(frame)
-            logger.debug(f"Sent {len(metrics)} metrics via protocol")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to send protocol metrics: {e}")
-            self.protocol_socket = None
-            return False
-
-    def send_metrics(self, anomaly: Optional[Dict] = None) -> bool:
-        """Send a batch of metrics to the monitoring service."""
-        metric_types = [
-            # System metrics
-            "CPU_USAGE", "MEMORY_USAGE", "TEMPERATURE", "POWER_CONSUMPTION",
-            # 5G NR metrics
-            "SIGNAL_STRENGTH", "DL_THROUGHPUT_NR3500", "UL_THROUGHPUT_NR3500",
-            "RSRP_NR3500", "SINR_NR3500", "DL_THROUGHPUT_NR700", "UL_THROUGHPUT_NR700",
-            "RSRP_NR700", "SINR_NR700", "LATENCY_PING", "TX_IMBALANCE",
-            # Extended metrics for AI diagnostics
-            "INITIAL_BLER", "BATTERY_SOC", "DATA_THROUGHPUT",
-            "HANDOVER_SUCCESS_RATE", "INTERFERENCE_LEVEL",
-        ]
-
-        timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        metrics = []
-
-        for metric_type in metric_types:
-            value = self.generate_metric_value(metric_type, anomaly)
-            metrics.append({
-                "type": metric_type,
-                "value": value,
-                "timestamp": timestamp
-            })
-
-        # Send via binary protocol if enabled
-        if self.use_protocol:
-            protocol_metrics = []
-            for m in metrics:
-                if m["type"] in self.METRIC_TYPE_MAP:
-                    protocol_metrics.append(Metric(self.METRIC_TYPE_MAP[m["type"]], m["value"]))
-            if protocol_metrics:
-                self._send_protocol_metrics(protocol_metrics)
-
-        # Batch request format expected by the API
-        batch_request = {
-            "stationId": self.station_name,
-            "metrics": metrics
-        }
-
+    def inject_fault(self, fault_code: str, target_url: Optional[str] = None) -> bool:
+        """Inject a fault into device-simulator via its control API."""
+        url = target_url or self.device_simulator_url
         try:
             response = self.session.post(
-                f"{self.monitoring_url}/api/v1/metrics/batch",
-                json=batch_request,
-                headers=self._get_auth_headers(),
-                timeout=10
+                f"{url}/api/inject",
+                json={"fault": fault_code},
+                timeout=5
             )
             if response.ok:
-                logger.debug(f"Sent {len(metrics)} metrics via HTTP")
-                return True
-            else:
-                logger.warning(f"Failed to send metrics: {response.status_code} - {response.text[:200]}")
-                return False
-        except Exception as e:
-            logger.error(f"Error sending metrics: {e}")
+                result = response.json()
+                logger.info("Fault injected into %s: %s -> %s",
+                            url, fault_code, result.get("status"))
+                return result.get("status") == "injected"
+            logger.warning("Failed to inject fault: %d %s",
+                           response.status_code, response.text[:200])
+            return False
+        except requests.RequestException as e:
+            logger.error("Error injecting fault into %s: %s", url, e)
             return False
 
-    def send_problem_to_ai(self, anomaly: Dict) -> Optional[Dict]:
+    def clear_fault(self, fault_code: str, target_url: Optional[str] = None) -> bool:
+        """Clear a fault from device-simulator via its control API."""
+        url = target_url or self.device_simulator_url
+        try:
+            response = self.session.post(
+                f"{url}/api/clear",
+                json={"fault": fault_code},
+                timeout=5
+            )
+            if response.ok:
+                result = response.json()
+                logger.info("Fault cleared from %s: %s -> %s",
+                            url, fault_code, result.get("status"))
+                return True
+            return False
+        except requests.RequestException as e:
+            logger.error("Error clearing fault from %s: %s", url, e)
+            return False
+
+    def clear_all_faults(self) -> bool:
+        """Clear all faults from all device-simulators."""
+        success = True
+        for target in self.targets:
+            try:
+                response = self.session.post(
+                    f"{target.url}/api/clear-all",
+                    timeout=5
+                )
+                if response.ok:
+                    logger.info("All faults cleared on %s: %s",
+                                target.station_name, response.json())
+                else:
+                    success = False
+            except requests.RequestException as e:
+                logger.error("Error clearing faults on %s: %s", target.station_name, e)
+                success = False
+        return success
+
+    def suppress_anomaly(self, problem_code: str) -> dict:
+        """Suppress an active anomaly — clears the fault from device-simulator.
+
+        Searches all targets for the matching anomaly.
+        Called by the self-healing service via the control API.
+        """
+        for target in self.targets:
+            if target.active_anomaly and target.active_anomaly["code"] == problem_code:
+                name = target.active_anomaly["name"]
+                self.clear_fault(problem_code, target.url)
+                target.active_anomaly = None
+                target.anomaly_end_time = 0
+                logger.info("Anomaly '%s' suppressed on %s by self-healing",
+                            name, target.station_name)
+                # Keep backwards-compat single-target state in sync
+                if target is self.targets[0]:
+                    self.active_anomaly = None
+                    self.anomaly_end_time = 0
+                return {"status": "suppressed", "anomaly": name,
+                        "station": target.station_name}
+
+        return {"status": "no_matching_anomaly", "requested_code": problem_code}
+
+    def send_problem_to_ai(self, anomaly: Dict,
+                           target: Optional[DeviceTarget] = None) -> Optional[Dict]:
         """Send the problem directly to AI diagnostic service."""
+        t = target or self.targets[0]
         self.problem_counter += 1
         problem_id = f"anomaly-{self.problem_counter:04d}-{int(time.time())}"
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Collect current anomalous metric values
         metrics_snapshot = {}
-        for metric_type in anomaly.get("metrics", {}).keys():
-            metrics_snapshot[metric_type] = self.generate_metric_value(metric_type, anomaly)
+        for metric_type, (lo, hi) in anomaly.get("metrics", {}).items():
+            metrics_snapshot[metric_type] = random.uniform(lo, hi)
 
         problem = {
             "id": problem_id,
             "timestamp": timestamp,
-            "station_id": str(self.station_id),
+            "station_id": str(t.station_id),
             "category": anomaly["category"],
             "severity": anomaly["severity"],
             "code": anomaly["code"],
             "message": anomaly["message"],
             "metrics": metrics_snapshot,
-            "raw_logs": f"ANOMALY DETECTED: {anomaly['name']} at station {self.station_name}"
+            "raw_logs": f"FAULT INJECTED: {anomaly['name']} at station {t.station_name}"
         }
 
         try:
@@ -452,113 +359,193 @@ class AnomalySimulator:
             )
             if response.ok:
                 solution = response.json()
-                logger.info(f"AI Solution received for {anomaly['code']}:")
-                logger.info(f"  Action: {solution.get('action', 'N/A')}")
-                logger.info(f"  Confidence: {solution.get('confidence', 0):.0%}")
-                logger.info(f"  Risk Level: {solution.get('risk_level', 'N/A')}")
+                logger.info("AI Solution for %s@%s: action=%s confidence=%.0f%% risk=%s",
+                            anomaly['code'], t.station_name,
+                            solution.get('action', 'N/A'),
+                            solution.get('confidence', 0) * 100,
+                            solution.get('risk_level', 'N/A'))
 
-                # Log auto-healing status if present
                 healing = solution.get('healing')
                 if healing:
                     if healing.get('error'):
-                        logger.warning(f"  Auto-healing error: {healing['error']}")
+                        logger.warning("  Auto-healing error: %s", healing['error'])
                     else:
-                        logger.info(f"  Auto-Healing: {healing.get('status', 'N/A')}")
-                        logger.info(f"    Action ID: {healing.get('action_id', 'N/A')}")
-                        logger.info(f"    Auto-execute: {healing.get('auto_execute', False)}")
-
+                        logger.info("  Auto-Healing: %s (action_id=%s, auto=%s)",
+                                    healing.get('status', 'N/A'),
+                                    healing.get('action_id', 'N/A'),
+                                    healing.get('auto_execute', False))
                 return solution
-            else:
-                logger.warning(f"AI diagnostic failed: {response.status_code} - {response.text[:200]}")
-                return None
-        except Exception as e:
-            logger.error(f"Error calling AI diagnostic: {e}")
+            logger.warning("AI diagnostic failed: %d %s",
+                           response.status_code, response.text[:200])
+            return None
+        except requests.RequestException as e:
+            logger.error("Error calling AI diagnostic: %s", e)
             return None
 
-    def run(self, interval_seconds: float = 5.0, anomaly_check_interval: float = 30.0):
-        """Main loop - send metrics and occasionally trigger anomalies."""
-        logger.info("Starting Anomaly Simulator")
-        logger.info(f"  Monitoring Service: {self.monitoring_url}")
-        logger.info(f"  AI Diagnostic: {self.diagnostic_url}")
-        logger.info(f"  Station: {self.station_name} (ID: {self.station_id})")
-        logger.info(f"  Metric interval: {interval_seconds}s")
-        logger.info(f"  Anomaly check interval: {anomaly_check_interval}s")
-        if self.use_protocol:
-            logger.info(f"  Binary Protocol: {self.protocol_host}:{self.protocol_port}")
+    def _expire_anomalies(self, current_time: float):
+        """Clear anomalies whose duration has expired on all targets."""
+        for target in self.targets:
+            if not target.active_anomaly or current_time <= target.anomaly_end_time:
+                continue
+            logger.info("Anomaly '%s' expired on %s — clearing",
+                        target.active_anomaly['name'], target.station_name)
+            self.clear_fault(target.active_anomaly['code'], target.url)
+            target.active_anomaly = None
+            if target is self.targets[0]:
+                self.active_anomaly = None
+
+    def _find_idle_target(self) -> Optional[DeviceTarget]:
+        """Find the next target without an active anomaly via round-robin."""
+        for _ in range(len(self.targets)):
+            target = self._select_target()
+            if not target.active_anomaly:
+                return target
+        return None
+
+    def _inject_new_anomaly(self, current_time: float):
+        """Pick an idle target and inject the next anomaly scenario."""
+        target = self._find_idle_target()
+        if target is None:
+            return
+
+        new_anomaly = self.select_anomaly()
+        if not self.inject_fault(new_anomaly["code"], target.url):
+            logger.warning("Failed to inject fault %s on %s",
+                           new_anomaly['code'], target.station_name)
+            return
+
+        target.active_anomaly = new_anomaly
+        target.anomaly_end_time = current_time + new_anomaly["duration_seconds"]
+        if target is self.targets[0]:
+            self.active_anomaly = new_anomaly
+            self.anomaly_end_time = target.anomaly_end_time
+
+        logger.warning(">>> FAULT INJECTED on %s: %s (%s)",
+                       target.station_name,
+                       new_anomaly['name'], new_anomaly['code'])
+        logger.warning("    Severity: %s, Duration: %ds",
+                       new_anomaly['severity'], new_anomaly['duration_seconds'])
+        # Anomalous metrics flow naturally through the telemetry pipeline:
+        #   device-simulator → binary protocol → edge-bridge → monitoring-service
+        # Monitoring-service detects threshold breaches and triggers AI diagnostics
+        # automatically. No need to call send_problem_to_ai() directly.
+
+    def run(self, anomaly_check_interval: float = 30.0):
+        """Main loop — periodically inject faults and trigger AI diagnostics.
+
+        With multiple targets, faults are injected in round-robin across devices.
+        Each target maintains its own active fault state independently.
+        """
+        logger.info("Starting Fault Orchestrator")
+        logger.info("  Targets: %d device-simulator(s)", len(self.targets))
+        for t in self.targets:
+            logger.info("    - %s (station %d) at %s",
+                        t.station_name, t.station_id, t.url)
+        logger.info("  AI Diagnostic: %s", self.diagnostic_url)
+        logger.info("  Anomaly check interval: %.0fs", anomaly_check_interval)
 
         last_anomaly_check = 0
 
         while True:
             try:
                 current_time = time.time()
+                self._expire_anomalies(current_time)
 
-                # Check if current anomaly has ended
-                if self.active_anomaly and current_time > self.anomaly_end_time:
-                    logger.info(f"Anomaly '{self.active_anomaly['name']}' resolved")
-                    self.active_anomaly = None
-
-                # Check for new anomaly
-                if not self.active_anomaly and (current_time - last_anomaly_check) > anomaly_check_interval:
+                if (current_time - last_anomaly_check) > anomaly_check_interval:
                     last_anomaly_check = current_time
-                    new_anomaly = self.select_anomaly()
-                    if new_anomaly:
-                        self.active_anomaly = new_anomaly
-                        self.anomaly_end_time = current_time + new_anomaly["duration_seconds"]
-                        logger.warning(f">>> ANOMALY STARTED: {new_anomaly['name']} ({new_anomaly['code']})")
-                        logger.warning(f"    Severity: {new_anomaly['severity']}")
-                        logger.warning(f"    Duration: {new_anomaly['duration_seconds']}s")
+                    self._inject_new_anomaly(current_time)
 
-                        # Send problem to AI diagnostic
-                        self.send_problem_to_ai(new_anomaly)
-
-                # Send metrics
-                self.send_metrics(self.active_anomaly)
-
-                time.sleep(interval_seconds)
+                time.sleep(anomaly_check_interval / 3)
 
             except KeyboardInterrupt:
-                logger.info("Shutting down...")
+                logger.info("Shutting down — clearing all faults")
+                self.clear_all_faults()
                 break
             except Exception as e:
-                logger.error(f"Error in main loop: {e}")
+                logger.error("Error in main loop: %s", e)
                 time.sleep(5)
 
 
+def _parse_extra_targets(env_value: str) -> list:
+    """Parse EXTRA_TARGETS env var.
+
+    Format: url1,station_id1,name1;url2,station_id2,name2
+    Example: http://device-sim-2:8098,2,BS-002;http://device-sim-3:8098,3,BS-003
+    """
+    targets = []
+    for entry in env_value.split(";"):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.split(",", 2)
+        if len(parts) == 3:
+            targets.append({
+                "url": parts[0].strip(),
+                "station_id": int(parts[1].strip()),
+                "station_name": parts[2].strip(),
+            })
+        else:
+            logger.warning("Ignoring malformed EXTRA_TARGETS entry: %s", entry)
+    return targets
+
+
 def main():
-    monitoring_url = os.environ.get("MONITORING_SERVICE_URL", MONITORING_SERVICE_URL)
+    device_simulator_url = os.environ.get("DEVICE_SIMULATOR_URL", DEVICE_SIMULATOR_URL)
     diagnostic_url = os.environ.get("AI_DIAGNOSTIC_URL", AI_DIAGNOSTIC_URL)
     station_id = int(os.environ.get("STATION_ID", STATION_ID))
     station_name = os.environ.get("STATION_NAME", STATION_NAME)
-    interval = float(os.environ.get("METRIC_INTERVAL", "5"))
-    anomaly_interval = float(os.environ.get("ANOMALY_CHECK_INTERVAL", "30"))
+    anomaly_interval = float(os.environ.get("ANOMALY_CHECK_INTERVAL", "10"))
     internal_secret = os.environ.get("SECURITY_INTERNAL_SECRET", "")
+    extra_targets = _parse_extra_targets(
+        os.environ.get("EXTRA_TARGETS", "")
+    )
 
-    # Binary protocol configuration
-    protocol_host = os.environ.get("DEVICE_PROTOCOL_HOST", DEVICE_PROTOCOL_HOST)
-    protocol_port = int(os.environ.get("DEVICE_PROTOCOL_PORT", DEVICE_PROTOCOL_PORT))
-    use_protocol = os.environ.get("USE_DEVICE_PROTOCOL", "false").lower() == "true"
-
-    if not internal_secret:
-        logger.warning("SECURITY_INTERNAL_SECRET not set - metrics sending may fail")
-
-    simulator = AnomalySimulator(
-        monitoring_url=monitoring_url,
+    orchestrator = FaultOrchestrator(
+        device_simulator_url=device_simulator_url,
         diagnostic_url=diagnostic_url,
         station_id=station_id,
         station_name=station_name,
         internal_secret=internal_secret,
-        protocol_host=protocol_host,
-        protocol_port=protocol_port,
-        use_protocol=use_protocol
+        extra_targets=extra_targets,
     )
 
-    if use_protocol:
-        logger.info(f"Binary protocol enabled: {protocol_host}:{protocol_port}")
+    # Start Flask control API in background thread for self-healing integration
+    from flask import Flask, request as flask_request, jsonify
 
-    simulator.run(
-        interval_seconds=interval,
-        anomaly_check_interval=anomaly_interval
+    control_app = Flask("fault-orchestrator")
+    flask_log = logging.getLogger("werkzeug")
+    flask_log.setLevel(logging.WARNING)
+
+    @control_app.route("/api/suppress", methods=["POST"])
+    def suppress():
+        data = flask_request.get_json(silent=True) or {}
+        code = data.get("problem_code", "")
+        result = orchestrator.suppress_anomaly(code)
+        return jsonify(result)
+
+    @control_app.route("/health")
+    def health():
+        active_targets = [
+            {"station": t.station_name, "code": t.active_anomaly["code"]}
+            for t in orchestrator.targets if t.active_anomaly
+        ]
+        return jsonify({
+            "status": "ok",
+            "targets": len(orchestrator.targets),
+            "active_faults": active_targets,
+        })
+
+    api_port = int(os.environ.get("CONTROL_API_PORT", "8099"))
+    api_thread = threading.Thread(
+        target=lambda: control_app.run(
+            host="0.0.0.0", port=api_port, use_reloader=False,
+        ),
+        daemon=True,
     )
+    api_thread.start()
+    logger.info("Control API started on port %d", api_port)
+
+    orchestrator.run(anomaly_check_interval=anomaly_interval)
 
 
 if __name__ == "__main__":

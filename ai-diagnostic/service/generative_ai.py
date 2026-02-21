@@ -22,8 +22,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Modern RNG (replaces deprecated np.random functions)
-_rng = np.random.default_rng(42)
+# Shared RNG for reproducibility
+from .utils.rng import get_rng
+_rng = get_rng()
 
 
 class ScenarioType(Enum):
@@ -230,6 +231,32 @@ class MetricsGenerator:
             "tx_power": 43.0,
         }
 
+    def _calculate_anomaly_factor(
+        self, anomaly_type: str, progress: float, severity: float
+    ) -> float:
+        """Calculate anomaly factor based on type and progress."""
+        if anomaly_type == "spike":
+            return severity * 2.0 if 0.4 < progress < 0.6 else 0
+        elif anomaly_type == "gradual_increase":
+            return progress * severity
+        elif anomaly_type == "gradual_decrease":
+            return -progress * severity
+        elif anomaly_type == "oscillation":
+            return severity * np.sin(progress * 10) * (1 + progress)
+        elif anomaly_type == "step_change":
+            return severity if progress > 0.5 else 0
+        return severity * progress
+
+    def _apply_anomaly_to_metric(
+        self, metric_name: str, base_value: float, anomaly_factor: float
+    ) -> float:
+        """Apply anomaly factor to base metric value."""
+        if metric_name in ["temperature", "vswr", "humidity"]:
+            return base_value * (1 + anomaly_factor * 0.5)
+        elif metric_name in ["fan_speed", "battery_soc", "throughput", "sinr"]:
+            return base_value * (1 - anomaly_factor * 0.5)
+        return base_value + anomaly_factor * base_value * 0.2
+
     def generate_sequence(self,
                           metric_name: str,
                           duration_minutes: int,
@@ -243,35 +270,9 @@ class MetricsGenerator:
         for i in range(steps):
             progress = i / max(1, steps - 1)
 
-            # Different anomaly patterns
-            if anomaly_type == "spike":
-                # Sudden spike
-                if 0.4 < progress < 0.6:
-                    anomaly_factor = severity * 2.0
-                else:
-                    anomaly_factor = 0
-            elif anomaly_type == "gradual_increase":
-                # Gradual degradation
-                anomaly_factor = progress * severity
-            elif anomaly_type == "gradual_decrease":
-                # Gradual decrease
-                anomaly_factor = -progress * severity
-            elif anomaly_type == "oscillation":
-                # Unstable oscillation
-                anomaly_factor = severity * np.sin(progress * 10) * (1 + progress)
-            elif anomaly_type == "step_change":
-                # Step change at midpoint
-                anomaly_factor = severity if progress > 0.5 else 0
-            else:
-                anomaly_factor = severity * progress
-
-            # Apply anomaly to base value
-            if metric_name in ["temperature", "vswr", "humidity"]:
-                value = base_value * (1 + anomaly_factor * 0.5)
-            elif metric_name in ["fan_speed", "battery_soc", "throughput", "sinr"]:
-                value = base_value * (1 - anomaly_factor * 0.5)
-            else:
-                value = base_value + anomaly_factor * base_value * 0.2
+            # Calculate anomaly factor and apply to base value
+            anomaly_factor = self._calculate_anomaly_factor(anomaly_type, progress, severity)
+            value = self._apply_anomaly_to_metric(metric_name, base_value, anomaly_factor)
 
             # Add noise
             noise = _rng.normal(0, base_value * 0.02)
@@ -292,7 +293,7 @@ class AlarmSequenceGenerator:
                           scenario_type: ScenarioType,
                           pattern_name: str,
                           start_time: datetime,
-                          duration_minutes: int,
+                          _duration_minutes: int,  # Reserved for time-bounded alarm generation
                           severity: float) -> List[Dict[str, Any]]:
         """Generate an alarm sequence for a scenario."""
         alarms = []
@@ -522,9 +523,9 @@ class GenerativeAIService:
                 scenarios.append(scenario)
 
         # Calculate quality score (based on diversity and realism)
-        unique_patterns = len(set(s.metadata.get("pattern_name") for s in scenarios))
+        unique_patterns = len({s.metadata.get("pattern_name") for s in scenarios})
         severity_variance = np.var([s.severity for s in scenarios])
-        quality_score = min(1.0, (unique_patterns / 10) * 0.5 + (severity_variance * 2) * 0.5)
+        quality_score = float(min(1.0, (unique_patterns / 10) * 0.5 + (severity_variance * 2) * 0.5))
 
         batch = TrainingDataBatch(
             batch_id=batch_id,
@@ -553,7 +554,7 @@ class GenerativeAIService:
             original_severity = existing.get("severity", 0.5)
             original_duration = existing.get("duration_minutes", 60)
 
-            for i in range(augmentation_factor):
+            for _ in range(augmentation_factor):
                 # Vary parameters
                 severity_variation = _rng.normal(0, 0.1)
                 duration_variation = _rng.normal(0, 0.2)
@@ -632,22 +633,12 @@ class GenerativeAIService:
             "severity_std": np.std(severities),
             "average_duration_minutes": np.mean(durations),
             "scenario_type_distribution": type_counts,
-            "unique_patterns": len(set(
+            "unique_patterns": len({
                 s.metadata.get("pattern_name") for s in self.generated_scenarios
-            ))
+            })
         }
 
 
 # Singleton instance with thread-safe initialization
-_generative_ai_service: Optional[GenerativeAIService] = None
-_generative_ai_service_lock = threading.Lock()
-
-
-def get_generative_ai_service() -> GenerativeAIService:
-    """Get the singleton generative AI service instance (thread-safe)."""
-    global _generative_ai_service
-    if _generative_ai_service is None:
-        with _generative_ai_service_lock:
-            if _generative_ai_service is None:  # Double-check locking
-                _generative_ai_service = GenerativeAIService()
-    return _generative_ai_service
+from .utils.singleton import singleton_factory
+get_generative_ai_service = singleton_factory(GenerativeAIService)

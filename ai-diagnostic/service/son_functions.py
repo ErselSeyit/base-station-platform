@@ -138,6 +138,67 @@ class MLBOptimizer:
         self.cell_history: Dict[str, deque] = {}
         self.cio_adjustments: Dict[str, float] = {}  # cell_id -> current CIO offset
 
+    def _find_offload_candidates(
+        self,
+        overloaded_cell: CellMetrics,
+        cells: List[CellMetrics]
+    ) -> List[Tuple[CellMetrics, float]]:
+        """Find candidate cells to offload traffic to."""
+        candidates = []
+        for neighbor_id in overloaded_cell.neighbor_cells:
+            neighbor = next((c for c in cells if c.cell_id == neighbor_id), None)
+            if not neighbor or neighbor.prb_utilization >= self.HIGH_LOAD_THRESHOLD - 10:
+                continue
+            load_diff = overloaded_cell.prb_utilization - neighbor.prb_utilization
+            if load_diff > self.LOAD_IMBALANCE_THRESHOLD:
+                candidates.append((neighbor, load_diff))
+        return sorted(candidates, key=lambda x: x[1], reverse=True)
+
+    def _create_mlb_recommendation(
+        self,
+        station_id: str,
+        overloaded_cell: CellMetrics,
+        target_cell: CellMetrics,
+        load_diff: float,
+        rec_index: int
+    ) -> SONRecommendation:
+        """Create an MLB recommendation for load balancing."""
+        cio_change = min(6.0, load_diff / 10.0)
+        current_cio = self.cio_adjustments.get(target_cell.cell_id, 0)
+
+        return SONRecommendation(
+            recommendation_id=f"MLB-{station_id[:8]}-{rec_index:04d}",
+            function_type=SONFunctionType.MLB,
+            station_id=station_id,
+            cell_id=overloaded_cell.cell_id,
+            priority=RecommendationPriority.HIGH if overloaded_cell.prb_utilization > 90 else RecommendationPriority.MEDIUM,
+            status=RecommendationStatus.PENDING,
+            created_at=datetime.now(),
+            description=(
+                f"Offload traffic from {overloaded_cell.cell_id} "
+                f"({overloaded_cell.prb_utilization:.1f}% load) to "
+                f"{target_cell.cell_id} ({target_cell.prb_utilization:.1f}% load)"
+            ),
+            parameters={
+                "source_cell": overloaded_cell.cell_id,
+                "target_cell": target_cell.cell_id,
+                "action": "adjust_cio",
+                "cio_change": cio_change,
+                "new_cio": current_cio + cio_change,
+            },
+            expected_impact={
+                "load_reduction": min(15.0, load_diff * 0.3),
+                "affected_users_estimate": int(overloaded_cell.active_users * 0.15),
+            },
+            risk_level="low",
+            requires_approval=True,
+            auto_rollback=True,
+            rollback_params={
+                "cell_id": target_cell.cell_id,
+                "cio_value": current_cio,
+            },
+        )
+
     def analyze(
         self,
         cell_metrics: List[CellMetrics],
@@ -158,61 +219,15 @@ class MLBOptimizer:
             station_cells[cm.station_id].append(cm)
 
         for station_id, cells in station_cells.items():
-            # Find overloaded and underloaded cells
+            # Find overloaded cells
             overloaded = [c for c in cells if c.prb_utilization > self.HIGH_LOAD_THRESHOLD]
-            underloaded = [c for c in cells if c.prb_utilization < self.LOW_LOAD_THRESHOLD]
 
             for overloaded_cell in overloaded:
-                # Find candidate cells to offload to
-                candidates = []
-                for neighbor_id in overloaded_cell.neighbor_cells:
-                    neighbor = next((c for c in cells if c.cell_id == neighbor_id), None)
-                    if neighbor and neighbor.prb_utilization < self.HIGH_LOAD_THRESHOLD - 10:
-                        load_diff = overloaded_cell.prb_utilization - neighbor.prb_utilization
-                        if load_diff > self.LOAD_IMBALANCE_THRESHOLD:
-                            candidates.append((neighbor, load_diff))
-
+                candidates = self._find_offload_candidates(overloaded_cell, cells)
                 if candidates:
-                    # Sort by load difference (highest first)
-                    candidates.sort(key=lambda x: x[1], reverse=True)
                     target_cell, load_diff = candidates[0]
-
-                    # Calculate CIO adjustment
-                    cio_change = min(6.0, load_diff / 10.0)  # Max 6dB change
-
-                    current_cio = self.cio_adjustments.get(target_cell.cell_id, 0)
-
-                    rec = SONRecommendation(
-                        recommendation_id=f"MLB-{station_id[:8]}-{len(recommendations):04d}",
-                        function_type=SONFunctionType.MLB,
-                        station_id=station_id,
-                        cell_id=overloaded_cell.cell_id,
-                        priority=RecommendationPriority.HIGH if overloaded_cell.prb_utilization > 90 else RecommendationPriority.MEDIUM,
-                        status=RecommendationStatus.PENDING,
-                        created_at=datetime.now(),
-                        description=(
-                            f"Offload traffic from {overloaded_cell.cell_id} "
-                            f"({overloaded_cell.prb_utilization:.1f}% load) to "
-                            f"{target_cell.cell_id} ({target_cell.prb_utilization:.1f}% load)"
-                        ),
-                        parameters={
-                            "source_cell": overloaded_cell.cell_id,
-                            "target_cell": target_cell.cell_id,
-                            "action": "adjust_cio",
-                            "cio_change": cio_change,
-                            "new_cio": current_cio + cio_change,
-                        },
-                        expected_impact={
-                            "load_reduction": min(15.0, load_diff * 0.3),
-                            "affected_users_estimate": int(overloaded_cell.active_users * 0.15),
-                        },
-                        risk_level="low",
-                        requires_approval=True,
-                        auto_rollback=True,
-                        rollback_params={
-                            "cell_id": target_cell.cell_id,
-                            "cio_value": current_cio,
-                        },
+                    rec = self._create_mlb_recommendation(
+                        station_id, overloaded_cell, target_cell, load_diff, len(recommendations)
                     )
                     recommendations.append(rec)
 
@@ -242,7 +257,7 @@ class MROOptimizer:
     def analyze(
         self,
         cell_metrics: List[CellMetrics],
-        handover_events: Optional[List[Dict]] = None,
+        _handover_events: Optional[List[Dict]] = None,  # Reserved for detailed HO analysis
     ) -> List[SONRecommendation]:
         """
         Analyze handover performance and generate MRO recommendations.

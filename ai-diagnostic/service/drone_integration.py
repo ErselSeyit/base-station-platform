@@ -24,8 +24,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Modern RNG (replaces deprecated np.random functions)
-_rng = np.random.default_rng(42)
+# Shared RNG for reproducibility
+from .utils.rng import get_rng
+_rng = get_rng()
 
 
 class DroneStatus(Enum):
@@ -82,9 +83,9 @@ class GeoPoint:
     latitude: float
     longitude: float
     altitude: float  # meters above ground level
-    heading: Optional[float] = None  # degrees, 0 = north
+    heading: Optional[float] = None  # Heading in degrees (north is 0)
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Optional[float]]:
         return {
             "latitude": self.latitude,
             "longitude": self.longitude,
@@ -550,7 +551,7 @@ class DroneController:
                     timestamp=datetime.now(),
                     position=waypoint.position,
                     file_path=f"/captures/{self._mission.mission_id}/img_{i:04d}.jpg",
-                    file_size_bytes=_rng.integers(500000, 2000000)
+                    file_size_bytes=int(_rng.integers(500000, 2000000))
                 )
                 self._mission.captured_data.append(capture)
 
@@ -736,15 +737,5 @@ class DroneIntegrationService:
 
 
 # Singleton instance with thread-safe initialization
-_drone_service: Optional[DroneIntegrationService] = None
-_drone_service_lock = threading.Lock()
-
-
-def get_drone_service() -> DroneIntegrationService:
-    """Get the singleton drone integration service instance (thread-safe)."""
-    global _drone_service
-    if _drone_service is None:
-        with _drone_service_lock:
-            if _drone_service is None:  # Double-check locking
-                _drone_service = DroneIntegrationService()
-    return _drone_service
+from .utils.singleton import singleton_factory
+get_drone_service = singleton_factory(DroneIntegrationService)

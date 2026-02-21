@@ -24,8 +24,9 @@ import random
 
 logger = logging.getLogger(__name__)
 
-# Modern RNG (replaces deprecated np.random.choice)
-_rng = np.random.default_rng(42)
+# Shared RNG for reproducibility
+from .utils.rng import get_rng
+_rng = get_rng()
 
 
 class AnomalySeverity(Enum):
@@ -142,6 +143,8 @@ class IsolationTree:
 
     def path_length(self, x: np.ndarray) -> float:
         """Compute path length for a single point."""
+        if self.root is None:
+            raise ValueError("Tree not fitted. Call fit() first.")
         return self._traverse(x, self.root, 0)
 
     def _traverse(self, x: np.ndarray, node: Dict, height: int) -> float:
@@ -419,7 +422,7 @@ class AnomalyDetector:
         expected_upper = mean + 2 * std
 
         # Check correlated metrics for root cause hints
-        root_cause_hints = self._analyze_correlations(station_id, metric, value)
+        root_cause_hints = self._analyze_correlations(station_id, metric)
 
         # Generate description
         direction = "above" if value > mean else "below"
@@ -457,46 +460,107 @@ class AnomalyDetector:
 
         return anomaly
 
-    def _analyze_correlations(
-        self,
-        station_id: str,
-        metric: str,
-        value: float,
-    ) -> List[str]:
-        """Analyze correlated metrics to suggest root causes."""
+    def _check_correlated_metric_abnormal(
+        self, station_id: str, corr_metric: str
+    ) -> Optional[str]:
+        """Check if a correlated metric is abnormal, return hint if so."""
+        if corr_metric not in self.data[station_id]:
+            return None
+
+        corr_values = list(self.data[station_id][corr_metric])
+        if len(corr_values) < 10:
+            return None
+
+        corr_stats = self.stats[station_id].get(corr_metric, {})
+        recent_val = corr_values[-1] if corr_values else 0
+        corr_mean = corr_stats.get("mean", recent_val)
+        corr_std = corr_stats.get("std", 1)
+
+        if corr_std <= 0:
+            return None
+
+        corr_z = abs(recent_val - corr_mean) / corr_std
+        if corr_z > 2:
+            return f"Related metric '{corr_metric}' is also abnormal ({corr_z:.1f} std from mean)"
+        return None
+
+    def _get_metric_specific_hints(self, station_id: str, metric: str) -> List[str]:
+        """Get category-specific correlation hints."""
         hints = []
 
-        correlated = self.METRIC_CORRELATIONS.get(metric, [])
-
-        for corr_metric in correlated:
-            if corr_metric in self.data[station_id]:
-                corr_values = list(self.data[station_id][corr_metric])
-                if len(corr_values) >= 10:
-                    corr_stats = self.stats[station_id].get(corr_metric, {})
-                    recent_val = corr_values[-1] if corr_values else 0
-                    corr_mean = corr_stats.get("mean", recent_val)
-                    corr_std = corr_stats.get("std", 1)
-
-                    if corr_std > 0:
-                        corr_z = abs(recent_val - corr_mean) / corr_std
-                        if corr_z > 2:
-                            hints.append(
-                                f"Related metric '{corr_metric}' is also abnormal "
-                                f"({corr_z:.1f} std from mean)"
-                            )
-
-        # Category-specific hints
         if metric == "temperature" and "fan_speed" in self.data[station_id]:
             fan_values = list(self.data[station_id]["fan_speed"])
-            if fan_values and fan_values[-1] < self.stats[station_id].get("fan_speed", {}).get("mean", 100) * 0.5:
+            fan_mean = self.stats[station_id].get("fan_speed", {}).get("mean", 100)
+            if fan_values and fan_values[-1] < fan_mean * 0.5:
                 hints.append("Fan speed is low - possible cooling system issue")
 
         if metric == "cpu_usage" and "connection_count" in self.data[station_id]:
             conn_values = list(self.data[station_id]["connection_count"])
-            if conn_values and conn_values[-1] > self.stats[station_id].get("connection_count", {}).get("mean", 0) * 1.5:
+            conn_mean = self.stats[station_id].get("connection_count", {}).get("mean", 0)
+            if conn_values and conn_values[-1] > conn_mean * 1.5:
                 hints.append("Connection count is elevated - possible traffic surge or DDoS")
 
         return hints
+
+    def _analyze_correlations(self, station_id: str, metric: str) -> List[str]:
+        """Analyze correlated metrics to suggest root causes."""
+        hints = []
+
+        for corr_metric in self.METRIC_CORRELATIONS.get(metric, []):
+            hint = self._check_correlated_metric_abnormal(station_id, corr_metric)
+            if hint:
+                hints.append(hint)
+
+        hints.extend(self._get_metric_specific_hints(station_id, metric))
+        return hints
+
+    def _get_environmental_recs(self, metric: str, value: float, threshold_high: float
+                                ) -> List[str]:
+        """Get environmental category recommendations."""
+        if metric == "temperature" and value > threshold_high:
+            return ["Check HVAC system and ventilation",
+                    "Consider load shedding to reduce heat generation"]
+        if metric == "humidity" and value > threshold_high:
+            return ["Check for water ingress or condensation"]
+        return []
+
+    def _get_hardware_recs(self, metric: str) -> List[str]:
+        """Get hardware category recommendations."""
+        if metric == "voltage":
+            return ["Check power supply and battery backup", "Verify utility power stability"]
+        if metric == "fan_speed":
+            return ["Inspect fan and cooling system"]
+        return []
+
+    def _get_network_recs(self, metric: str, value: float,
+                          threshold_high: float, threshold_low: float) -> List[str]:
+        """Get network category recommendations."""
+        if metric == "throughput" and value < threshold_low:
+            return ["Check for backhaul issues", "Verify antenna alignment"]
+        if metric == "latency" and value > threshold_high:
+            return ["Check for network congestion", "Verify routing configuration"]
+        return []
+
+    def _get_category_recommendations(
+        self, metric: str, category: AnomalyCategory, value: float, mean: float, std: float
+    ) -> List[str]:
+        """Get category-specific recommendations."""
+        threshold_high = mean + 2 * std
+        threshold_low = mean - 2 * std
+
+        handlers = {
+            AnomalyCategory.ENVIRONMENTAL: lambda: self._get_environmental_recs(
+                metric, value, threshold_high),
+            AnomalyCategory.HARDWARE: lambda: self._get_hardware_recs(metric),
+            AnomalyCategory.NETWORK: lambda: self._get_network_recs(
+                metric, value, threshold_high, threshold_low),
+            AnomalyCategory.SECURITY: lambda: [
+                "Review security camera footage",
+                "Verify authorized personnel access logs"],
+        }
+
+        handler = handlers.get(category)
+        return handler() if handler else []
 
     def _generate_recommendations(
         self,
@@ -513,31 +577,9 @@ class AnomalyDetector:
         if severity in [AnomalySeverity.CRITICAL, AnomalySeverity.HIGH]:
             recommendations.append("Dispatch field technician for inspection")
 
-        if category == AnomalyCategory.ENVIRONMENTAL:
-            if metric == "temperature" and value > mean + 2 * std:
-                recommendations.append("Check HVAC system and ventilation")
-                recommendations.append("Consider load shedding to reduce heat generation")
-            elif metric == "humidity" and value > mean + 2 * std:
-                recommendations.append("Check for water ingress or condensation")
-
-        elif category == AnomalyCategory.HARDWARE:
-            if metric == "voltage":
-                recommendations.append("Check power supply and battery backup")
-                recommendations.append("Verify utility power stability")
-            elif metric == "fan_speed":
-                recommendations.append("Inspect fan and cooling system")
-
-        elif category == AnomalyCategory.NETWORK:
-            if metric == "throughput" and value < mean - 2 * std:
-                recommendations.append("Check for backhaul issues")
-                recommendations.append("Verify antenna alignment")
-            elif metric == "latency" and value > mean + 2 * std:
-                recommendations.append("Check for network congestion")
-                recommendations.append("Verify routing configuration")
-
-        elif category == AnomalyCategory.SECURITY:
-            recommendations.append("Review security camera footage")
-            recommendations.append("Verify authorized personnel access logs")
+        recommendations.extend(
+            self._get_category_recommendations(metric, category, value, mean, std)
+        )
 
         if not recommendations:
             recommendations.append("Monitor closely and gather more data")
@@ -619,15 +661,8 @@ class AnomalyDetector:
 
 
 # Singleton instance
-_anomaly_detector: Optional[AnomalyDetector] = None
-
-
-def get_anomaly_detector() -> AnomalyDetector:
-    """Get or create the anomaly detector singleton."""
-    global _anomaly_detector
-    if _anomaly_detector is None:
-        _anomaly_detector = AnomalyDetector()
-    return _anomaly_detector
+from .utils.singleton import singleton_factory
+get_anomaly_detector = singleton_factory(AnomalyDetector)
 
 
 # Convenience functions for API integration

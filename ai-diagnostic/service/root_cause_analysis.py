@@ -322,6 +322,72 @@ class RootCauseAnalysisService:
 
         return links
 
+    def _check_domain_knowledge_link(
+        self,
+        event1: CausalEvent,
+        event2: CausalEvent,
+        time_lag: float
+    ) -> Optional[CausalLink]:
+        """Check for causal link based on domain knowledge."""
+        if event1.event_type not in self.CAUSAL_KNOWLEDGE:
+            return None
+
+        knowledge = self.CAUSAL_KNOWLEDGE[event1.event_type]
+        if event2.event_type not in knowledge["effects"]:
+            return None
+
+        max_lag = self.TEMPORAL_CONSTRAINTS.get(event1.event_type, 300)
+        if time_lag > max_lag:
+            return None
+
+        evidence = [
+            f"Known causal rule: {event1.event_type} -> {event2.event_type}",
+            f"Temporal precedence: {time_lag:.1f}s delay",
+            f"Same station: {event1.station_id == event2.station_id}"
+        ]
+
+        confidence = 0.9
+        if event1.station_id == event2.station_id:
+            confidence += 0.05
+        if time_lag <= max_lag / 2:
+            confidence += 0.03
+
+        return CausalLink(
+            cause=event1,
+            effect=event2,
+            relation_type=CausalRelationType.DIRECT,
+            confidence=min(confidence, 0.99),
+            time_lag_seconds=time_lag,
+            evidence=evidence
+        )
+
+    def _check_heuristic_link(
+        self,
+        event1: CausalEvent,
+        event2: CausalEvent,
+        time_lag: float
+    ) -> Optional[CausalLink]:
+        """Check for causal link based on heuristics."""
+        if event1.station_id != event2.station_id:
+            return None
+        if time_lag > 120:
+            return None
+        if self._severity_value(event1.severity) > self._severity_value(event2.severity):
+            return None
+
+        return CausalLink(
+            cause=event1,
+            effect=event2,
+            relation_type=CausalRelationType.CORRELATION,
+            confidence=0.5,
+            time_lag_seconds=time_lag,
+            evidence=[
+                "Same station",
+                f"Temporal proximity: {time_lag:.1f}s",
+                "Severity escalation pattern"
+            ]
+        )
+
     def _check_causal_relationship(
         self,
         event1: CausalEvent,
@@ -335,33 +401,9 @@ class RootCauseAnalysisService:
         time_lag = (event2.timestamp - event1.timestamp).total_seconds()
 
         # Check domain knowledge
-        if event1.event_type in self.CAUSAL_KNOWLEDGE:
-            knowledge = self.CAUSAL_KNOWLEDGE[event1.event_type]
-            if event2.event_type in knowledge["effects"]:
-                # Check temporal constraint
-                max_lag = self.TEMPORAL_CONSTRAINTS.get(event1.event_type, 300)
-                if time_lag <= max_lag:
-                    evidence = [
-                        f"Known causal rule: {event1.event_type} -> {event2.event_type}",
-                        f"Temporal precedence: {time_lag:.1f}s delay",
-                        f"Same station: {event1.station_id == event2.station_id}"
-                    ]
-
-                    # Calculate confidence
-                    confidence = 0.9
-                    if event1.station_id == event2.station_id:
-                        confidence += 0.05
-                    if time_lag <= max_lag / 2:
-                        confidence += 0.03
-
-                    return CausalLink(
-                        cause=event1,
-                        effect=event2,
-                        relation_type=CausalRelationType.DIRECT,
-                        confidence=min(confidence, 0.99),
-                        time_lag_seconds=time_lag,
-                        evidence=evidence
-                    )
+        link = self._check_domain_knowledge_link(event1, event2, time_lag)
+        if link:
+            return link
 
         # Check learned patterns
         pattern_key = f"{event1.event_type}->{event2.event_type}"
@@ -376,24 +418,8 @@ class RootCauseAnalysisService:
                 evidence=[f"Learned pattern with {pattern.get('observations', 0)} observations"]
             )
 
-        # Heuristic: same station, close in time, severity escalation
-        if (event1.station_id == event2.station_id and
-            time_lag <= 120 and
-            self._severity_value(event1.severity) <= self._severity_value(event2.severity)):
-            return CausalLink(
-                cause=event1,
-                effect=event2,
-                relation_type=CausalRelationType.CORRELATION,
-                confidence=0.5,
-                time_lag_seconds=time_lag,
-                evidence=[
-                    "Same station",
-                    f"Temporal proximity: {time_lag:.1f}s",
-                    "Severity escalation pattern"
-                ]
-            )
-
-        return None
+        # Heuristic check
+        return self._check_heuristic_link(event1, event2, time_lag)
 
     def _severity_value(self, severity: str) -> int:
         """Convert severity to numeric value for comparison."""
@@ -496,13 +522,15 @@ class RootCauseAnalysisService:
         self.analysis_history.append(record)
         # deque maxlen automatically keeps only last 1000 results
 
-    def learn_from_feedback(
+    def learn_from_feedback(  # noqa: S1172 - analysis_id reserved for future use
         self,
         analysis_id: str,
         actual_root_cause: str,
         was_correct: bool,
         corrective_action: Optional[str] = None
     ):
+        # Note: analysis_id currently unused but kept for API compatibility
+        _ = analysis_id  # Suppress unused variable warning
         """
         Learn from operator feedback on root cause analysis.
 
@@ -556,18 +584,8 @@ class RootCauseAnalysisService:
 
 
 # Singleton instance with thread-safe initialization
-_rca_service: Optional[RootCauseAnalysisService] = None
-_rca_service_lock = threading.Lock()
-
-
-def get_rca_service() -> RootCauseAnalysisService:
-    """Get or create singleton RootCauseAnalysisService instance (thread-safe)."""
-    global _rca_service
-    if _rca_service is None:
-        with _rca_service_lock:
-            if _rca_service is None:  # Double-check locking
-                _rca_service = RootCauseAnalysisService()
-    return _rca_service
+from .utils.singleton import singleton_factory
+get_rca_service = singleton_factory(RootCauseAnalysisService)
 
 
 def parse_event_from_dict(data: Dict[str, Any]) -> CausalEvent:

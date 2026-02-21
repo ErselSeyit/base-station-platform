@@ -223,8 +223,50 @@ void send_problem(int sock, const char* code, float cpu_temp) {
 ai-diagnostic/
 ├── README.md                           # This file
 ├── requirements.txt                    # Python dependencies
+├── pyproject.toml                      # Project config (linting, testing)
+├── requirements-dev.txt                # Dev/test dependencies
 ├── service/
-│   └── diagnostic_service.py          # Main AI service
-└── virtual-basestation/
-    └── mips_simulator.py               # Virtual MIPS simulator
+│   ├── diagnostic_service.py           # Main Flask service (port 9091)
+│   ├── internal_auth.py                # HMAC authentication
+│   ├── logging_config.py               # Structured logging
+│   ├── metrics.py                      # Prometheus metrics
+│   ├── alarm_correlation.py            # Multi-alarm correlation engine
+│   ├── anomaly_detection.py            # Isolation Forest anomaly detection
+│   ├── bi_report_generator.py          # Business intelligence reports
+│   ├── computer_vision.py              # Tower image analysis
+│   ├── config_drift_detection.py       # Configuration drift detection
+│   ├── digital_twin.py                 # Digital twin simulation
+│   ├── drone_integration.py            # Drone inspection integration
+│   ├── generative_ai.py               # LLM-based diagnostics (Ollama)
+│   ├── healing_integration.py          # Self-healing orchestration
+│   ├── predictive_maintenance.py       # Fan/battery failure prediction
+│   ├── root_cause_analysis.py          # Root cause analysis engine
+│   ├── self_healing.py                 # Automated remediation
+│   ├── son_functions.py                # SON: MLB, MRO, CCO, Energy Saving
+│   ├── son_scheduler.py                # SON optimization scheduler
+│   ├── traffic_prediction.py           # LSTM traffic forecasting
+│   ├── vision_service.py               # Computer vision service layer
+│   └── utils/                          # Shared utilities
+│       ├── confidence.py               # Confidence scoring
+│       ├── enums.py                    # Shared enums
+│       ├── health.py                   # Health check helpers
+│       ├── rng.py                      # Random number generation
+│       ├── serialization.py            # JSON serialization
+│       ├── singleton.py                # Singleton pattern
+│       ├── threshold_client.py         # Threshold config client
+│       ├── thresholds.py               # Threshold evaluation
+│       └── validation.py               # Input validation
+├── tests/                              # Pytest test suite
+│   ├── conftest.py
+│   ├── test_anomaly_detection.py
+│   ├── test_self_healing.py
+│   ├── test_threshold_client.py
+│   └── test_validation.py
+├── anomaly-simulator/                  # Anomaly injection tool
+│   └── Dockerfile
+└── virtual-basestation/                # Virtual device simulators
+    ├── device_protocol.py              # Binary protocol implementation
+    ├── mips_device.py                  # MIPS device emulator
+    ├── mips_simulator.py               # Multi-device simulator
+    └── Dockerfile
 ```

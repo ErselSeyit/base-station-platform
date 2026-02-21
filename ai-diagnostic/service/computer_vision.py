@@ -13,6 +13,7 @@ Provides AI-powered visual analysis for:
 import base64
 import io
 import logging
+import random
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -25,8 +26,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Modern RNG (replaces deprecated np.random functions)
-_rng = np.random.default_rng(42)
+# Shared RNG for reproducibility
+from .utils.rng import get_rng
+_rng = get_rng()
 
 # Optional imports for actual image processing
 try:
@@ -320,18 +322,18 @@ class ImageProcessor:
         height, width = image.shape[:2] if len(image.shape) >= 2 else (480, 640)
 
         # Simulate LED detection (would use YOLO/SSD in production)
-        num_leds = _rng.integers(3, 8)
+        num_leds = int(_rng.integers(3, 8))
 
         for i in range(num_leds):
             # Random position and size
-            x = _rng.integers(50, width - 100)
-            y = _rng.integers(50, height - 100)
-            size = _rng.integers(10, 30)
+            x = int(_rng.integers(50, width - 100))
+            y = int(_rng.integers(50, height - 100))
+            size = int(_rng.integers(10, 30))
 
             # Simulate color detection based on pixel analysis
             colors = [LEDColor.GREEN, LEDColor.YELLOW, LEDColor.RED, LEDColor.OFF]
             weights = [0.6, 0.2, 0.1, 0.1]  # Most LEDs should be green in normal operation
-            color = _rng.choice(colors, p=weights)
+            color = random.choices(colors, weights=weights, k=1)[0]
 
             is_blinking = _rng.random() < 0.2  # 20% chance of blinking
 
@@ -367,18 +369,18 @@ class ImageProcessor:
         # Simulate defect detection (would use CNN in production)
         # Lower probability of defects - most inspections should find equipment in good condition
         if _rng.random() > 0.7:  # 30% chance of finding any defects
-            num_defects = _rng.integers(1, 3)
+            num_defects = int(_rng.integers(1, 3))
 
             defect_types = list(DefectType)
             weights = [0.15, 0.1, 0.05, 0.15, 0.1, 0.05, 0.03, 0.1, 0.12, 0.05, 0.05, 0.02, 0.03]
 
-            for i in range(num_defects):
-                defect_type = _rng.choice(defect_types, p=weights)
+            for _ in range(num_defects):
+                defect_type = random.choices(defect_types, weights=weights, k=1)[0]
 
-                x = _rng.integers(20, width - 100)
-                y = _rng.integers(20, height - 100)
-                w = _rng.integers(30, 150)
-                h = _rng.integers(30, 150)
+                x = int(_rng.integers(20, width - 100))
+                y = int(_rng.integers(20, height - 100))
+                w = int(_rng.integers(30, 150))
+                h = int(_rng.integers(30, 150))
 
                 severity = _rng.uniform(0.2, 0.9)
                 action, urgency = self.defect_classifier.get_recommendation(defect_type)
@@ -506,7 +508,7 @@ class ComputerVisionService:
             metadata={
                 "equipment_type": equipment_type,
                 "image_dimensions": image.shape[:2] if len(image.shape) >= 2 else (0, 0),
-                "processing_time_ms": _rng.integers(100, 500)  # Simulated
+                "processing_time_ms": int(_rng.integers(100, 500))  # Simulated
             }
         )
 
@@ -695,15 +697,5 @@ class ComputerVisionService:
 
 
 # Singleton instance with thread-safe initialization
-_computer_vision_service: Optional[ComputerVisionService] = None
-_computer_vision_service_lock = threading.Lock()
-
-
-def get_computer_vision_service() -> ComputerVisionService:
-    """Get the singleton computer vision service instance (thread-safe)."""
-    global _computer_vision_service
-    if _computer_vision_service is None:
-        with _computer_vision_service_lock:
-            if _computer_vision_service is None:  # Double-check locking
-                _computer_vision_service = ComputerVisionService()
-    return _computer_vision_service
+from .utils.singleton import singleton_factory
+get_computer_vision_service = singleton_factory(ComputerVisionService)

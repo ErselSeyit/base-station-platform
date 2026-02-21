@@ -22,8 +22,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Modern RNG (replaces deprecated np.random functions)
-_rng = np.random.default_rng(42)
+# Shared RNG for reproducibility
+from .utils.rng import get_rng
+_rng = get_rng()
 
 
 class TwinState(Enum):
@@ -411,35 +412,43 @@ class DigitalTwin:
             recommendations=recommendations
         )
 
+    def _apply_environment_scenario(self, env: Dict):
+        """Apply environment changes from scenario."""
+        if "temperature" in env:
+            self.environment.temperature = env["temperature"]
+        if "humidity" in env:
+            self.environment.humidity = env["humidity"]
+
+    def _apply_component_change(self, comp_id: str, param: str, value):
+        """Apply a single component parameter change."""
+        component = self.components[comp_id]
+        if param == "health_score":
+            component.health_score = value
+        elif param == "degradation_rate":
+            component.degradation_rate = value
+        else:
+            component.parameters[param] = value
+
+    def _apply_traffic_scenario(self, traffic: Dict):
+        """Apply traffic changes from scenario."""
+        if "base_load" in traffic:
+            self.traffic.base_load = traffic["base_load"]
+        if "peak_multiplier" in traffic:
+            self.traffic.peak_multiplier = traffic["peak_multiplier"]
+
     def _apply_scenario(self, scenario: Dict):
         """Apply a what-if scenario to the twin."""
-        # Modify environment
         if "environment" in scenario:
-            env = scenario["environment"]
-            if "temperature" in env:
-                self.environment.temperature = env["temperature"]
-            if "humidity" in env:
-                self.environment.humidity = env["humidity"]
+            self._apply_environment_scenario(scenario["environment"])
 
-        # Modify components
         if "components" in scenario:
             for comp_id, changes in scenario["components"].items():
                 if comp_id in self.components:
                     for param, value in changes.items():
-                        if param == "health_score":
-                            self.components[comp_id].health_score = value
-                        elif param == "degradation_rate":
-                            self.components[comp_id].degradation_rate = value
-                        else:
-                            self.components[comp_id].parameters[param] = value
+                        self._apply_component_change(comp_id, param, value)
 
-        # Modify traffic
         if "traffic" in scenario:
-            traffic = scenario["traffic"]
-            if "base_load" in traffic:
-                self.traffic.base_load = traffic["base_load"]
-            if "peak_multiplier" in traffic:
-                self.traffic.peak_multiplier = traffic["peak_multiplier"]
+            self._apply_traffic_scenario(scenario["traffic"])
 
     def _generate_recommendations(self,
                                    failures: List[Dict],
@@ -681,15 +690,5 @@ class DigitalTwinService:
 
 
 # Singleton instance with thread-safe initialization
-_digital_twin_service: Optional[DigitalTwinService] = None
-_digital_twin_service_lock = threading.Lock()
-
-
-def get_digital_twin_service() -> DigitalTwinService:
-    """Get the singleton digital twin service instance (thread-safe)."""
-    global _digital_twin_service
-    if _digital_twin_service is None:
-        with _digital_twin_service_lock:
-            if _digital_twin_service is None:  # Double-check locking
-                _digital_twin_service = DigitalTwinService()
-    return _digital_twin_service
+from .utils.singleton import singleton_factory
+get_digital_twin_service = singleton_factory(DigitalTwinService)

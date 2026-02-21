@@ -24,8 +24,9 @@ from collections import deque
 
 logger = logging.getLogger(__name__)
 
-# Modern RNG (replaces deprecated np.random.seed/randn)
-_rng = np.random.default_rng(42)
+# Shared RNG for reproducibility
+from .utils.rng import get_rng
+_rng = get_rng()
 
 
 class TrafficMetricType(Enum):
@@ -99,7 +100,7 @@ class TrafficPredictor:
         self,
         sequence_length: int = 168,  # 1 week of hourly data
         hidden_size: int = 64,
-        prediction_steps: Dict[str, int] = None,
+        prediction_steps: Optional[Dict[str, int]] = None,
     ):
         self.sequence_length = sequence_length
         self.hidden_size = hidden_size
@@ -209,6 +210,16 @@ class TrafficPredictor:
 
         return h_new, y
 
+    def _calculate_trend_adjustment(
+        self, trend: str, recent_mean: float, step: int
+    ) -> float:
+        """Calculate trend adjustment for prediction step."""
+        if trend == "increasing":
+            return recent_mean * 0.01 * (step + 1)
+        elif trend == "decreasing":
+            return -recent_mean * 0.01 * (step + 1)
+        return 0.0
+
     def predict(
         self,
         station_id: str,
@@ -270,7 +281,7 @@ class TrafficPredictor:
 
         for i in range(steps):
             # Combine LSTM output with trend
-            h, lstm_delta = self._simple_lstm_step(current_pred, h)
+            h, lstm_delta = self._simple_lstm_step(float(current_pred), h)
 
             # Add seasonality if available
             seasonality_adj = 0
@@ -281,12 +292,7 @@ class TrafficPredictor:
                     seasonality_adj = (pattern[hour_of_week] - recent_mean) * 0.3
 
             # Trend adjustment
-            if trend == "increasing":
-                trend_adj = recent_mean * 0.01 * (i + 1)
-            elif trend == "decreasing":
-                trend_adj = -recent_mean * 0.01 * (i + 1)
-            else:
-                trend_adj = 0
+            trend_adj = self._calculate_trend_adjustment(trend, float(recent_mean), i)
 
             # Final prediction
             pred_value = recent_mean + lstm_delta * recent_std + seasonality_adj + trend_adj

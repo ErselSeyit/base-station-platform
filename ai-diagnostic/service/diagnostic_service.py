@@ -182,7 +182,9 @@ try:
 except ImportError:
     WEBSOCKET_AVAILABLE = False
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+from service.logging_config import configure_logging
+from service.metrics import register_metrics_endpoint
+configure_logging()
 logger = logging.getLogger(__name__)
 
 # Error messages
@@ -774,7 +776,7 @@ class RuleBasedBackend(AIBackend):
                 "logger -p local0.crit 'Battery critically low - emergency mode activated'"
             ],
             "expected_outcome": "Power consumption reduced, generator standby activated",
-            "risk_level": "high"
+            "risk_level": "medium"
         },
         "HIGH_LATENCY": {
             "action": "Optimize network path and reduce latency",
@@ -2511,6 +2513,7 @@ class HTTPAdapter(ProtocolAdapter):
 
         self.running = True
         self.app = Flask(__name__)
+        register_metrics_endpoint(self.app)
         self._setup_tracing()
         self._register_routes()
 
@@ -2614,9 +2617,9 @@ class DiagnosticService:
             return
 
         try:
-            # Only auto-apply if confidence is high enough and risk is low
+            # Only auto-apply if confidence is high enough and risk is low/medium
             min_confidence = 0.90
-            allowed_risk = ["low"]
+            allowed_risk = ["low", "medium"]
 
             if solution.confidence >= min_confidence and solution.risk_level in allowed_risk:
                 success = self.cloud_client.post_solution(problem, solution)
@@ -2700,7 +2703,7 @@ def _start_son_scheduler(cloud_user: Optional[str], cloud_password: Optional[str
         scheduler = get_son_scheduler(
             monitoring_url=monitoring_url,
             auth_user=cloud_user or "admin",
-            auth_password=cloud_password or "AdminPass12345!",
+            auth_password=cloud_password or "",
             interval_seconds=son_interval
         )
         scheduler.start()

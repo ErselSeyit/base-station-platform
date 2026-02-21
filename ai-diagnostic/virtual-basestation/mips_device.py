@@ -23,9 +23,10 @@ import math
 import threading
 import logging
 import argparse
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict, Any, Tuple
 
 logging.basicConfig(
     level=logging.INFO,
@@ -117,6 +118,20 @@ class MetricType(IntEnum):
     # Carrier Aggregation
     CA_DL_THROUGHPUT = 0x78
     CA_UL_THROUGHPUT = 0x79
+    # Power & Energy (0x80-0x8F)
+    UTILITY_VOLTAGE_L1 = 0x80
+    UTILITY_VOLTAGE_L2 = 0x81
+    UTILITY_VOLTAGE_L3 = 0x82
+    POWER_FACTOR = 0x83
+    GENERATOR_FUEL_LEVEL = 0x84
+    GENERATOR_RUNTIME = 0x85
+    BATTERY_SOC = 0x86
+    BATTERY_DOD = 0x87
+    BATTERY_CELL_TEMP_MIN = 0x88
+    BATTERY_CELL_TEMP_MAX = 0x89
+    SOLAR_PANEL_VOLTAGE = 0x8A
+    SOLAR_CHARGE_CURRENT = 0x8B
+    SITE_POWER_KWH = 0x8C
     # Special
     ALL = 0xFF
 
@@ -127,6 +142,134 @@ class StatusCode(IntEnum):
     ERROR = 0x02
     CRITICAL = 0x03
     OFFLINE = 0x04
+
+
+class CmdType(IntEnum):
+    """Command sub-types (aligned with Go edge-bridge)."""
+    RESTART = 0x01
+    SHUTDOWN = 0x02
+    RESET_CONFIG = 0x03
+    UPDATE_FIRMWARE = 0x04
+    RUN_DIAGNOSTIC = 0x05
+    SET_PARAMETER = 0x06
+
+
+class DeviceMode(IntEnum):
+    """Device operational mode — drives state machine transitions."""
+    NORMAL = 0
+    DEGRADED = 1      # Mild fault active — still operational with reduced performance
+    FAULTED = 2       # Severe fault active — needs intervention
+    RESTARTING = 3    # Restart in progress — no metrics, rejects commands
+    MAINTENANCE = 4   # Maintenance mode — accepts diagnostic commands only
+
+
+# Restart timing
+RESTART_DURATION_MIN = 30  # seconds
+RESTART_DURATION_MAX = 60  # seconds
+
+# Failure probabilities per mode
+RESTART_SUCCESS_RATE = {
+    DeviceMode.NORMAL: 1.0,
+    DeviceMode.DEGRADED: 0.95,
+    DeviceMode.FAULTED: 0.90,
+    DeviceMode.RESTARTING: 0.0,   # Cannot restart while restarting
+    DeviceMode.MAINTENANCE: 0.98,
+}
+
+
+@dataclass
+class FaultScenario:
+    """Defines anomalous metric ranges for a fault type."""
+    name: str
+    metric_overrides: Dict[str, Tuple[float, float]]  # metric_field -> (min, max)
+    status: StatusCode = StatusCode.WARNING
+
+
+# Fault scenarios mirroring anomaly_simulator.py ANOMALY_SCENARIOS.
+# Keys match the problem codes from DiagnosticSessionService.metricTypeToProblemCode().
+FAULT_SCENARIOS: Dict[str, FaultScenario] = {
+    "CPU_OVERHEAT": FaultScenario(
+        name="CPU Overheat",
+        metric_overrides={
+            "cpu_usage": (92, 99),
+            "temperature": (82, 95),
+        },
+        status=StatusCode.CRITICAL,
+    ),
+    "MEMORY_PRESSURE": FaultScenario(
+        name="Memory Pressure",
+        metric_overrides={
+            "memory_usage": (96, 99),
+            "cpu_usage": (70, 85),
+        },
+        status=StatusCode.CRITICAL,
+    ),
+    "SIGNAL_DEGRADATION": FaultScenario(
+        name="Signal Degradation",
+        metric_overrides={
+            "signal_strength": (-105, -95),
+            "rsrp_nr3500": (-110, -100),
+            "sinr_nr3500": (2, 8),
+        },
+        status=StatusCode.WARNING,
+    ),
+    "HIGH_LATENCY": FaultScenario(
+        name="High Latency",
+        metric_overrides={
+            "latency_ping": (110, 200),
+            "data_throughput": (30, 45),
+        },
+        status=StatusCode.CRITICAL,
+    ),
+    "HIGH_POWER_CONSUMPTION": FaultScenario(
+        name="High Power Consumption",
+        metric_overrides={
+            "power_consumption": (3100, 3500),
+            "temperature": (72, 82),
+        },
+        status=StatusCode.CRITICAL,
+    ),
+    "HIGH_INTERFERENCE": FaultScenario(
+        name="High Interference",
+        metric_overrides={
+            "interference_level": (-68, -60),
+            "sinr_nr3500": (-2, 5),
+            "sinr_nr700": (0, 6),
+        },
+        status=StatusCode.WARNING,
+    ),
+    "HIGH_BLOCK_ERROR_RATE": FaultScenario(
+        name="High Block Error Rate",
+        metric_overrides={
+            "initial_bler": (32, 50),
+            "sinr_nr3500": (3, 8),
+        },
+        status=StatusCode.CRITICAL,
+    ),
+    "LOW_BATTERY": FaultScenario(
+        name="Low Battery",
+        metric_overrides={
+            "battery_soc": (5, 9),
+        },
+        status=StatusCode.CRITICAL,
+    ),
+    "LOW_THROUGHPUT": FaultScenario(
+        name="Low Throughput",
+        metric_overrides={
+            "data_throughput": (15, 19),
+            "latency_ping": (40, 60),
+        },
+        status=StatusCode.CRITICAL,
+    ),
+    "HANDOVER_FAILURE": FaultScenario(
+        name="Handover Failure",
+        metric_overrides={
+            "handover_success_rate": (85, 89),
+            "signal_strength": (-90, -80),
+        },
+        status=StatusCode.CRITICAL,
+    ),
+}
 
 
 # CRC-16 CCITT lookup table
@@ -252,10 +395,16 @@ class DeviceState:
     # Quality metrics
     latency_ping: float = 8.5             # ms
     tx_imbalance: float = 1.2             # dB
+    handover_success_rate: float = 98.5   # %
+    interference_level: float = -85.0     # dBm
 
-    # Stress mode
-    stress_mode: bool = False
-    stress_type: str = ""  # "cpu", "temperature", "signal", "throughput"
+    # 5G Radio metrics
+    initial_bler: float = 2.0             # %
+    data_throughput: float = 180.0        # Mbps
+
+    # Battery / Power
+    battery_soc: float = 85.0             # %
+    battery_dod: float = 15.0             # %
 
 
 # Thresholds for alerts
@@ -274,9 +423,14 @@ THRESHOLDS = {
 class MIPSDevice:
     """Virtual MIPS base station device."""
 
-    def __init__(self, station_id: str, port: int = 9999):
+    def __init__(self, station_id: str, port: int = 9999,
+                 tls_cert: Optional[str] = None, tls_key: Optional[str] = None,
+                 tls_ca: Optional[str] = None):
         self.station_id = station_id
         self.port = port
+        self.tls_cert = tls_cert
+        self.tls_key = tls_key
+        self.tls_ca = tls_ca
         self.state = DeviceState(station_id=station_id)
         self.running = False
         self.server_socket: Optional[socket.socket] = None
@@ -285,8 +439,155 @@ class MIPSDevice:
         self.alert_sequence = 0
         self.last_alert_time = 0
 
+        # Fault injection state
+        self.active_faults: Dict[str, FaultScenario] = {}
+        self._fault_lock = threading.Lock()
+
+        # State machine
+        self.mode = DeviceMode.NORMAL
+        self._restart_until: Optional[float] = None  # timestamp when restart completes
+        self._mode_lock = threading.Lock()
+
+    def _update_mode(self):
+        """Recalculate device mode based on active faults and restart state."""
+        with self._mode_lock:
+            # RESTARTING takes priority — don't change until restart completes
+            if self.mode == DeviceMode.RESTARTING:
+                if self._restart_until and time.time() >= self._restart_until:
+                    self._restart_until = None
+                    self.mode = DeviceMode.NORMAL
+                    logger.info("Restart complete — mode → NORMAL")
+                return
+
+            # MAINTENANCE is sticky — only cleared explicitly
+            if self.mode == DeviceMode.MAINTENANCE:
+                return
+
+            with self._fault_lock:
+                if not self.active_faults:
+                    self.mode = DeviceMode.NORMAL
+                    return
+                worst = max(s.status for s in self.active_faults.values())
+
+            if worst >= StatusCode.CRITICAL:
+                self.mode = DeviceMode.FAULTED
+            elif worst >= StatusCode.WARNING:
+                self.mode = DeviceMode.DEGRADED
+            else:
+                self.mode = DeviceMode.NORMAL
+
+    def inject_fault(self, fault_type: str) -> Dict[str, Any]:
+        """Inject a named fault. Returns status dict."""
+        fault_type = fault_type.upper()
+        if fault_type not in FAULT_SCENARIOS:
+            return {"status": "error", "message": f"Unknown fault: {fault_type}",
+                    "available": list(FAULT_SCENARIOS.keys())}
+        with self._fault_lock:
+            self.active_faults[fault_type] = FAULT_SCENARIOS[fault_type]
+        self._update_mode()
+        logger.info("Fault injected: %s (%s) — mode → %s",
+                     fault_type, FAULT_SCENARIOS[fault_type].name, self.mode.name)
+        return {"status": "injected", "fault": fault_type, "mode": self.mode.name}
+
+    def clear_fault(self, fault_type: str) -> Dict[str, Any]:
+        """Clear a specific fault. Returns status dict."""
+        fault_type = fault_type.upper()
+        with self._fault_lock:
+            removed = self.active_faults.pop(fault_type, None)
+        if removed:
+            self._update_mode()
+            logger.info("Fault cleared: %s — mode → %s", fault_type, self.mode.name)
+            return {"status": "cleared", "fault": fault_type, "mode": self.mode.name}
+        return {"status": "not_active", "fault": fault_type}
+
+    def clear_all_faults(self) -> Dict[str, Any]:
+        """Clear all active faults."""
+        with self._fault_lock:
+            count = len(self.active_faults)
+            self.active_faults.clear()
+        self._update_mode()
+        logger.info("All faults cleared (count=%d) — mode → %s", count, self.mode.name)
+        return {"status": "cleared_all", "count": count, "mode": self.mode.name}
+
+    def get_active_faults(self) -> Dict[str, Any]:
+        """Return list of active faults."""
+        with self._fault_lock:
+            faults = {k: v.name for k, v in self.active_faults.items()}
+        return {"active_faults": faults, "count": len(faults), "mode": self.mode.name}
+
+    def _get_fault_overrides(self) -> Dict[str, Tuple[float, float]]:
+        """Collect all metric overrides from active faults."""
+        overrides: Dict[str, Tuple[float, float]] = {}
+        with self._fault_lock:
+            for scenario in self.active_faults.values():
+                overrides.update(scenario.metric_overrides)
+        return overrides
+
+    def _get_worst_status(self) -> StatusCode:
+        """Return the worst status code across all active faults."""
+        with self._fault_lock:
+            if not self.active_faults:
+                return StatusCode.OK
+            return max(s.status for s in self.active_faults.values())
+
+    def _apply_cascading_effects(self):
+        """Apply realistic cascading effects based on current metric values.
+
+        Physics-inspired relationships:
+        - High temperature → increased fan speed, CPU throttling → reduced throughput
+        - Signal degradation → BLER increases, handover rate drops, throughput drops
+        - Memory pressure → latency increases
+        - High power consumption → temperature rises further
+        """
+        s = self.state
+
+        # Temperature cascades: high temp → throughput reduction from CPU throttling
+        if s.temperature > 75:
+            throttle_factor = 1.0 - (s.temperature - 75) / 50  # 75C=1.0, 95C=0.6
+            throttle_factor = max(0.4, throttle_factor)
+            s.dl_throughput_nr3500 *= throttle_factor
+            s.ul_throughput_nr3500 *= throttle_factor
+            s.data_throughput *= throttle_factor
+
+        # Signal degradation cascades: weak RSRP → BLER up, handover rate down
+        if s.rsrp_nr3500 < -95:
+            signal_penalty = (-95 - s.rsrp_nr3500) / 15  # 0 at -95, 1.0 at -110
+            signal_penalty = min(1.0, signal_penalty)
+            s.initial_bler += signal_penalty * 25  # up to +25% BLER
+            s.handover_success_rate -= signal_penalty * 10  # up to -10% handover
+            s.dl_throughput_nr3500 *= (1.0 - signal_penalty * 0.5)
+            s.data_throughput *= (1.0 - signal_penalty * 0.4)
+
+        # Memory pressure cascades: high memory → latency spike
+        if s.memory_usage > 90:
+            mem_pressure = (s.memory_usage - 90) / 10  # 0 at 90%, 1.0 at 100%
+            s.latency_ping += mem_pressure * 80  # up to +80ms latency
+
+        # High power → temperature feedback loop
+        if s.power_consumption > 2500:
+            power_heat = (s.power_consumption - 2500) / 1000  # 0 at 2500W, 1.0 at 3500W
+            s.temperature += power_heat * 8  # up to +8C from power
+
+        # Clamp values to physical bounds
+        s.dl_throughput_nr3500 = max(0, s.dl_throughput_nr3500)
+        s.ul_throughput_nr3500 = max(0, s.ul_throughput_nr3500)
+        s.data_throughput = max(0, s.data_throughput)
+        s.initial_bler = min(100, max(0, s.initial_bler))
+        s.handover_success_rate = max(50, min(100, s.handover_success_rate))
+        s.latency_ping = max(1, s.latency_ping)
+        s.temperature = min(120, s.temperature)
+
     def simulate_metrics(self):
         """Update metrics with realistic variations."""
+        # Check if restart has completed
+        self._update_mode()
+
+        # During RESTARTING, don't generate metrics — device is offline
+        if self.mode == DeviceMode.RESTARTING:
+            self.state.uptime_seconds = 0
+            self.state.status = StatusCode.OFFLINE
+            return
+
         hour = time.localtime().tm_hour
 
         # Time-based load factor (higher during business hours)
@@ -296,29 +597,6 @@ class MIPSDevice:
             load_factor = 0.7
         else:
             load_factor = 0.9
-
-        # Stress mode overrides
-        if self.state.stress_mode:
-            if self.state.stress_type == "cpu":
-                self.state.cpu_usage = random.uniform(88, 95)
-                self.state.temperature = random.uniform(72, 80)
-                self.state.status = StatusCode.WARNING
-            elif self.state.stress_type == "temperature":
-                self.state.temperature = random.uniform(78, 85)
-                self.state.cpu_usage = random.uniform(60, 75)
-                self.state.status = StatusCode.CRITICAL
-            elif self.state.stress_type == "signal":
-                self.state.rsrp_nr3500 = random.uniform(-98, -105)
-                self.state.rsrp_nr700 = random.uniform(-102, -110)
-                self.state.sinr_nr3500 = random.uniform(2, 6)
-                self.state.sinr_nr700 = random.uniform(-1, 3)
-                self.state.status = StatusCode.WARNING
-            elif self.state.stress_type == "throughput":
-                self.state.dl_throughput_nr3500 = random.uniform(200, 400)
-                self.state.ul_throughput_nr3500 = random.uniform(15, 30)
-                self.state.latency_ping = random.uniform(35, 60)
-                self.state.status = StatusCode.WARNING
-            return  # Skip normal simulation
 
         # System metrics with realistic patterns
         self.state.cpu_usage = max(15, min(85,
@@ -359,13 +637,48 @@ class MIPSDevice:
             8.5 + random.uniform(-2, 3)))
         self.state.tx_imbalance = max(0.5, min(4,
             1.2 + random.uniform(-0.3, 0.5)))
+        self.state.handover_success_rate = max(92, min(99.9,
+            98.5 + random.uniform(-1.5, 1.0)))
+        self.state.interference_level = max(-100, min(-70,
+            -85 + random.uniform(-5, 5)))
+
+        # 5G Radio metrics
+        self.state.initial_bler = max(0.5, min(8,
+            2.0 + random.uniform(-0.5, 1.0)))
+        self.state.data_throughput = max(100, min(300,
+            180 * load_factor + random.uniform(-20, 25)))
+
+        # Battery (slow drift)
+        self.state.battery_soc = max(20, min(100,
+            85 + random.uniform(-2, 2)))
+        self.state.battery_dod = 100 - self.state.battery_soc
 
         # Update uptime
         self.state.uptime_seconds = int(time.time() - self.start_time)
 
-    def get_metrics_payload(self, requested_types: list = None) -> bytes:
-        """Build metrics response payload."""
+        # Apply fault overrides (replace normal values with anomalous ranges)
+        overrides = self._get_fault_overrides()
+        for field_name, (lo, hi) in overrides.items():
+            if hasattr(self.state, field_name):
+                setattr(self.state, field_name, random.uniform(lo, hi))
+
+        # Apply cascading effects (secondary metric degradation from faults)
+        self._apply_cascading_effects()
+
+        # Set status based on active faults
+        fault_status = self._get_worst_status()
+        if fault_status != StatusCode.OK:
+            self.state.status = fault_status
+        else:
+            self.state.status = StatusCode.OK
+
+    def get_metrics_payload(self, requested_types: Optional[list] = None) -> bytes:
+        """Build metrics response payload. Returns empty during RESTARTING."""
         self.simulate_metrics()
+
+        # During restart, return empty payload — edge-bridge handles this gracefully
+        if self.mode == DeviceMode.RESTARTING:
+            return b''
 
         # Map metric types to values
         metrics_map = {
@@ -384,6 +697,12 @@ class MIPSDevice:
             MetricType.SINR_NR700: self.state.sinr_nr700,
             MetricType.LATENCY_PING: self.state.latency_ping,
             MetricType.TX_IMBALANCE: self.state.tx_imbalance,
+            MetricType.HANDOVER_SUCCESS_RATE: self.state.handover_success_rate,
+            MetricType.INTERFERENCE_LEVEL: self.state.interference_level,
+            MetricType.INITIAL_BLER: self.state.initial_bler,
+            MetricType.DATA_THROUGHPUT: self.state.data_throughput,
+            MetricType.BATTERY_SOC: self.state.battery_soc,
+            MetricType.BATTERY_DOD: self.state.battery_dod,
         }
 
         # Determine which metrics to include
@@ -429,13 +748,187 @@ class MIPSDevice:
             return build_frame(MsgType.STATUS_RESPONSE, sequence, status_payload)
 
         elif msg_type == MsgType.EXECUTE_COMMAND:
-            logger.info(f"Command execution request (seq={sequence})")
-            result_payload = struct.pack('>BB', 1, 0)
-            return build_frame(MsgType.COMMAND_RESULT, sequence, result_payload)
+            return self._handle_execute_command(sequence, payload)
 
         else:
             logger.warning(f"Unknown message type: 0x{msg_type:02X}")
             return None
+
+    def _handle_execute_command(self, sequence: int, payload: bytes) -> bytes:
+        """Handle EXECUTE_COMMAND with real sub-type dispatch.
+
+        Payload format from edge-bridge:
+          Byte 0: Command sub-type (CmdType enum)
+          Byte 1: Parameter length (N)
+          Bytes 2..2+N: Parameter data (JSON-encoded string)
+        """
+        if len(payload) < 2:
+            logger.warning("EXECUTE_COMMAND payload too short (%d bytes)", len(payload))
+            return self._command_result(sequence, success=False, code=0x01)
+
+        cmd_sub = payload[0]
+        param_len = payload[1]
+        params_raw = payload[2:2 + param_len] if param_len > 0 else b''
+
+        # Parse JSON params if present
+        params: Dict[str, Any] = {}
+        if params_raw:
+            try:
+                params = json.loads(params_raw.decode('utf-8'))
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.warning("Failed to parse command params: %s", e)
+
+        logger.info("EXECUTE_COMMAND sub=0x%02X params=%s (seq=%d, mode=%s)",
+                     cmd_sub, params, sequence, self.mode.name)
+
+        # Reject commands while device is restarting (except PING handled above)
+        if self.mode == DeviceMode.RESTARTING:
+            logger.warning("Command rejected — device is RESTARTING")
+            return self._command_result(sequence, success=False, code=0x04)
+
+        # In MAINTENANCE mode, only allow diagnostic and reset commands
+        if self.mode == DeviceMode.MAINTENANCE and cmd_sub not in (
+            CmdType.RUN_DIAGNOSTIC, CmdType.RESET_CONFIG
+        ):
+            logger.warning("Command 0x%02X rejected — device in MAINTENANCE mode", cmd_sub)
+            return self._command_result(sequence, success=False, code=0x05)
+
+        try:
+            if cmd_sub == CmdType.RESTART:
+                return self._cmd_restart(sequence, params)
+            elif cmd_sub == CmdType.SET_PARAMETER:
+                return self._cmd_set_parameter(sequence, params)
+            elif cmd_sub == CmdType.RUN_DIAGNOSTIC:
+                return self._cmd_run_diagnostic(sequence)
+            elif cmd_sub == CmdType.SHUTDOWN:
+                return self._cmd_shutdown(sequence)
+            elif cmd_sub == CmdType.RESET_CONFIG:
+                return self._cmd_reset_config(sequence)
+            else:
+                logger.warning("Unknown command sub-type: 0x%02X", cmd_sub)
+                return self._command_result(sequence, success=False, code=0x02)
+        except Exception as e:
+            logger.error("Command execution failed: %s", e)
+            return self._command_result(sequence, success=False, code=0xFF)
+
+    def _command_result(self, sequence: int, success: bool, code: int = 0) -> bytes:
+        """Build a COMMAND_RESULT frame.
+
+        Byte 0: 0x00=success, 0x01=failure (matches Go edge-bridge convention).
+        Byte 1: return code.
+        """
+        result_payload = struct.pack('>BB', 0x00 if success else 0x01, code)
+        return build_frame(MsgType.COMMAND_RESULT, sequence, result_payload)
+
+    def _cmd_restart(self, sequence: int, params: Dict[str, Any]) -> bytes:
+        """Handle RESTART command with realistic failure probability and downtime.
+
+        Success rate depends on current device mode (90% when FAULTED).
+        On success, enters RESTARTING mode for 30-60s — no metrics, rejects commands.
+        On completion, faults are cleared and state is reset.
+        """
+        component = params.get("component", "full")
+        success_rate = RESTART_SUCCESS_RATE.get(self.mode, 0.95)
+
+        if random.random() > success_rate:
+            logger.warning("RESTART failed (mode=%s, success_rate=%.0f%%)",
+                           self.mode.name, success_rate * 100)
+            self.state.errors += 1
+            return self._command_result(sequence, success=False, code=0x10)
+
+        # Calculate restart duration
+        duration = random.uniform(RESTART_DURATION_MIN, RESTART_DURATION_MAX)
+        logger.info("RESTART command accepted: component=%s, downtime=%.0fs (mode=%s)",
+                     component, duration, self.mode.name)
+
+        # Clear faults and enter RESTARTING mode
+        with self._fault_lock:
+            self.active_faults.clear()
+        with self._mode_lock:
+            self.mode = DeviceMode.RESTARTING
+            self._restart_until = time.time() + duration
+
+        self.state.errors = 0
+        self.state.warnings = 0
+        self.start_time = time.time() + duration  # uptime resets after restart
+        return self._command_result(sequence, success=True)
+
+    def _cmd_set_parameter(self, sequence: int, params: Dict[str, Any]) -> bytes:
+        """Handle SET_PARAMETER command — the primary healing action path.
+
+        Expected params:
+          {"action": "clear_fault", "fault_type": "CPU_OVERHEAT"}
+          {"action": "inject_fault", "fault_type": "CPU_OVERHEAT"}
+          {"action": "clear_all_faults"}
+        """
+        action = params.get("action", "")
+
+        if action == "clear_fault":
+            fault_type = params.get("fault_type", "")
+            result = self.clear_fault(fault_type)
+            success = result.get("status") == "cleared"
+            return self._command_result(sequence, success=success)
+
+        elif action == "inject_fault":
+            fault_type = params.get("fault_type", "")
+            result = self.inject_fault(fault_type)
+            success = result.get("status") == "injected"
+            return self._command_result(sequence, success=success)
+
+        elif action == "clear_all_faults":
+            self.clear_all_faults()
+            return self._command_result(sequence, success=True)
+
+        elif action == "enter_maintenance":
+            with self._mode_lock:
+                self.mode = DeviceMode.MAINTENANCE
+            logger.info("Device entered MAINTENANCE mode (exit via RESET_CONFIG)")
+            return self._command_result(sequence, success=True)
+
+        else:
+            logger.warning("Unknown SET_PARAMETER action: %s", action)
+            return self._command_result(sequence, success=False, code=0x03)
+
+    def _cmd_run_diagnostic(self, sequence: int) -> bytes:
+        """Handle RUN_DIAGNOSTIC — returns device diagnostic data as JSON payload."""
+        diag = {
+            "station_id": self.station_id,
+            "mode": self.mode.name,
+            "uptime_seconds": self.state.uptime_seconds,
+            "status": self.state.status.name,
+            "active_faults": {k: v.name for k, v in self.active_faults.items()},
+            "cpu_usage": round(self.state.cpu_usage, 1),
+            "memory_usage": round(self.state.memory_usage, 1),
+            "temperature": round(self.state.temperature, 1),
+        }
+        diag_json = json.dumps(diag).encode('utf-8')
+        # COMMAND_RESULT with success=0x00, code=0, followed by JSON
+        result_payload = struct.pack('>BB', 0x00, 0) + diag_json
+        return build_frame(MsgType.COMMAND_RESULT, sequence, result_payload)
+
+    def _cmd_shutdown(self, sequence: int) -> bytes:
+        """Handle SHUTDOWN — acknowledge and schedule stop."""
+        logger.info("SHUTDOWN command received — acknowledging")
+        # Send success first, then schedule stop
+        threading.Timer(1.0, self.stop).start()
+        return self._command_result(sequence, success=True)
+
+    def _cmd_reset_config(self, sequence: int) -> bytes:
+        """Handle RESET_CONFIG — clear all faults, exit maintenance, reset to defaults.
+
+        This is the authoritative "factory reset" — always transitions to NORMAL.
+        Allowed even in MAINTENANCE mode.
+        """
+        logger.info("RESET_CONFIG command — restoring defaults")
+        with self._fault_lock:
+            self.active_faults.clear()
+        with self._mode_lock:
+            self.mode = DeviceMode.NORMAL
+            self._restart_until = None
+        self.state = DeviceState(station_id=self.station_id)
+        self.start_time = time.time()
+        logger.info("Device reset — mode → NORMAL")
+        return self._command_result(sequence, success=True)
 
     def _process_buffer(self, buffer: bytearray, client_socket: socket.socket) -> bytearray:
         """Process complete frames from buffer. Returns remaining buffer."""
@@ -487,16 +980,37 @@ class MIPSDevice:
             client_socket.close()
             logger.info(f"Client disconnected: {address}")
 
+    def _create_ssl_context(self):
+        """Create SSL context for TLS server mode."""
+        import ssl
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.load_cert_chain(certfile=self.tls_cert, keyfile=self.tls_key)
+        if self.tls_ca:
+            ctx.load_verify_locations(cafile=self.tls_ca)
+            ctx.verify_mode = ssl.CERT_REQUIRED  # mutual TLS
+        logger.info("TLS enabled: cert=%s, key=%s, ca=%s, mTLS=%s",
+                    self.tls_cert, self.tls_key, self.tls_ca or "none",
+                    "yes" if self.tls_ca else "no")
+        return ctx
+
     def run(self):
         """Run the device server."""
         self.running = True
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_socket.bind(('0.0.0.0', self.port))
-        self.server_socket.listen(5)
-        self.server_socket.settimeout(1.0)
+        raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        raw_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        raw_socket.bind(('0.0.0.0', self.port))
+        raw_socket.listen(5)
+        raw_socket.settimeout(1.0)
 
-        logger.info(f"MIPS Virtual Base Station '{self.station_id}' listening on port {self.port}")
+        if self.tls_cert and self.tls_key:
+            ssl_ctx = self._create_ssl_context()
+            self.server_socket = ssl_ctx.wrap_socket(raw_socket, server_side=True)
+        else:
+            self.server_socket = raw_socket
+
+        transport = "TLS" if self.tls_cert else "TCP"
+        logger.info(f"MIPS Virtual Base Station '{self.station_id}' listening on {transport} port {self.port}")
         logger.info("Generating metrics: CPU, Memory, Temperature, Power, Signal")
         logger.info("                    5G NR3500 (n78): DL/UL throughput, RSRP, SINR")
         logger.info("                    5G NR700 (n28): DL/UL throughput, RSRP, SINR")
@@ -528,17 +1042,106 @@ class MIPSDevice:
         self.running = False
 
 
+def create_control_api(device: MIPSDevice):
+    """Create Flask control API for external fault injection (port 8098).
+
+    Endpoints:
+      POST /api/inject    — inject a named fault
+      POST /api/clear     — clear a specific fault
+      POST /api/clear-all — clear all faults
+      GET  /api/faults    — list active faults
+      GET  /health        — health check
+    """
+    try:
+        from flask import Flask, request as flask_request, jsonify
+    except ImportError:
+        logger.warning("Flask not installed — control API disabled. Install with: pip install flask")
+        return None
+
+    app = Flask(__name__)
+    # Suppress Flask request logs (use our own logger)
+    flog = logging.getLogger('werkzeug')
+    flog.setLevel(logging.WARNING)
+
+    @app.route('/api/inject', methods=['POST'])
+    def inject_fault():
+        data = flask_request.get_json(silent=True) or {}
+        fault_type = data.get('fault') or data.get('fault_type', '')
+        if not fault_type:
+            return jsonify({"status": "error", "message": "Missing 'fault' field",
+                            "available": list(FAULT_SCENARIOS.keys())}), 400
+        result = device.inject_fault(fault_type)
+        status_code = 200 if result.get("status") == "injected" else 400
+        return jsonify(result), status_code
+
+    @app.route('/api/clear', methods=['POST'])
+    def clear_fault():
+        data = flask_request.get_json(silent=True) or {}
+        fault_type = data.get('fault') or data.get('fault_type', '')
+        if not fault_type:
+            return jsonify({"status": "error", "message": "Missing 'fault' field"}), 400
+        result = device.clear_fault(fault_type)
+        return jsonify(result)
+
+    @app.route('/api/clear-all', methods=['POST'])
+    def clear_all():
+        result = device.clear_all_faults()
+        return jsonify(result)
+
+    @app.route('/api/faults', methods=['GET'])
+    def list_faults():
+        result = device.get_active_faults()
+        return jsonify(result)
+
+    @app.route('/health', methods=['GET'])
+    def health():
+        return jsonify({
+            "status": "healthy",
+            "station_id": device.station_id,
+            "running": device.running,
+            "mode": device.mode.name,
+            "active_faults": len(device.active_faults),
+        })
+
+    return app
+
+
 def main():
     parser = argparse.ArgumentParser(description="MIPS Virtual Base Station Device")
     parser.add_argument("--station-id", default="MIPS-BS-001", help="Station identifier")
     parser.add_argument("--port", type=int, default=9999, help="TCP port to listen on")
+    parser.add_argument("--control-port", type=int, default=8098, help="Flask control API port")
+    parser.add_argument("--no-control-api", action="store_true", help="Disable Flask control API")
+    parser.add_argument("--tls-cert", default=None, help="TLS certificate file (PEM)")
+    parser.add_argument("--tls-key", default=None, help="TLS private key file (PEM)")
+    parser.add_argument("--tls-ca", default=None, help="CA cert for mutual TLS (PEM)")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    device = MIPSDevice(station_id=args.station_id, port=args.port)
+    device = MIPSDevice(
+        station_id=args.station_id,
+        port=args.port,
+        tls_cert=args.tls_cert,
+        tls_key=args.tls_key,
+        tls_ca=args.tls_ca,
+    )
+
+    # Start Flask control API in a daemon thread
+    if not args.no_control_api:
+        app = create_control_api(device)
+        if app:
+            api_thread = threading.Thread(
+                target=lambda: app.run(
+                    host='0.0.0.0', port=args.control_port, debug=False, use_reloader=False
+                ),
+                daemon=True,
+                name="control-api",
+            )
+            api_thread.start()
+            logger.info("Control API started on port %d", args.control_port)
 
     try:
         device.run()
