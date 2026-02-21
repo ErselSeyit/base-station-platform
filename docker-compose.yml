@@ -207,6 +207,7 @@ services:
     container_name: ai-diagnostic
     environment:
       DIAGNOSTIC_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:?SECURITY_INTERNAL_SECRET is required}
       # ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans  # Disabled - uncomment when zipkin is running
       API_GATEWAY_URL: http://api-gateway:8080
       AUTH_ADMIN_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
@@ -446,6 +447,12 @@ services:
     container_name: edge-bridge
     environment:
       STATION_ID: ${EDGE_STATION_ID:-BS-001}
+      STATION_NAME: "Istanbul Base Station"
+      STATION_TYPE: "MACRO_CELL"
+      STATION_LOCATION: "Istanbul, Turkey"
+      STATION_LATITUDE: "41.0082"
+      STATION_LONGITUDE: "28.9784"
+      STATION_DESCRIPTION: "Primary 5G NR base station"
       CLOUD_BASE_URL: http://api-gateway:8080
       BRIDGE_USERNAME: ${BRIDGE_USERNAME:?BRIDGE_USERNAME is required}
       BRIDGE_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
@@ -473,6 +480,7 @@ services:
       STATION_ID: ${MIPS_STATION_ID:-MIPS-BS-001}
     ports:
       - "9999:9999"
+      - "8098:8098"
     networks:
       - app-network
     restart: unless-stopped
@@ -483,6 +491,229 @@ services:
           memory: 64M
     profiles:
       - edge  # Only start with: docker-compose --profile edge up
+
+  # ============================================
+  # FAULT ORCHESTRATOR (anomaly injection)
+  # ============================================
+  fault-orchestrator:
+    build:
+      context: ./ai-diagnostic/anomaly-simulator
+      dockerfile: Dockerfile
+    container_name: fault-orchestrator
+    environment:
+      DEVICE_SIMULATOR_URL: http://device-simulator:8098
+      AI_DIAGNOSTIC_URL: http://ai-diagnostic:9091
+      STATION_ID: "1"
+      STATION_NAME: BS-001
+      ANOMALY_CHECK_INTERVAL: "30"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:-}
+    depends_on:
+      - device-simulator
+      - ai-diagnostic
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    profiles:
+      - edge
+
+  # ============================================
+  # MULTI-DEVICE DEPLOYMENT (3 stations)
+  # Start with: docker-compose --profile multi-device up
+  # ============================================
+
+  # --- Station BS-001 ---
+  device-sim-1:
+    build:
+      context: ./ai-diagnostic/virtual-basestation
+      dockerfile: Dockerfile
+    container_name: device-sim-1
+    environment:
+      STATION_ID: BS-001
+      DEVICE_PORT: "9999"
+      CONTROL_PORT: "8098"
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    profiles:
+      - multi-device
+
+  edge-bridge-1:
+    build:
+      context: ./edge-bridge
+      dockerfile: Dockerfile
+    container_name: edge-bridge-1
+    environment:
+      STATION_ID: BS-001
+      STATION_NAME: "Base Station Istanbul-1"
+      STATION_LOCATION: "Istanbul"
+      STATION_LATITUDE: "41.0082"
+      STATION_LONGITUDE: "28.9784"
+      STATION_TYPE: "MACRO_CELL"
+      STATION_DESCRIPTION: "5G NR base station Istanbul site 1"
+      CLOUD_BASE_URL: http://api-gateway:8080
+      BRIDGE_USERNAME: ${BRIDGE_USERNAME:?BRIDGE_USERNAME is required}
+      BRIDGE_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
+      DEVICE_HOST: device-sim-1
+      DEVICE_PORT: "9999"
+    depends_on:
+      - api-gateway
+      - device-sim-1
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+    profiles:
+      - multi-device
+
+  # --- Station BS-002 ---
+  device-sim-2:
+    build:
+      context: ./ai-diagnostic/virtual-basestation
+      dockerfile: Dockerfile
+    container_name: device-sim-2
+    environment:
+      STATION_ID: BS-002
+      DEVICE_PORT: "9999"
+      CONTROL_PORT: "8098"
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    profiles:
+      - multi-device
+
+  edge-bridge-2:
+    build:
+      context: ./edge-bridge
+      dockerfile: Dockerfile
+    container_name: edge-bridge-2
+    environment:
+      STATION_ID: BS-002
+      STATION_NAME: "Base Station Istanbul-2"
+      STATION_LOCATION: "Istanbul"
+      STATION_LATITUDE: "41.0352"
+      STATION_LONGITUDE: "29.0094"
+      STATION_TYPE: "MACRO_CELL"
+      STATION_DESCRIPTION: "5G NR base station Istanbul site 2"
+      CLOUD_BASE_URL: http://api-gateway:8080
+      BRIDGE_USERNAME: ${BRIDGE_USERNAME:?BRIDGE_USERNAME is required}
+      BRIDGE_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
+      DEVICE_HOST: device-sim-2
+      DEVICE_PORT: "9999"
+    depends_on:
+      - api-gateway
+      - device-sim-2
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+    profiles:
+      - multi-device
+
+  # --- Station BS-003 ---
+  device-sim-3:
+    build:
+      context: ./ai-diagnostic/virtual-basestation
+      dockerfile: Dockerfile
+    container_name: device-sim-3
+    environment:
+      STATION_ID: BS-003
+      DEVICE_PORT: "9999"
+      CONTROL_PORT: "8098"
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    profiles:
+      - multi-device
+
+  edge-bridge-3:
+    build:
+      context: ./edge-bridge
+      dockerfile: Dockerfile
+    container_name: edge-bridge-3
+    environment:
+      STATION_ID: BS-003
+      STATION_NAME: "Base Station Ankara-1"
+      STATION_LOCATION: "Ankara"
+      STATION_LATITUDE: "39.9334"
+      STATION_LONGITUDE: "32.8597"
+      STATION_TYPE: "MACRO_CELL"
+      STATION_DESCRIPTION: "5G NR base station Ankara site 1"
+      CLOUD_BASE_URL: http://api-gateway:8080
+      BRIDGE_USERNAME: ${BRIDGE_USERNAME:?BRIDGE_USERNAME is required}
+      BRIDGE_PASSWORD: ${AUTH_ADMIN_PASSWORD:?AUTH_ADMIN_PASSWORD is required}
+      DEVICE_HOST: device-sim-3
+      DEVICE_PORT: "9999"
+    depends_on:
+      - api-gateway
+      - device-sim-3
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+    profiles:
+      - multi-device
+
+  # Fault orchestrator for multi-device (targets all 3 stations in rotation)
+  fault-orchestrator-multi:
+    build:
+      context: ./ai-diagnostic/anomaly-simulator
+      dockerfile: Dockerfile
+    container_name: fault-orchestrator-multi
+    environment:
+      DEVICE_SIMULATOR_URL: http://device-sim-1:8098
+      AI_DIAGNOSTIC_URL: http://ai-diagnostic:9091
+      STATION_ID: "1"
+      STATION_NAME: BS-001
+      ANOMALY_CHECK_INTERVAL: "30"
+      EXTRA_TARGETS: "http://device-sim-2:8098,2,BS-002;http://device-sim-3:8098,3,BS-003"
+      SECURITY_INTERNAL_SECRET: ${SECURITY_INTERNAL_SECRET:-}
+    depends_on:
+      - device-sim-1
+      - device-sim-2
+      - device-sim-3
+      - ai-diagnostic
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    profiles:
+      - multi-device
 
   # ============================================
   # VIRTUAL 5G STATION (realistic 5G NR simulator)
