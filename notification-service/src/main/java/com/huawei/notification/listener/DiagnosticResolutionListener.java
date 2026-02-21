@@ -13,7 +13,8 @@ import com.huawei.notification.service.NotificationService;
 
 /**
  * RabbitMQ listener for diagnostic resolution events from monitoring service.
- * When AI diagnostics resolves a problem, this listener marks related notifications as RESOLVED.
+ * When AI diagnostics resolves a problem, this listener marks related
+ * notifications as RESOLVED.
  */
 @Component
 public class DiagnosticResolutionListener {
@@ -50,7 +51,8 @@ public class DiagnosticResolutionListener {
         } catch (Exception e) {
             log.error("Failed to process resolution event for problemId={}: {}",
                     event.problemId(), e.getMessage(), e);
-            // Don't rethrow - we don't want to reject the message and cause infinite retries
+            // Don't rethrow - we don't want to reject the message and cause infinite
+            // retries
         }
     }
 }

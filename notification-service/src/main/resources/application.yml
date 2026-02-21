@@ -6,14 +6,20 @@ spring:
       enabled: true
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/notificationdb}
-    username: ${SPRING_DATASOURCE_USERNAME:}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       # Use 'validate' in production, 'update' only in development
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
     open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+    validate-on-migrate: true
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:rabbitmq}
     port: ${SPRING_RABBITMQ_PORT:5672}
@@ -35,6 +41,12 @@ management:
     export:
       prometheus:
         enabled: true
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLE_PROBABILITY:0.1}
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_TRACING_ENDPOINT:http://zipkin:9411/api/v2/spans}
 
 logging:
   level:
@@ -56,7 +68,7 @@ alerts:
   pagerduty:
     enabled: ${PAGERDUTY_ENABLED:false}
     routing-key: ${PAGERDUTY_ROUTING_KEY:}
-    source: ${PAGERDUTY_SOURCE:base-station-platform}
+    source: ${PAGERDUTY_SOURCE:basestation-platform}
   slack:
     enabled: ${SLACK_ENABLED:false}
     webhook-url: ${SLACK_WEBHOOK_URL:}

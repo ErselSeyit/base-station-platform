@@ -35,7 +35,7 @@ public class PagerDutyService implements AlertIntegration {
     @Value("${alerts.pagerduty.routing-key:}")
     private String routingKey;
 
-    @Value("${alerts.pagerduty.source:base-station-platform}")
+    @Value("${alerts.pagerduty.source:basestation-platform}")
     private String source;
 
     private final RestTemplate restTemplate;

@@ -7,7 +7,7 @@
 
     <parent>
         <groupId>com.huawei</groupId>
-        <artifactId>base-station-platform</artifactId>
+        <artifactId>basestation-platform</artifactId>
         <version>1.0.0</version>
     </parent>
 
@@ -39,6 +39,15 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Flyway database migrations -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
@@ -57,7 +66,17 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
-        
+
+        <!-- Distributed Tracing with Zipkin -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.zipkin.reporter2</groupId>
+            <artifactId>zipkin-reporter-brave</artifactId>
+        </dependency>
+
         <!-- Logstash Logback Encoder for structured JSON logging -->
         <dependency>
             <groupId>net.logstash.logback</groupId>

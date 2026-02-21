@@ -123,5 +123,12 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
      * @return a page of notifications (never null)
      */
     Page<Notification> findByStatusIn(List<NotificationStatus> statuses, Pageable pageable);
+
+    // Paginated overloads for production use
+    Page<Notification> findByStationId(Long stationId, Pageable pageable);
+
+    Page<Notification> findByType(NotificationType type, Pageable pageable);
+
+    Page<Notification> findByStationIdAndStatus(Long stationId, NotificationStatus status, Pageable pageable);
 }
 
