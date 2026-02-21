@@ -1546,7 +1546,10 @@ class AIAutoDiagnose:
         try:
             response = requests.post(
                 f"{self.api_url}/api/v1/auth/login",
-                json={"username": "admin", "password": "adminPassword123!"},
+                json={
+                    "username": os.environ.get("API_USERNAME", "admin"),
+                    "password": os.environ.get("API_PASSWORD", ""),
+                },
                 timeout=10,
             )
             if response.status_code == 200:

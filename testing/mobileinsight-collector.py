@@ -261,11 +261,11 @@ class MobileInsightCollector:
             try:
                 auth_data = json.loads(auth_response.stdout)
                 token = auth_data.get("token")
-            except Exception:
+            except Exception as e:
                 print(
-                    f"{Colors.YELLOW}[TOKEN]{Colors.RESET} Using demo token (parse failed)"
+                    f"{Colors.RED}[AUTH]{Colors.RESET} Failed to parse auth response: {e}"
                 )
-                token = "demo_token"
+                return False
 
             # Prepare metrics based on real cell info
             station_id = cell_info.get("cell_id", 1)

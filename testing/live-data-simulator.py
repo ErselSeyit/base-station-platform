@@ -23,6 +23,7 @@ Options:
     --concurrent            Use concurrent workers for load testing
 """
 
+import os
 import requests
 import time
 import random
@@ -264,7 +265,10 @@ class LiveDataSimulator:
         try:
             response = requests.post(
                 f"{self.api_url}/api/v1/auth/login",
-                json={"username": "admin", "password": "adminPassword123!"},
+                json={
+                    "username": os.environ.get("API_USERNAME", "admin"),
+                    "password": os.environ.get("API_PASSWORD", ""),
+                },
                 timeout=10,
             )
 
