@@ -166,7 +166,7 @@ func (c *Client) UploadMetrics(stationID string, metrics []MetricData) (*Metrics
 	return &resp, nil
 }
 
-// UpdateStatus updates the device status.
+// UpdateStatus updates the device status via the legacy endpoint.
 func (c *Client) UpdateStatus(stationID string, status *StatusUpdateRequest) (*StatusUpdateResponse, error) {
 	url := fmt.Sprintf("%s/api/base-stations/%s/status", c.config.BaseURL, stationID)
 
@@ -176,6 +176,14 @@ func (c *Client) UpdateStatus(stationID string, status *StatusUpdateRequest) (*S
 	}
 
 	return &resp, nil
+}
+
+// UpdateStationStatus updates a station's operational status (ACTIVE, OFFLINE, etc.).
+func (c *Client) UpdateStationStatus(stationID string, status string) error {
+	url := fmt.Sprintf("%s/api/v1/stations/%s/status", c.config.BaseURL, stationID)
+	body := map[string]string{"status": status}
+	var resp BaseStation
+	return c.doRequest("PATCH", url, body, &resp)
 }
 
 // GetPendingCommands retrieves pending commands for execution.

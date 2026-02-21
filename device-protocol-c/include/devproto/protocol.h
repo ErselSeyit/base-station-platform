@@ -36,31 +36,33 @@ extern "C" {
 #define DEVPROTO_MAX_FRAME_SIZE     (DEVPROTO_HEADER_SIZE + DEVPROTO_MAX_PAYLOAD_SIZE + DEVPROTO_CRC_SIZE)
 
 /**
- * Message types - compatible with Python MessageType enum
+ * Message types - aligned with Python device_protocol.py and Go edge-bridge
+ *
+ * Response type = Request type | 0x80 (via devproto_response_type())
  */
 typedef enum {
     /* Requests (PC -> Device) */
     DEVPROTO_MSG_PING            = 0x01,
     DEVPROTO_MSG_REQUEST_METRICS = 0x02,
-    DEVPROTO_MSG_EXECUTE_COMMAND = 0x03,
+    DEVPROTO_MSG_GET_STATUS      = 0x03,
     DEVPROTO_MSG_SET_CONFIG      = 0x04,
-    DEVPROTO_MSG_GET_STATUS      = 0x05,
-    DEVPROTO_MSG_REBOOT          = 0x06,
-    DEVPROTO_MSG_UPDATE_FIRMWARE = 0x07,
+    DEVPROTO_MSG_EXECUTE_COMMAND = 0x05,
+    DEVPROTO_MSG_START_STREAM    = 0x06,
+    DEVPROTO_MSG_STOP_STREAM     = 0x07,
 
     /* Responses (Device -> PC) */
     DEVPROTO_MSG_PONG            = 0x81,
     DEVPROTO_MSG_METRICS_RESPONSE= 0x82,
-    DEVPROTO_MSG_COMMAND_RESULT  = 0x83,
+    DEVPROTO_MSG_STATUS_RESPONSE = 0x83,
     DEVPROTO_MSG_CONFIG_ACK      = 0x84,
-    DEVPROTO_MSG_STATUS_RESPONSE = 0x85,
-    DEVPROTO_MSG_REBOOT_ACK      = 0x86,
+    DEVPROTO_MSG_COMMAND_RESULT  = 0x85,
+    DEVPROTO_MSG_STREAM_ACK      = 0x86,
 
     /* Async Events (Device -> PC, unsolicited) */
-    DEVPROTO_MSG_ALERT_EVENT        = 0xA1,
+    DEVPROTO_MSG_METRICS_EVENT      = 0xA1,
     DEVPROTO_MSG_THRESHOLD_EXCEEDED = 0xA2,
-    DEVPROTO_MSG_HARDWARE_FAULT     = 0xA3,
-    DEVPROTO_MSG_CONNECTION_LOST    = 0xA4
+    DEVPROTO_MSG_DEVICE_STATE_CHANGE= 0xA3,
+    DEVPROTO_MSG_ERROR              = 0xA4
 } devproto_msg_type_t;
 
 /**
@@ -76,19 +78,29 @@ typedef enum {
 } devproto_status_t;
 
 /**
- * Command types - compatible with Python CommandType enum
+ * Command types - aligned with Go edge-bridge CommandType
+ *
+ * Core commands (0x01-0x06) match edge-bridge/internal/protocol/message.go
+ * Telecom-specific commands (0x10+) extend the set for real device operations.
  */
 typedef enum {
-    DEVPROTO_CMD_RESTART_SERVICE   = 0x01,
-    DEVPROTO_CMD_CLEAR_CACHE       = 0x02,
-    DEVPROTO_CMD_ROTATE_LOGS       = 0x03,
-    DEVPROTO_CMD_SET_FAN_SPEED     = 0x04,
-    DEVPROTO_CMD_SET_POWER_MODE    = 0x05,
-    DEVPROTO_CMD_CALIBRATE_ANTENNA = 0x06,
-    DEVPROTO_CMD_SWITCH_CHANNEL    = 0x07,
-    DEVPROTO_CMD_ENABLE_FILTER     = 0x08,
-    DEVPROTO_CMD_BLOCK_IP          = 0x09,
-    DEVPROTO_CMD_RUN_DIAGNOSTIC    = 0x0A,
+    /* Core commands (match Go edge-bridge) */
+    DEVPROTO_CMD_RESTART         = 0x01,
+    DEVPROTO_CMD_SHUTDOWN        = 0x02,
+    DEVPROTO_CMD_RESET_CONFIG    = 0x03,
+    DEVPROTO_CMD_UPDATE_FIRMWARE = 0x04,
+    DEVPROTO_CMD_RUN_DIAGNOSTIC  = 0x05,
+    DEVPROTO_CMD_SET_PARAMETER   = 0x06,
+
+    /* Telecom-specific commands */
+    DEVPROTO_CMD_SET_FAN_SPEED     = 0x10,
+    DEVPROTO_CMD_SET_POWER_MODE    = 0x11,
+    DEVPROTO_CMD_CALIBRATE_ANTENNA = 0x12,
+    DEVPROTO_CMD_SWITCH_CHANNEL    = 0x13,
+    DEVPROTO_CMD_ENABLE_FILTER     = 0x14,
+    DEVPROTO_CMD_CLEAR_CACHE       = 0x15,
+    DEVPROTO_CMD_ROTATE_LOGS       = 0x16,
+    DEVPROTO_CMD_BLOCK_IP          = 0x17,
     DEVPROTO_CMD_CUSTOM_SHELL      = 0xFF
 } devproto_cmd_type_t;
 

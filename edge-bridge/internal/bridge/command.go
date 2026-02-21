@@ -2,6 +2,7 @@
 package bridge
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -25,6 +26,12 @@ func NewCommandExecutor(deviceMgr *device.Manager, cloudClient *cloud.Client, st
 		cloudClient: cloudClient,
 		stationID:   stationID,
 	}
+}
+
+// SetStationID updates the station ID used for command polling.
+// Called after station registration resolves the database ID.
+func (e *CommandExecutor) SetStationID(id string) {
+	e.stationID = id
 }
 
 // ProcessPendingCommands fetches and executes pending commands.
@@ -95,17 +102,16 @@ func (e *CommandExecutor) mapCommandType(cloudType string) (protocol.CommandType
 }
 
 func (e *CommandExecutor) buildCommandParams(cmd *cloud.PendingCommand) []byte {
-	if cmd.Params == nil {
+	if len(cmd.Params) == 0 {
 		return nil
 	}
 
-	// Simple serialization of params
-	// In production, use a proper encoding
-	var parts []string
-	for k, v := range cmd.Params {
-		parts = append(parts, fmt.Sprintf("%s=%v", k, v))
+	data, err := json.Marshal(cmd.Params)
+	if err != nil {
+		log.Printf("Failed to marshal command params: %v", err)
+		return nil
 	}
-	return []byte(strings.Join(parts, ";"))
+	return data
 }
 
 // ExecuteLocalCommand executes a command directly without cloud involvement.

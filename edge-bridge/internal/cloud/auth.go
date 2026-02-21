@@ -108,7 +108,11 @@ func (a *Authenticator) Login() error {
 	if a.tokenType == "" {
 		a.tokenType = "Bearer"
 	}
-	a.expiresAt = time.Now().Add(time.Duration(loginResp.ExpiresIn) * time.Second)
+	expiresIn := loginResp.ExpiresIn
+	if expiresIn <= 0 {
+		expiresIn = 86400 // Default: 24 hours if server doesn't return expiresIn
+	}
+	a.expiresAt = time.Now().Add(time.Duration(expiresIn) * time.Second)
 	a.mu.Unlock()
 
 	return nil

@@ -18,6 +18,9 @@ import (
 	"edge-bridge/internal/transport"
 )
 
+// Default buffer size: 100 batches ≈ 50 min of metrics at 30s intervals.
+const defaultBufferSize = 100
+
 // Bridge orchestrates communication between device and cloud.
 type Bridge struct {
 	config      *config.Config
@@ -28,9 +31,11 @@ type Bridge struct {
 	cmdExecutor *CommandExecutor
 	adapterMgr  *adapter.Manager // Multi-protocol adapter manager
 
-	stationDBID int64 // Database ID of registered station
-	metrics     []protocol.Metric
-	metricsLock sync.RWMutex
+	stationDBID   int64 // Database ID of registered station
+	metrics       []protocol.Metric
+	metricsLock   sync.RWMutex
+	metricBuffer  *MetricBuffer // Buffered metrics for offline resilience
+	cloudBackoff  *Backoff      // Exponential backoff for cloud reconnection
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -97,13 +102,15 @@ func New(cfg *config.Config) (*Bridge, error) {
 	}
 
 	return &Bridge{
-		config:      cfg,
-		transport:   t,
-		deviceMgr:   deviceMgr,
-		cloudAuth:   cloudAuth,
-		cloudClient: cloudClient,
-		cmdExecutor: cmdExecutor,
-		adapterMgr:  adapterMgr,
+		config:       cfg,
+		transport:    t,
+		deviceMgr:    deviceMgr,
+		cloudAuth:    cloudAuth,
+		cloudClient:  cloudClient,
+		cmdExecutor:  cmdExecutor,
+		adapterMgr:   adapterMgr,
+		metricBuffer: NewMetricBuffer(defaultBufferSize),
+		cloudBackoff: NewBackoff(5*time.Second, 5*time.Minute),
 	}, nil
 }
 
@@ -267,15 +274,8 @@ func (b *Bridge) collectAndUploadMetrics() {
 	b.metrics = metrics
 	b.metricsLock.Unlock()
 
-	// Upload to cloud
-	if !b.cloudAuth.IsAuthenticated() {
-		if err := b.cloudAuth.Login(); err != nil {
-			log.Printf("Cloud authentication failed, skipping upload")
-			return
-		}
-	}
-
 	// Filter and convert metrics to cloud format
+	now := time.Now()
 	cloudMetrics := make([]cloud.MetricData, 0, len(metrics))
 	for _, m := range metrics {
 		typeStr := protocol.MetricTypeString(m.Type)
@@ -285,7 +285,7 @@ func (b *Bridge) collectAndUploadMetrics() {
 		cloudMetrics = append(cloudMetrics, cloud.MetricData{
 			Type:      typeStr,
 			Value:     float64(m.Value),
-			Timestamp: time.Now(),
+			Timestamp: now,
 		})
 	}
 
@@ -300,12 +300,43 @@ func (b *Bridge) collectAndUploadMetrics() {
 		stationID = strconv.FormatInt(b.stationDBID, 10)
 	}
 
+	// Ensure cloud authentication
+	if !b.cloudAuth.IsAuthenticated() {
+		backoff := b.cloudBackoff.Next()
+		if err := b.cloudAuth.Login(); err != nil {
+			log.Printf("Cloud auth failed (backoff=%s, buffered=%d), buffering metrics",
+				backoff.Round(time.Second), b.metricBuffer.Len()+1)
+			b.metricBuffer.Push(MetricBatch{
+				StationID: stationID,
+				Metrics:   cloudMetrics,
+				Collected: now,
+			})
+			return
+		}
+		b.cloudBackoff.Reset()
+		log.Printf("Cloud authentication restored")
+		b.registerBridge()
+		b.registerStation()
+	}
+
+	// First, drain any buffered metrics from previous outages
+	if b.metricBuffer.Len() > 0 {
+		uploadBufferedMetrics(b.metricBuffer, b.cloudClient)
+	}
+
+	// Upload current batch
 	resp, err := b.cloudClient.UploadMetrics(stationID, cloudMetrics)
 	if err != nil {
-		log.Printf("Failed to upload metrics: %v", err)
+		log.Printf("Failed to upload metrics, buffering: %v", err)
+		b.metricBuffer.Push(MetricBatch{
+			StationID: stationID,
+			Metrics:   cloudMetrics,
+			Collected: now,
+		})
 		return
 	}
 
+	b.cloudBackoff.Reset()
 	log.Printf("Uploaded %d metrics to cloud (status: %s)", resp.Received, resp.Status)
 }
 
@@ -385,6 +416,11 @@ func (b *Bridge) IsCloudConnected() bool {
 	return b.cloudAuth.IsAuthenticated()
 }
 
+// BufferStats returns metric buffer statistics.
+func (b *Bridge) BufferStats() (current int, totalBuffered int64, totalDropped int64) {
+	return b.metricBuffer.Stats()
+}
+
 // StationID returns the configured station ID.
 func (b *Bridge) StationID() string {
 	return b.config.Bridge.StationID
@@ -397,8 +433,13 @@ func (b *Bridge) registerStation() {
 	// First try to find existing station by name
 	existing, err := b.cloudClient.GetBaseStationByName(cfg.StationName)
 	if err == nil && existing != nil {
-		b.stationDBID = existing.ID
+		b.setStationDBID(existing.ID)
 		log.Printf("Station already registered: %s (ID: %d)", existing.StationName, existing.ID)
+		// Mark station ACTIVE since edge-bridge is now connected
+		if err := b.cloudClient.UpdateStationStatus(
+			strconv.FormatInt(existing.ID, 10), "ACTIVE"); err != nil {
+			log.Printf("Warning: could not update station status to ACTIVE: %v", err)
+		}
 		return
 	}
 
@@ -420,16 +461,24 @@ func (b *Bridge) registerStation() {
 		log.Printf("Registration attempt failed: %v, trying to find existing station", err)
 		existing, findErr := b.cloudClient.GetBaseStationByName(cfg.StationName)
 		if findErr == nil && existing != nil {
-			b.stationDBID = existing.ID
+			b.setStationDBID(existing.ID)
 			log.Printf("Found existing station: %s (ID: %d)", existing.StationName, existing.ID)
+			_ = b.cloudClient.UpdateStationStatus(
+				strconv.FormatInt(existing.ID, 10), "ACTIVE")
 			return
 		}
 		log.Printf("Warning: Failed to register or find station: %v", err)
 		return
 	}
 
-	b.stationDBID = station.ID
+	b.setStationDBID(station.ID)
 	log.Printf("Station registered: %s (ID: %d)", station.StationName, station.ID)
+}
+
+// setStationDBID updates the database ID and propagates it to the command executor.
+func (b *Bridge) setStationDBID(id int64) {
+	b.stationDBID = id
+	b.cmdExecutor.SetStationID(strconv.FormatInt(id, 10))
 }
 
 // registerBridge registers this edge-bridge instance with the platform.

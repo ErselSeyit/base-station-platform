@@ -434,10 +434,17 @@ func NewStatusRequestMessage(sequence byte) *Message {
 }
 
 // NewCommandMessage creates a command execution message.
+// Wire format: [cmdType(1)][paramLen(1)][params...].
 func NewCommandMessage(sequence byte, cmdType CommandType, params []byte) *Message {
-	payload := make([]byte, 1+len(params))
+	paramLen := len(params)
+	if paramLen > 255 {
+		paramLen = 255
+		params = params[:255]
+	}
+	payload := make([]byte, 2+paramLen)
 	payload[0] = byte(cmdType)
-	copy(payload[1:], params)
+	payload[1] = byte(paramLen)
+	copy(payload[2:], params)
 	return &Message{
 		Type:     MsgExecuteCommand,
 		Sequence: sequence,
