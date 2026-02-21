@@ -4,10 +4,16 @@
 
 ```mermaid
 graph LR
-    Client[Dashboard<br/>:3000]
+    User[Browser]
+    Ingress[NGINX Ingress<br/>basestation.local]
+    Client[Frontend<br/>nginx :80]
     GW[API Gateway<br/>:8080]
 
-    Client --> GW
+    User --> Ingress
+    Ingress -->|/| Client
+    Ingress -->|/api| Client
+    Ingress -->|/ws| MS
+    Client -->|/api proxy| GW
 
     GW --> AS[Auth<br/>:8084]
     GW --> BS[Base Station<br/>:8081]
@@ -25,6 +31,7 @@ graph LR
     MS -.-> RMQ[RabbitMQ]
     RMQ -.-> NS
 
+    style Ingress fill:#e65100,color:#fff
     style GW fill:#1976d2,color:#fff
     style Client fill:#4caf50,color:#fff
     style BS fill:#9c27b0,color:#fff
@@ -46,14 +53,26 @@ graph LR
 | **Notification** | 8083 | PostgreSQL | Alerts, event-driven notifications |
 | **AI Diagnostic** | 9091 | - | Python AI engine for problem detection |
 
+## Networking & Ingress
+
+External traffic enters through **NGINX Ingress** on `basestation.local`:
+
+| Ingress Path | Backend | Description |
+|--------------|---------|-------------|
+| `/` | frontend:80 | React SPA served by nginx |
+| `/api` | frontend:80 → api-gateway:8080 | API calls proxied by frontend nginx |
+| `/ws` | monitoring-service:8082 | WebSocket streaming |
+
+The frontend container runs nginx which proxies `/api` requests to the API Gateway internally, keeping the browser's origin consistent.
+
 ## Service Discovery
 
-The platform uses **Docker DNS** for service discovery (container names as hostnames). This approach:
+The platform uses **Kubernetes DNS** for service discovery (service names as hostnames). This approach:
 - Eliminates Eureka overhead
 - Simplifies deployment
-- Works identically in Docker Compose and Kubernetes
+- Native to Kubernetes
 
-Services reference each other by container name (e.g., `http://auth-service:8084`).
+Services reference each other by service name (e.g., `http://auth-service:8084`).
 
 ## Technology Stack
 
@@ -70,7 +89,7 @@ Services reference each other by container name (e.g., `http://auth-service:8084
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **Python** | 3.12 | AI diagnostic engine |
-| **FastAPI** | 0.115+ | Async HTTP server |
+| **Flask** | 2.3+ | HTTP server |
 | **OpenTelemetry** | Latest | Distributed tracing with Zipkin |
 | **HMAC Authentication** | - | Service-to-service security |
 
@@ -89,9 +108,9 @@ Services reference each other by container name (e.g., `http://auth-service:8084
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **PostgreSQL** | 18 | Consolidated database for stations, auth, notifications |
-| **MongoDB** | 8.2 | Time-series metrics storage |
-| **Redis** | 8 | Rate limiting, caching |
-| **RabbitMQ** | 3.13 | Async messaging for alerts |
+| **MongoDB** | 8 | Time-series metrics storage |
+| **Redis** | 7 | Rate limiting, caching |
+| **RabbitMQ** | 4 | Async messaging for alerts |
 | **Prometheus** | Latest | Metrics collection |
 | **Grafana** | Latest | Dashboards and visualization |
 | **Zipkin** | Latest | Distributed tracing |
@@ -105,12 +124,12 @@ Previously used 3 separate PostgreSQL instances. Now consolidated to single inst
 - Simplifies backup/restore
 - Appropriate for current scale
 
-### Docker DNS vs Service Discovery
+### Kubernetes DNS vs Service Discovery
 
-Removed Eureka service discovery in favor of Docker DNS:
-- Container names serve as hostnames
-- No additional infrastructure
-- Works seamlessly with Docker Compose and Kubernetes
+Removed Eureka service discovery in favor of Kubernetes DNS:
+- Service names serve as hostnames within the cluster
+- No additional infrastructure required
+- NGINX Ingress handles external routing
 
 ### AI Diagnostic Integration
 
@@ -156,12 +175,18 @@ PostGIS-ready architecture for geospatial queries (stations within radius).
 | **Structured Logging** | JSON logs with logstash-logback-encoder |
 | **Health Checks** | Custom health indicators for dependencies |
 
-## Container Overview
+## Deployment Overview
+
+Deployed on Kubernetes (minikube) via Helm:
 
 ```
-14 containers total:
+19 pods total:
 - 6 application services (gateway, auth, base-station, monitoring, notification, frontend)
 - 1 AI service (ai-diagnostic)
+- 2 simulators (anomaly-simulator, device-simulator)
+- 1 edge bridge (Go)
 - 4 databases (postgres, mongodb, redis, rabbitmq)
-- 3 observability (prometheus, grafana, zipkin)
+- 5 observability (prometheus, grafana, zipkin, loki, promtail)
 ```
+
+External access via NGINX Ingress at `basestation.local`.

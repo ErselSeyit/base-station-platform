@@ -10,11 +10,10 @@ Add screenshots of the running application here.
 
 ## How to Capture
 
-1. Start the application: `docker compose up -d`
-2. Wait for services to initialize (~30 seconds)
-3. Seed data: `python3 scripts/seed_realistic_data.py`
-4. Open http://localhost:3000
-5. Take screenshots of each page
+1. Deploy to minikube: `helm install basestation helm/basestation-platform -n basestation-platform`
+2. Wait for all pods to be Running: `kubectl get pods -n basestation-platform`
+3. Open `http://basestation.local:{ingress-port}` in your browser
+4. Take screenshots of each page
 
 ## Note
 

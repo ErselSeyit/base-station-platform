@@ -143,27 +143,19 @@ spec:
 
 ---
 
-### Option 3: Docker Compose (Development Only)
+### Option 3: Generate Secrets Script (Development)
 
-For local development with Docker Compose, use `.env` file:
+For local minikube development, generate and apply secrets directly:
 
-1. **Copy the example:**
-   ```bash
-   cp .env.example .env
-   ```
+```bash
+# Generate cryptographically random secrets and apply to K8s
+./k8s/generate-secrets.sh | kubectl apply -f -
+```
 
-2. **Generate secure secrets:**
-   ```bash
-   ./scripts/generate-secrets.sh
-   ```
-
-3. **Copy the generated values to `.env`**
-
-4. **Verify `.env` is in `.gitignore`:**
-   ```bash
-   git check-ignore .env
-   # Should output: .env
-   ```
+Verify secrets are applied:
+```bash
+kubectl get secrets -n basestation-platform
+```
 
 **⚠️ NEVER use development secrets in production!**
 
@@ -293,7 +285,7 @@ git clone https://github.com/awslabs/git-secrets.git
 cd git-secrets && make install
 
 # Configure for this repo
-cd /path/to/base-station-platform
+cd /path/to/basestation-platform
 git secrets --install
 git secrets --register-aws
 

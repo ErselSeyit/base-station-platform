@@ -2,9 +2,14 @@
 
 ## Base URL
 
-All API endpoints are accessed through the API Gateway:
+All API endpoints are accessed through NGINX Ingress, which routes to the frontend nginx proxy, then to the API Gateway:
 ```
-http://localhost:8080/api/v1
+http://basestation.local:{ingress-port}/api/v1
+```
+
+To find your ingress port:
+```bash
+kubectl get svc -n ingress-nginx ingress-nginx-controller
 ```
 
 ## Rate Limiting
@@ -16,7 +21,12 @@ Gateway enforces per-service rate limits:
 | Auth (`/auth/**`) | 10 req/s | 20 |
 | Stations (`/stations/**`) | 50 req/s | 100 |
 | Monitoring (`/metrics/**`) | 100 req/s | 200 |
+| Alerts (`/alerts/**`) | 50 req/s | 100 |
+| SON (`/son/**`) | 50 req/s | 100 |
+| Diagnostics (`/diagnostics/**`) | 30 req/s | 60 |
+| Thresholds (`/thresholds/**`) | 30 req/s | 60 |
 | Notifications (`/notifications/**`) | 30 req/s | 60 |
+| Reports (`/reports/**`) | 5 req/s | 10 |
 
 ## Authentication
 
@@ -219,13 +229,15 @@ All errors follow a consistent format:
 
 ## Health Endpoints
 
-Each service exposes health endpoints:
+Each service exposes health endpoints. Externally accessible via ingress:
 
 ```bash
-# API Gateway
-GET http://localhost:8080/actuator/health
+# Via ingress
+GET http://basestation.local:{ingress-port}/api/actuator/health
+```
 
-# Individual services (internal)
+Internal health checks (within the cluster):
+```bash
 GET http://auth-service:8084/actuator/health
 GET http://base-station-service:8081/actuator/health
 GET http://monitoring-service:8082/actuator/health

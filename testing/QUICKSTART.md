@@ -2,95 +2,72 @@
 
 ## Prerequisites Check
 
-Before running the simulator, your platform must be deployed and running. Here's how to check:
+Before running the simulator, your platform must be deployed and running on Kubernetes (minikube).
 
 ### 1. Check if Services are Running
 
-**For Docker Compose:**
-```bash
-cd /home/siyu/base-station-platform
-docker-compose ps
-```
-
-**For Kubernetes:**
 ```bash
 kubectl get pods -n basestation-platform
 ```
 
 All pods should show `Running` status.
 
-### 2. Verify API Gateway is Accessible
+### 2. Access Points
+
+All external traffic routes through NGINX Ingress at `basestation.local`:
+
+| Service | Access Method |
+|---------|---------------|
+| Dashboard / API | `http://basestation.local:{ingress-port}` (NGINX Ingress) |
+| Grafana | NodePort: `kubectl get svc grafana -n basestation-platform` |
+| Prometheus | NodePort: `kubectl get svc prometheus -n basestation-platform` |
+| Zipkin | NodePort: `kubectl get svc zipkin -n basestation-platform` |
 
 ```bash
-# Test if API Gateway responds
-curl http://localhost:30080/actuator/health
-
-# Should return: {"status":"UP"}
+# Get the ingress NodePort
+kubectl get svc -n ingress-nginx ingress-nginx-controller
 ```
 
-### 3. Test Authentication
+### 3. Verify API is Accessible
 
 ```bash
-# Try to login
-curl -X POST http://localhost:30080/api/v1/auth/login \
+# Set your password first
+export API_PASSWORD='<your-password>'
+
+# Get ingress port
+INGRESS_PORT=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
+  -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')
+
+# Try to login via ingress
+curl -X POST http://basestation.local:$INGRESS_PORT/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d "{\"username\":\"admin\",\"password\":\"$API_PASSWORD\"}"
 
 # Should return a JWT token
 ```
 
 ## If Services Are NOT Running
 
-### Option 1: Start with Docker Compose (Quickest)
+### Deploy to Kubernetes
 
 ```bash
-cd /home/siyu/base-station-platform
+# 1. Start minikube
+minikube start --memory=8192 --cpus=4
+minikube addons enable ingress
 
-# Start all services
-docker-compose up -d
+# 2. Add to /etc/hosts
+echo "$(minikube ip)  basestation.local" | sudo tee -a /etc/hosts
 
-# Wait for services to be healthy (2-3 minutes)
-docker-compose ps
+# 3. Deploy via Helm
+helm install basestation helm/basestation-platform \
+  -n basestation-platform --create-namespace
 
-# Check logs if any service fails
-docker-compose logs -f api-gateway
-```
-
-### Option 2: Deploy to Kubernetes
-
-```bash
-cd /home/siyu/base-station-platform
-
-# 1. Create namespace
-kubectl create namespace basestation-platform
-
-# 2. Generate and apply secrets
-./k8s/generate-secrets.sh
-kubectl apply -f k8s/secrets.yaml
-
-# 3. Apply PVCs
-kubectl apply -f k8s/persistent-volumes.yaml
-
-# 4. Apply init ConfigMaps
-kubectl apply -f k8s/init-configmaps.yaml
-
-# 5. Deploy databases (will auto-initialize)
-kubectl apply -f k8s/databases.yaml
-
-# 6. Wait for databases to be ready (2-3 minutes)
+# 4. Wait for all pods to be Running (2-3 minutes)
 kubectl get pods -n basestation-platform -w
 
-# 7. Deploy applications
-kubectl apply -f k8s/app-services.yaml
-
-# 8. Deploy monitoring stack
-kubectl apply -f k8s/monitoring-stack.yaml
-
-# 9. Wait for all pods to be Running
-kubectl get pods -n basestation-platform
-
-# 10. Verify API Gateway is accessible
-curl http://localhost:30080/actuator/health
+# 5. Get ingress port and verify
+kubectl get svc -n ingress-nginx ingress-nginx-controller
+curl http://basestation.local:{ingress-port}/api/v1/stations
 ```
 
 ## Now Run the Simulator!
@@ -126,50 +103,33 @@ python3 testing/live-data-simulator.py \
 
 ### "Login failed: 401"
 
-This means the auth-service is not running or not accessible.
+Auth-service is not running or not accessible.
 
 **Check:**
 ```bash
-# Docker Compose
-docker-compose logs auth-service
-
-# Kubernetes
 kubectl logs -f deployment/auth-service -n basestation-platform
 ```
 
 **Fix:**
 ```bash
-# Docker Compose - restart auth-service
-docker-compose restart auth-service
-
-# Kubernetes - restart pod
 kubectl rollout restart deployment/auth-service -n basestation-platform
 ```
 
 ### "Connection refused"
 
-API Gateway is not running.
+API Gateway or ingress is not running.
 
 **Check:**
 ```bash
-# Docker Compose
-docker-compose ps | grep api-gateway
-
-# Kubernetes
 kubectl get pod -n basestation-platform -l app=api-gateway
+kubectl get ingress -n basestation-platform
+kubectl get pods -n ingress-nginx
 ```
 
 ### Database Not Initialized
 
 If auth fails with "user not found":
 
-**Docker Compose:**
-```bash
-# Re-run database initialization
-docker-compose exec postgres-auth psql -U postgres -d authdb -f /docker-entrypoint-initdb.d/auth-seed.sql
-```
-
-**Kubernetes:**
 ```bash
 # Database should auto-initialize via init containers
 # If it didn't, manually run:
@@ -184,44 +144,41 @@ Run this comprehensive check:
 #!/bin/bash
 echo "Checking Base Station Platform..."
 
-# 1. API Gateway
-echo -n "API Gateway: "
-curl -sf http://localhost:30080/actuator/health > /dev/null && echo "✓ UP" || echo "✗ DOWN"
+INGRESS_PORT=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
+  -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')
+MINIKUBE_IP=$(minikube ip)
+
+# 1. Frontend via Ingress
+echo -n "Frontend (Ingress): "
+curl -sf -o /dev/null -w "%{http_code}" http://$MINIKUBE_IP:$INGRESS_PORT/ && echo " UP" || echo " DOWN"
 
 # 2. Authentication
 echo -n "Auth Service: "
-TOKEN=$(curl -sf -X POST http://localhost:30080/api/v1/auth/login \
+TOKEN=$(curl -sf -X POST http://$MINIKUBE_IP:$INGRESS_PORT/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}' \
+  -d "{\"username\":\"admin\",\"password\":\"$API_PASSWORD\"}" \
   | jq -r '.token' 2>/dev/null)
 
 if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
-  echo "✓ UP (token: ${TOKEN:0:20}...)"
+  echo "UP (token: ${TOKEN:0:20}...)"
 else
-  echo "✗ DOWN"
+  echo "DOWN"
 fi
 
 # 3. Prometheus
+PROM_PORT=$(kubectl get svc prometheus -n basestation-platform \
+  -o jsonpath='{.spec.ports[0].nodePort}')
 echo -n "Prometheus: "
-curl -sf http://localhost:30090/-/healthy > /dev/null && echo "✓ UP" || echo "✗ DOWN"
+curl -sf http://$MINIKUBE_IP:$PROM_PORT/-/healthy > /dev/null && echo "UP" || echo "DOWN"
 
 # 4. Grafana
+GRAF_PORT=$(kubectl get svc grafana -n basestation-platform \
+  -o jsonpath='{.spec.ports[0].nodePort}')
 echo -n "Grafana: "
-curl -sf http://localhost:30300/api/health > /dev/null && echo "✓ UP" || echo "✗ DOWN"
-
-# 5. Zipkin
-echo -n "Zipkin: "
-curl -sf http://localhost:30411/health > /dev/null && echo "✓ UP" || echo "✗ DOWN"
+curl -sf http://$MINIKUBE_IP:$GRAF_PORT/api/health > /dev/null && echo "UP" || echo "DOWN"
 
 echo ""
-echo "If all show ✓ UP, you're ready to run the simulator!"
-```
-
-Save this as `check-services.sh`, make it executable, and run it:
-
-```bash
-chmod +x check-services.sh
-./check-services.sh
+echo "If all show UP, you're ready to run the simulator!"
 ```
 
 ## Once Everything is UP
@@ -236,45 +193,31 @@ python3 testing/live-data-simulator.py --stations 20 --scenario peak_hours
 tail -f /tmp/simulator.log
 ```
 
-### Browser 1: Grafana
-```
-http://localhost:30300
-Login: admin/admin
+### Browser: Grafana
 
-Create a dashboard with these queries:
-- signal_strength_dbm
-- temperature_celsius
-- throughput_mbps
-- connected_devices
-```
+Open Grafana at its NodePort URL. Create a dashboard with these queries:
+- `signal_strength_dbm`
+- `temperature_celsius`
+- `throughput_mbps`
+- `connected_devices`
 
-### Browser 2: Prometheus
-```
-http://localhost:30090
+### Browser: Prometheus
 
-Try these queries:
-- avg(signal_strength_dbm)
-- sum(throughput_mbps)
-- count(temperature_celsius > 80)
-```
-
-### Browser 3: Zipkin
-```
-http://localhost:30411
-
-Watch distributed traces appear in real-time
-```
+Open Prometheus at its NodePort URL. Try these queries:
+- `avg(signal_strength_dbm)`
+- `sum(throughput_mbps)`
+- `count(temperature_celsius > 80)`
 
 ## Success Indicators
 
 You'll know it's working when:
 
-1. ✅ Simulator shows `[AUTH] Successfully authenticated`
-2. ✅ You see `[SUCCESS] successful_updates` incrementing
-3. ✅ Grafana graphs are moving (if you created panels)
-4. ✅ Prometheus shows your custom metrics
-5. ✅ Logs appear in Loki (Grafana → Explore → Loki)
-6. ✅ Traces appear in Zipkin
+1. Simulator shows `[AUTH] Successfully authenticated`
+2. You see `[SUCCESS] successful_updates` incrementing
+3. Grafana graphs are moving (if you created panels)
+4. Prometheus shows your custom metrics
+5. Logs appear in Loki (Grafana > Explore > Loki)
+6. Traces appear in Zipkin
 
 ## Sample Output (Success)
 
@@ -294,5 +237,3 @@ You'll know it's working when:
 [FAILURE] Simulated Station 12 went offline!
 [RECOVERY] Simulated Station 12 back online
 ```
-
-Happy Testing! 🚀

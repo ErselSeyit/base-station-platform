@@ -8,9 +8,9 @@
 </picture>
 
 <p>
-  <a href="https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml"><img src="https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml/badge.svg" alt="CI/CD"></a>
+  <a href="https://github.com/ErselSeyit/basestation-platform/actions/workflows/ci.yml"><img src="https://github.com/ErselSeyit/basestation-platform/actions/workflows/ci.yml/badge.svg" alt="CI/CD"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
-  <a href="https://goreportcard.com/report/github.com/ErselSeyit/base-station-platform"><img src="https://goreportcard.com/badge/github.com/ErselSeyit/base-station-platform" alt="Go Report Card"></a>
+  <a href="https://goreportcard.com/report/github.com/ErselSeyit/basestation-platform"><img src="https://goreportcard.com/badge/github.com/ErselSeyit/basestation-platform" alt="Go Report Card"></a>
 </p>
 
 <p>
@@ -27,8 +27,8 @@
   <img src="https://img.shields.io/badge/PostgreSQL-18-316192?logo=postgresql&logoColor=white" alt="PostgreSQL">
   <img src="https://img.shields.io/badge/MongoDB-8-47A248?logo=mongodb&logoColor=white" alt="MongoDB">
   <img src="https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white" alt="Redis">
-  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" alt="Docker">
-  <img src="https://img.shields.io/badge/Kubernetes-Ready-326CE5?logo=kubernetes&logoColor=white" alt="Kubernetes">
+  <img src="https://img.shields.io/badge/Kubernetes-Minikube-326CE5?logo=kubernetes&logoColor=white" alt="Kubernetes">
+  <img src="https://img.shields.io/badge/Helm-3.x-0F1689?logo=helm&logoColor=white" alt="Helm">
 </p>
 
 </div>
@@ -40,8 +40,10 @@ A production-ready microservices platform for 5G base station operations with AI
 ## Quick Start
 
 ```bash
-docker compose up -d && make docker_init_db
-# Dashboard: http://localhost:3000 (admin / AUTH_ADMIN_PASSWORD from .env)
+minikube start --memory=8192 --cpus=4
+minikube addons enable ingress
+helm install basestation helm/basestation-platform -n basestation-platform --create-namespace
+# Dashboard: http://basestation.local:{ingress-port} (admin / password from K8s secret)
 ```
 
 See [docs/QUICK_START.md](docs/QUICK_START.md) for setup details.
@@ -87,10 +89,8 @@ See [docs/QUICK_START.md](docs/QUICK_START.md) for setup details.
 | [API Reference](docs/API.md) | REST endpoints |
 | [Setup Guide](docs/SETUP.md) | Development setup |
 | [Testing](docs/TESTING.md) | Test strategies |
-| [Security](docs/AUTH_AUDIT.md) | Security audit |
 | [Secrets](docs/SECRET_MANAGEMENT.md) | Production secrets |
-| [Kubernetes](docs/k8s-services-reference.md) | K8s deployment |
-| [Roadmap](docs/ENHANCEMENT_ROADMAP.md) | Future plans |
+| [Kubernetes](k8s/README.md) | K8s deployment |
 
 ---
 

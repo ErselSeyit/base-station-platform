@@ -29,7 +29,7 @@ python3 testing/real-base-station-collector.py \
     --area "39.8,116.3,40.1,116.5" \
     --limit 15 \
     --interval 30 \
-    --api-url http://localhost:30080
+    --api-url http://basestation.local:{ingress-port}
 ```
 
 **Requirements**: OpenCelliD API key (free signup)
@@ -47,7 +47,7 @@ python3 testing/real-base-station-collector.py \
 **Usage**:
 ```bash
 # Install MobileInsight app on Android device
-python3 testing/mobileinsight-collector.py http://localhost:30080
+python3 testing/mobileinsight-collector.py http://basestation.local:{ingress-port}
 ```
 
 **Requirements**: Android device with MobileInsight app, USB debugging
@@ -116,8 +116,9 @@ python3 testing/live-data-simulator.py \
 ## 🔧 Configuration
 
 ### API Gateway
-- **Default**: http://localhost:30080
-- **Authentication**: JWT tokens (admin/admin)
+- **Access**: Via NGINX Ingress at `http://basestation.local:{ingress-port}/api`
+- **Internal**: `http://api-gateway:8080` (Kubernetes DNS)
+- **Authentication**: JWT tokens (set API_PASSWORD env var)
 - **Metrics Endpoint**: /api/v1/metrics
 - **Rate Limiting**: Enabled by default
 
@@ -127,7 +128,7 @@ python3 testing/live-data-simulator.py \
 - **Simulator**: Standalone, no external dependencies
 
 ### Common Parameters
-- `--api-url`: Monitoring platform API endpoint
+- `--api-url`: Platform API endpoint (default: `http://basestation.local:{ingress-port}`)
 - `--interval`: Update frequency in seconds
 - `--limit`: Maximum stations to monitor
 - `--area`: Geographic bounding box
@@ -168,7 +169,7 @@ python3 testing/real-base-station-collector.py \
     --limit 10
 
 # Android device with MobileInsight  
-python3 testing/mobileinsight-collector.py http://localhost:30080
+python3 testing/mobileinsight-collector.py http://basestation.local:{ingress-port}
 
 # Load testing with simulator
 python3 testing/live-data-simulator.py \
@@ -185,7 +186,7 @@ python3 testing/real-base-station-collector.py --api-key KEY &
 # Add simulator for load testing
 python3 testing/live-data-simulator.py --stations 10 &
 
-# Monitor both in dashboard at http://localhost:3000
+# Monitor both in dashboard at http://basestation.local:{ingress-port}
 ```
 
 ---
@@ -234,13 +235,17 @@ python3 testing/live-data-simulator.py --help
 
 ### Test API Connectivity
 ```bash
-# Test authentication endpoint
-curl -X POST http://localhost:30080/api/v1/auth/login \
+# Get the NGINX Ingress port
+INGRESS_PORT=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
+  -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')
+
+# Test authentication endpoint via ingress
+curl -X POST http://basestation.local:$INGRESS_PORT/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin"}'
+  -d '{"username":"admin","password":"YOUR_PASSWORD"}'
 
 # Test metrics endpoint (with valid token)
-curl -X POST http://localhost:30080/api/v1/metrics \
+curl -X POST http://basestation.local:$INGRESS_PORT/api/v1/metrics \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{"stationId":1,"metricType":"SIGNAL_STRENGTH","value":-80}'
@@ -252,9 +257,7 @@ curl -X POST http://localhost:30080/api/v1/metrics \
 
 - **Platform Architecture**: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
 - **API Reference**: [docs/API.md](../docs/API.md)
-- **Real Integration**: [docs/REAL_BASE_STATION_INTEGRATION.md](../docs/REAL_BASE_STATION_INTEGRATION.md)
 - **Setup Guide**: [docs/SETUP.md](../docs/SETUP.md)
-- **Performance**: [docs/RESOURCE_OPTIMIZATION.md](../docs/RESOURCE_OPTIMIZATION.md)
 
 ---
 
@@ -265,8 +268,9 @@ curl -X POST http://localhost:30080/api/v1/metrics \
 | `real-base-station-collector.py` | OpenCelliD real tower integration |
 | `mobileinsight-collector.py` | Android device integration |
 | `live-data-simulator.py` | Fixed simulator with 100% API compatibility |
-| `README.md` | This file |
-
----
-
-Your base station platform is ready for **REAL infrastructure monitoring**! 🚀
+| `ai-auto-diagnose.py` | AI diagnostic trigger and validation |
+| `bi-report-generator.py` | Business intelligence report generation |
+| `device_protocol.py` | Binary protocol library for device communication |
+| `check-services.sh` | Service health check script |
+| `end-to-end-test.sh` | Full platform end-to-end test |
+| `performance/` | Load testing scripts (k6) |

@@ -4,7 +4,7 @@
 
 | Area | Coverage | Test Count |
 |------|----------|------------|
-| Backend Services | 100% | 19 test classes |
+| Backend Services | 100% | 50 test classes |
 | Frontend | ~87% | 103 tests |
 
 ## Test Types

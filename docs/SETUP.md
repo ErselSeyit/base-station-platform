@@ -5,24 +5,33 @@
 - Java 21+
 - Maven 3.9+
 - Docker 20.10+
-- Docker Compose 2.0+
+- Minikube with NGINX Ingress addon
+- `kubectl` CLI
+- Helm 3.x
 - Node.js 18+ (for frontend development)
 
-## Quick Start
+## Quick Start (Kubernetes)
 
-Start all services:
+Start minikube and deploy:
 ```bash
-docker compose up -d
+minikube start --memory=8192 --cpus=4
+minikube addons enable ingress
+helm install basestation helm/basestation-platform -n basestation-platform --create-namespace
+```
+
+Add the ingress host to `/etc/hosts`:
+```bash
+echo "$(minikube ip)  basestation.local" | sudo tee -a /etc/hosts
 ```
 
 Access the application:
-- **Dashboard**: http://localhost:3000
-- **API Gateway**: http://localhost:8080
-- **AI Diagnostics**: http://localhost:9091
+- **Dashboard**: `http://basestation.local:{ingress-port}` (check `kubectl get svc -n ingress-nginx`)
+- **API**: Proxied through the frontend nginx at `/api`
 
 Stop services:
 ```bash
-docker compose down
+helm uninstall basestation -n basestation-platform
+minikube stop
 ```
 
 ## Local Development
@@ -45,32 +54,36 @@ mvn spring-boot:run
 ### Seed Data
 Initialize databases with demo data:
 ```bash
-make docker_init_db
+make k8s_init_db
 ```
 
 ### View Logs
 ```bash
-# All services
-docker compose logs -f
-
 # Specific service
-docker compose logs -f monitoring-service
+kubectl logs -f deployment/monitoring-service -n basestation-platform
+
+# Follow all pods for a service
+kubectl logs -f -l app=base-station-service -n basestation-platform
 ```
 
-### Rebuild Service
+### Rebuild and Redeploy Service
 ```bash
-docker compose build monitoring-service --no-cache
-docker compose up -d monitoring-service
+# Rebuild the image inside minikube's Docker daemon
+eval $(minikube docker-env)
+docker build -t monitoring-service:latest monitoring-service/
+
+# Restart the deployment to pick up the new image
+kubectl rollout restart deployment/monitoring-service -n basestation-platform
 ```
 
 ## Security Configuration
 
-All credentials are provided via environment variables - no hardcoded defaults.
+All credentials are provided via Kubernetes Secrets - no hardcoded defaults.
 
-### Required Environment Variables
+### Required Secrets
 
-| Variable | Description |
-|----------|-------------|
+| Secret Key | Description |
+|------------|-------------|
 | `POSTGRES_USER` | PostgreSQL username |
 | `POSTGRES_PASSWORD` | PostgreSQL password |
 | `MONGODB_USER` | MongoDB username |
@@ -82,24 +95,34 @@ All credentials are provided via environment variables - no hardcoded defaults.
 | `SECURITY_INTERNAL_SECRET` | HMAC secret for service auth |
 | `GRAFANA_PASSWORD` | Grafana admin password |
 
+Generate secrets:
+```bash
+./k8s/generate-secrets.sh | kubectl apply -f -
+```
+
 ### Optional Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SPRING_JPA_HIBERNATE_DDL_AUTO` | validate | JPA schema mode (use 'update' for dev) |
-| `CORS_ALLOWED_ORIGINS` | http://frontend:80 | API Gateway CORS |
+| `SPRING_JPA_HIBERNATE_DDL_AUTO` | update | JPA schema mode (use 'validate' for prod) |
+| `CORS_ALLOWED_ORIGINS` | http://localhost:3000 | API Gateway CORS |
 | `WEBSOCKET_ALLOWED_ORIGINS` | * | WebSocket CORS |
 | `TRACING_SAMPLE_PROBABILITY` | 0.1 | Tracing sample rate (0-1) |
 | `DIAGNOSTIC_REQUIRE_AUTH` | false | Enforce HMAC on AI diagnostic |
 
 ## Service Discovery
 
-The platform uses **Docker DNS** for service discovery. Services reference each other by container name:
+The platform uses **Kubernetes DNS** for service discovery. Services reference each other by service name within the cluster:
 - `http://auth-service:8084`
 - `http://base-station-service:8081`
 - `http://monitoring-service:8082`
 - `http://notification-service:8083`
 - `http://ai-diagnostic:9091`
+
+External access is handled by **NGINX Ingress**, which routes:
+- `/` → `frontend:80` (React dashboard)
+- `/api` → `api-gateway:8080` (proxied by frontend nginx)
+- `/ws` → `monitoring-service:8082` (WebSocket)
 
 ## Database Architecture
 
@@ -115,32 +138,27 @@ MongoDB for metrics:
 
 ### Services won't start
 ```bash
-docker compose ps
-docker compose logs -f
-docker compose restart
+kubectl get pods -n basestation-platform
+kubectl describe pod <pod-name> -n basestation-platform
+kubectl logs <pod-name> -n basestation-platform
 ```
 
 ### Port conflicts
 ```bash
-# Linux/Mac
+# Check what's using a port
 lsof -i :8080
-
-# Windows
-netstat -ano | findstr :8080
 ```
 
-### Clear and restart
+### Restart all services
 ```bash
-docker compose down -v
-docker compose up -d
-make docker_init_db
+kubectl rollout restart deployment -n basestation-platform
 ```
 
 ### Database connection issues
 ```bash
 # Check PostgreSQL
-docker compose exec postgres psql -U postgres -c '\l'
+kubectl exec deployment/postgres -n basestation-platform -- psql -U postgres -c '\l'
 
 # Check MongoDB
-docker compose exec mongodb mongosh -u admin -p admin --eval "show dbs"
+kubectl exec deployment/mongodb -n basestation-platform -- mongosh --quiet --eval "show dbs"
 ```
