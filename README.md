@@ -1,16 +1,103 @@
 # Base Station Operations & Maintenance Platform
 
+```mermaid
+graph LR
+    User[Browser]
+    Ingress[NGINX Ingress<br/>basestation.local]
+
+    subgraph FRONTEND
+        FE[Frontend<br/>React/nginx :3000]
+    end
+
+    subgraph GATEWAY
+        GW[API Gateway<br/>:8080]
+    end
+
+    subgraph SERVICES["Application Services"]
+        AS[Auth<br/>:8084]
+        BS[Base Station<br/>:8081]
+        MS[Monitoring<br/>:8082]
+        NS[Notification<br/>:8083]
+    end
+
+    subgraph AI["AI Engine"]
+        AID[AI Diagnostic<br/>Python :9091]
+    end
+
+    subgraph EDGE["Edge Layer"]
+        EB[Edge Bridge<br/>Go]
+        DS[Device Simulator<br/>:9999]
+        FS[Fault Orchestrator<br/>:8099]
+    end
+
+    subgraph DATA["Data Layer"]
+        PG[(PostgreSQL<br/>:5432)]
+        MDB[(MongoDB<br/>:27017)]
+        REDIS[(Redis<br/>:6379)]
+        RMQ[(RabbitMQ<br/>:5672)]
+    end
+
+    subgraph OBS["Observability"]
+        PROM[Prometheus<br/>:9090]
+        GRAF[Grafana<br/>:3001]
+        ZIP[Zipkin<br/>:9411]
+        LOKI[Loki<br/>:3100]
+    end
+
+    User --> Ingress
+    Ingress -->|/| FE
+    Ingress -->|/api| FE
+    Ingress -->|/ws| MS
+    FE -->|/api proxy| GW
+
+    GW --> AS & BS & MS & NS
+    GW --> REDIS
+
+    AS --> PG
+    BS --> PG
+    NS --> PG
+    MS --> MDB
+
+    MS -.-> RMQ
+    RMQ -.-> NS
+    MS --> AID
+
+    EB --> GW
+    DS --> EB
+    FS --> DS
+    FS --> AID
+
+    PROM -.-> GW & AS & BS & MS & NS
+    GRAF -.-> PROM & LOKI
+    ZIP -.-> MS
+
+    style Ingress fill:#e65100,color:#fff
+    style GW fill:#1976d2,color:#fff
+    style FE fill:#4caf50,color:#fff
+    style AS fill:#ff9800,color:#fff
+    style BS fill:#9c27b0,color:#fff
+    style MS fill:#f44336,color:#fff
+    style NS fill:#00bcd4,color:#fff
+    style AID fill:#667eea,color:#fff
+    style EB fill:#ff9800,color:#fff
+    style DS fill:#795548,color:#fff
+    style FS fill:#795548,color:#fff
+    style PG fill:#316192,color:#fff
+    style MDB fill:#47a248,color:#fff
+    style REDIS fill:#dc382d,color:#fff
+    style RMQ fill:#ff6f00,color:#fff
+    style PROM fill:#e6522c,color:#fff
+    style GRAF fill:#f46800,color:#fff
+    style ZIP fill:#4a90d9,color:#fff
+    style LOKI fill:#2c3e50,color:#fff
+```
+
 <div align="center">
 
-<picture>
-  <source media="(max-width: 768px)" srcset="docs/diagram.svg" width="100%">
-  <img src="docs/diagram.svg" alt="Architecture Diagram" style="max-width: 100%; height: auto;">
-</picture>
-
 <p>
-  <a href="https://github.com/ErselSeyit/basestation-platform/actions/workflows/ci.yml"><img src="https://github.com/ErselSeyit/basestation-platform/actions/workflows/ci.yml/badge.svg" alt="CI/CD"></a>
+  <a href="https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml"><img src="https://github.com/ErselSeyit/base-station-platform/actions/workflows/ci.yml/badge.svg" alt="CI/CD"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
-  <a href="https://goreportcard.com/report/github.com/ErselSeyit/basestation-platform"><img src="https://goreportcard.com/badge/github.com/ErselSeyit/basestation-platform" alt="Go Report Card"></a>
+  <a href="https://goreportcard.com/report/github.com/ErselSeyit/base-station-platform"><img src="https://goreportcard.com/badge/github.com/ErselSeyit/base-station-platform" alt="Go Report Card"></a>
 </p>
 
 <p>
