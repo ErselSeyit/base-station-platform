@@ -80,7 +80,7 @@ graph TD
 
 </div>
 
-A production-ready microservices platform for 5G base station operations with AI-powered diagnostics, self-healing automation, and real-time monitoring.
+A full-stack microservices platform for 5G base station operations featuring AI-powered diagnostics, self-healing automation, and real-time monitoring.
 
 ---
 
