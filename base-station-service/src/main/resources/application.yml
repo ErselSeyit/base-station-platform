@@ -6,14 +6,20 @@ spring:
       enabled: true
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/basestationdb}
-    username: ${SPRING_DATASOURCE_USERNAME:}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       # Use 'validate' in production, 'update' only in development
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
     open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+    validate-on-migrate: true
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -65,3 +71,24 @@ resilience4j:
         maxAttempts: 3
         waitDuration: 500ms
         enableExponentialBackoff: true
+  bulkhead:
+    instances:
+      diagnostic:
+        maxConcurrentCalls: 10
+        maxWaitDuration: 500ms
+      external:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 100ms
+      default:
+        maxConcurrentCalls: 20
+        maxWaitDuration: 200ms
+  thread-pool-bulkhead:
+    instances:
+      diagnostic:
+        maxThreadPoolSize: 10
+        coreThreadPoolSize: 5
+        queueCapacity: 100
+      external:
+        maxThreadPoolSize: 5
+        coreThreadPoolSize: 2
+        queueCapacity: 50

@@ -135,7 +135,7 @@ public class DeviceCommandController {
     @Operation(summary = "Create AI command", description = "Creates a command from AI diagnostic solution")
     @ApiResponse(responseCode = "201", description = "Command created")
     @PostMapping("/ai")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'SYSTEM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'SERVICE')")
     public ResponseEntity<DeviceCommand> createAICommand(
             @PathVariable Long stationId,
             @Valid @RequestBody AICommandRequest request) {

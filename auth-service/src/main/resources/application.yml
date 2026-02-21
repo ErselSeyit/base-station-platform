@@ -6,8 +6,8 @@ spring:
       enabled: true
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/authdb}
-    username: ${SPRING_DATASOURCE_USERNAME:}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -16,6 +16,12 @@ spring:
   sql:
     init:
       mode: always
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+    validate-on-migrate: true
 
 auth:
   admin:
@@ -60,6 +66,12 @@ management:
     export:
       prometheus:
         enabled: true
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLE_PROBABILITY:0.1}
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_TRACING_ENDPOINT:http://zipkin:9411/api/v2/spans}
 
 logging:
   level:

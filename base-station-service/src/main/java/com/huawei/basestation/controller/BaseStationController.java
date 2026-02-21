@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -53,7 +54,7 @@ public class BaseStationController {
     @Operation(summary = "Create station", description = "Creates a new base station")
     @ApiResponse(responseCode = "201", description = "Station created")
     @PostMapping
-    @PreAuthorize(Roles.HAS_OPERATOR)
+    @PreAuthorize(Roles.HAS_OPERATOR_OR_SERVICE)
     public ResponseEntity<BaseStationDTO> createStation(
             @Parameter(description = "Station data") @Valid @RequestBody BaseStationDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -99,6 +100,23 @@ public class BaseStationController {
             return ResponseEntity.ok(service.updateStation(
                     Objects.requireNonNull(id, ValidationMessages.STATION_ID_NULL_MESSAGE),
                     Objects.requireNonNull(dto, ValidationMessages.DTO_NULL_MESSAGE)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @Operation(summary = "Update station status", description = "Updates station operational status (service-accessible)")
+    @ApiResponse(responseCode = "200", description = "Status updated")
+    @ApiResponse(responseCode = "404", description = "Station not found")
+    @PatchMapping("/{id}/status")
+    @PreAuthorize(Roles.HAS_SERVICE)
+    public ResponseEntity<BaseStationDTO> updateStationStatus(
+            @Parameter(description = "Station ID") @PathVariable Long id,
+            @Parameter(description = "New status") @RequestBody Map<String, String> body) {
+        try {
+            StationStatus status = StationStatus.valueOf(
+                    Objects.requireNonNull(body.get("status"), "status field required"));
+            return ResponseEntity.ok(service.updateStationStatus(id, status));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }

@@ -6,9 +6,8 @@ spring:
       enabled: true
   data:
     redis:
-      reactive:
-        host: ${SPRING_DATA_REDIS_HOST:redis}
-        port: ${SPRING_DATA_REDIS_PORT:6379}
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
   cloud:
     gateway:
       routes:
@@ -60,6 +59,17 @@ spring:
           uri: ${ROUTE_MONITORING_URL:http://monitoring-service:8082}
           predicates:
             - Path=/api/v1/diagnostics,/api/v1/diagnostics/**
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 30
+                redis-rate-limiter.burstCapacity: 60
+                redis-rate-limiter.requestedTokens: 1
+        - id: thresholds-service
+          uri: ${ROUTE_MONITORING_URL:http://monitoring-service:8082}
+          predicates:
+            - Path=/api/v1/thresholds,/api/v1/thresholds/**
           filters:
             - StripPrefix=0
             - name: RequestRateLimiter

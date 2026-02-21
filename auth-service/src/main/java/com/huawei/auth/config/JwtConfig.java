@@ -52,7 +52,7 @@ public class JwtConfig {
             throw new IllegalArgumentException(errorMsg);
         }
 
-        log.info("JWT secret configured successfully (length: {} characters)", secret.length());
+        log.info("JWT secret configured successfully");
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 

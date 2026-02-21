@@ -100,6 +100,16 @@ public class BaseStationService {
         return updated;
     }
 
+    public BaseStationDTO updateStationStatus(Long id, StationStatus status) {
+        BaseStation station = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Station not found with id: " + id));
+        station.setStatus(status);
+        BaseStationDTO updated = convertToDTO(repository.save(station));
+        auditLogger.log(AuditAction.STATION_UPDATED, SYSTEM_ACTOR,
+                AUDIT_RESOURCE_PREFIX + id, "status=" + status);
+        return updated;
+    }
+
     public void deleteStation(Long id) {
         if (!repository.existsById(id)) {
             throw new IllegalArgumentException("Station not found with id: " + id);
@@ -142,8 +152,8 @@ public class BaseStationService {
         station.setPort(dto.port());
         station.setManagementProtocol(Objects.requireNonNullElse(
                 dto.managementProtocol(), ManagementProtocol.DIRECT));
-        // Status defaults to OFFLINE until first metrics/heartbeat received
-        station.setStatus(StationStatus.OFFLINE);
+        // Use provided status; default ACTIVE when registered by edge-bridge
+        station.setStatus(dto.status() != null ? dto.status() : StationStatus.ACTIVE);
         // powerConsumption comes from metrics, not user input
         station.setDescription(dto.description());
         return station;

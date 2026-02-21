@@ -2,6 +2,8 @@ package com.huawei.basestation.repository;
 
 import com.huawei.basestation.model.DeviceCommand;
 import com.huawei.basestation.model.DeviceCommand.CommandStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -49,4 +51,12 @@ public interface DeviceCommandRepository extends JpaRepository<DeviceCommand, St
      */
     @Query("SELECT c FROM DeviceCommand c WHERE c.status = 'IN_PROGRESS' AND c.pickedUpAt < :timeout")
     List<DeviceCommand> findStaleCommands(@Param("timeout") Instant timeout);
+
+    // Paginated overloads for production use
+    Page<DeviceCommand> findByStationIdOrderByCreatedAtDesc(Long stationId, Pageable pageable);
+
+    Page<DeviceCommand> findByStatusOrderByCreatedAtDesc(CommandStatus status, Pageable pageable);
+
+    @Query("SELECT c FROM DeviceCommand c WHERE c.createdAt > :since ORDER BY c.createdAt DESC")
+    Page<DeviceCommand> findRecentCommands(@Param("since") Instant since, Pageable pageable);
 }
