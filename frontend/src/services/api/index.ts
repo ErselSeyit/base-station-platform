@@ -20,6 +20,7 @@ export { notificationsApi } from './notifications'
 export { diagnosticsApi } from './diagnostics'
 export { sonApi } from './son'
 export { edgeBridgeApi } from './edgeBridge'
+export { thresholdsApi, DEFAULT_THRESHOLDS } from './thresholds'
 
 // Re-export types
 export type {
@@ -44,3 +45,13 @@ export type {
   EdgeBridgeInstance,
   BridgeStats,
 } from './edgeBridge'
+
+export type {
+  ThresholdConfig,
+  AllThresholds,
+  HealthThresholds,
+  ConfidenceThresholds,
+  LearningThresholds,
+  EquipmentThresholds,
+  MetricThreshold,
+} from './thresholds'

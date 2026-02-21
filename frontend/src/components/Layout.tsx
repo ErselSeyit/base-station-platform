@@ -13,6 +13,7 @@ import {
   Notifications as NotificationsIcon,
   Psychology as AIIcon,
   Assessment as ReportIcon,
+  Search as AnalyzeIcon,
 } from '@mui/icons-material'
 import { showToast } from '../utils/toast'
 import {
@@ -52,6 +53,7 @@ const getMenuItems = (unreadCount: number) => [
   { text: 'Alerts', icon: <NotificationsIcon />, path: '/alerts', badge: unreadCount },
   { text: 'Metrics', icon: <BarChartIcon />, path: '/metrics' },
   { text: 'AI Diagnostics', icon: <AIIcon />, path: '/ai-diagnostics' },
+  { text: 'Analyze Alert', icon: <AnalyzeIcon />, path: '/analyze' },
   { text: 'SON', icon: <SONIcon />, path: '/son' },
   { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
 ]

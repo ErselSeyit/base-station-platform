@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import { ToastProvider } from './components/ToastProvider'
 import { authService } from './services/authService'
 import { useRoutePrefetch } from './hooks/useRoutePrefetch'
+import { ThresholdProvider } from './contexts/ThresholdContext'
 
 // Lazy load pages for code splitting
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -18,6 +19,7 @@ const Reports = lazy(() => import('./pages/Reports'))
 const FiveGDashboard = lazy(() => import('./pages/FiveGDashboard'))
 const PowerDashboard = lazy(() => import('./pages/PowerDashboard'))
 const SONRecommendations = lazy(() => import('./pages/SONRecommendations'))
+const AnalyzeAlert = lazy(() => import('./pages/AnalyzeAlert'))
 const Login = lazy(() => import('./pages/Login'))
 
 // Loading fallback component
@@ -57,23 +59,26 @@ function AuthenticatedApp() {
 
   return (
     <ProtectedRoute>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/stations" element={<Stations />} />
-          <Route path="/stations/:id" element={<StationDetail />} />
-          <Route path="/map" element={<MapView />} />
-          <Route path="/alerts" element={<Alerts />} />
-          <Route path="/metrics" element={<Metrics />} />
-          <Route path="/ai-diagnostics" element={<AIDiagnostics />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/5g" element={<FiveGDashboard />} />
-          <Route path="/power" element={<PowerDashboard />} />
-          <Route path="/son" element={<SONRecommendations />} />
-          {/* 404 catch-all */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
+      <ThresholdProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/stations" element={<Stations />} />
+            <Route path="/stations/:id" element={<StationDetail />} />
+            <Route path="/map" element={<MapView />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route path="/metrics" element={<Metrics />} />
+            <Route path="/ai-diagnostics" element={<AIDiagnostics />} />
+            <Route path="/analyze" element={<AnalyzeAlert />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/5g" element={<FiveGDashboard />} />
+            <Route path="/power" element={<PowerDashboard />} />
+            <Route path="/son" element={<SONRecommendations />} />
+            {/* 404 catch-all */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
+      </ThresholdProvider>
     </ProtectedRoute>
   )
 }

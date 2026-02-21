@@ -1,7 +1,7 @@
 /**
- * Number Formatting Utilities
+ * Formatting Utilities
  *
- * Consistent formatting for metric values and percentages across the application.
+ * Consistent formatting for metric values, percentages, and strings across the application.
  */
 
 /**
@@ -58,4 +58,13 @@ export function formatBytes(bytes: number, decimals: number = 1): string {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${(bytes / Math.pow(k, i)).toFixed(decimals)} ${sizes[i]}`
+}
+
+/**
+ * Convert snake_case string to space-separated words.
+ * @param text - The snake_case string to format
+ * @returns Space-separated string (e.g., "problem_code" → "problem code")
+ */
+export function formatSnakeCase(text: string): string {
+  return text.replaceAll('_', ' ')
 }

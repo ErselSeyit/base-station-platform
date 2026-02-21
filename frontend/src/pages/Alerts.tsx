@@ -19,12 +19,16 @@ import {
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { memo, useCallback, useMemo, useRef, useEffect } from 'react'
 import ErrorDisplay from '../components/ErrorDisplay'
+import { LoadMoreSection } from '../components/LoadMoreSection'
 import { notificationsApi, type Notification } from '../services/api/notifications'
 import { NotificationType } from '../types'
 import { formatTimestamp, getErrorMessage } from '../utils/statusHelpers'
 import { showToast } from '../utils/toast'
 
 const PAGE_SIZE = 20 // Smaller initial load for faster LCP
+
+// Stable keys for skeleton placeholders (avoids S6479 array index warning)
+const SKELETON_KEYS = ['sk-1', 'sk-2', 'sk-3', 'sk-4', 'sk-5'] as const
 
 const SEVERITY_STYLES = {
   ALERT: { color: 'var(--status-offline)', shadow: 'var(--status-error-shadow)' },
@@ -107,7 +111,7 @@ interface AlertRowProps {
 
 // Memoized row component - only re-renders when notification or callback changes
 const AlertRow = memo(function AlertRow({ notification, onDelete }: Readonly<AlertRowProps>) {
-  const severityStyle = SEVERITY_STYLES[notification.type as keyof typeof SEVERITY_STYLES] || SEVERITY_STYLES.INFO
+  const severityStyle = SEVERITY_STYLES[notification.type] ?? SEVERITY_STYLES.INFO
   const severityColor = severityStyle.color
   const isUnread = notification.status === 'UNREAD'
   const isResolved = notification.status === 'RESOLVED'
@@ -371,6 +375,53 @@ export default function Alerts() {
     deleteMutation.mutate(id)
   }, [deleteMutation])
 
+  // Extract content rendering to reduce cognitive complexity (S3776, S3358)
+  const renderListContent = () => {
+    if (isLoading) {
+      return (
+        <Box>
+          {SKELETON_KEYS.map((key) => (
+            <AlertRowSkeleton key={key} />
+          ))}
+        </Box>
+      )
+    }
+
+    if (notifications.length === 0) {
+      return (
+        <Box sx={{ padding: '48px 24px', textAlign: 'center' }}>
+          <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-500)' }}>
+            No alerts or notifications
+          </Typography>
+        </Box>
+      )
+    }
+
+    return (
+      <Box>
+        {notifications.map((notification) => (
+          <AlertRow
+            key={notification.id}
+            notification={notification}
+            onDelete={handleDelete}
+          />
+        ))}
+
+        {/* Load more trigger */}
+        <Box ref={loadMoreRef}>
+          <LoadMoreSection
+            isFetching={isFetchingNextPage}
+            hasMore={hasNextPage}
+            totalCount={totalCount}
+            itemCount={notifications.length}
+            onLoadMore={() => fetchNextPage()}
+            itemLabel="notifications"
+          />
+        </Box>
+      </Box>
+    )
+  }
+
   if (error) {
     return <ErrorDisplay title="Failed to load alerts" message={getErrorMessage(error)} />
   }
@@ -448,63 +499,7 @@ export default function Alerts() {
           overflow: 'hidden',
         }}
       >
-        {isLoading ? (
-          // Skeleton loading - shows page structure immediately for fast LCP
-          <Box>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <AlertRowSkeleton key={i} />
-            ))}
-          </Box>
-        ) : notifications.length === 0 ? (
-          <Box sx={{ padding: '48px 24px', textAlign: 'center' }}>
-            <Typography
-              sx={{
-                fontSize: '0.875rem',
-                color: 'var(--mono-500)',
-              }}
-            >
-              No alerts or notifications
-            </Typography>
-          </Box>
-        ) : (
-          <Box>
-            {notifications.map((notification) => (
-              <AlertRow
-                key={notification.id}
-                notification={notification}
-                onDelete={handleDelete}
-              />
-            ))}
-
-            {/* Load more trigger */}
-            <Box
-              ref={loadMoreRef}
-              sx={{
-                padding: '16px',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                minHeight: '60px',
-              }}
-            >
-              {isFetchingNextPage ? (
-                <CircularProgress size={24} />
-              ) : hasNextPage ? (
-                <Button
-                  variant="text"
-                  onClick={() => fetchNextPage()}
-                  sx={{ color: 'var(--mono-600)' }}
-                >
-                  Load more
-                </Button>
-              ) : notifications.length > 0 ? (
-                <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-500)' }}>
-                  All {totalCount.toLocaleString()} notifications loaded
-                </Typography>
-              ) : null}
-            </Box>
-          </Box>
-        )}
+        {renderListContent()}
       </Box>
     </Box>
   )

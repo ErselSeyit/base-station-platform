@@ -25,11 +25,10 @@ import {
 } from '@mui/material'
 import { lazy, Suspense, useMemo, useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
-import CircularProgress from '@mui/material/CircularProgress'
-import Button from '@mui/material/Button'
 import Skeleton from '@mui/material/Skeleton'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import ErrorDisplay from '../components/ErrorDisplay'
+import { LoadMoreSection } from '../components/LoadMoreSection'
 
 // Lazy load below-the-fold components to reduce initial bundle
 const FeedbackDialog = lazy(() => import('../components/FeedbackDialog'))
@@ -663,7 +662,7 @@ export default function AIDiagnostics() {
                       Metric Value
                     </Typography>
                     <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--mono-950)', fontWeight: 600 }}>
-                      {event.metric_value != null ? `${event.metric_value.toFixed(1)} / ${event.threshold} threshold` : 'N/A'}
+                      {event.metric_value == null ? 'N/A' : `${event.metric_value.toFixed(1)} / ${event.threshold} threshold`}
                     </Typography>
                   </Box>
 
@@ -676,6 +675,18 @@ export default function AIDiagnostics() {
                       {event.ai_action}
                     </Typography>
                   </Box>
+
+                  {/* Root Cause / Reasoning */}
+                  {event.root_cause && (
+                    <Box sx={{ mb: 2, p: 1.5, background: 'var(--surface-subtle)', borderRadius: '8px', borderLeft: `3px solid ${CSS_VARS.colorBlue500}` }}>
+                      <Typography sx={{ color: 'var(--mono-600)', fontSize: '0.75rem', mb: 0.5 }}>
+                        Reasoning
+                      </Typography>
+                      <Typography sx={{ color: 'var(--mono-800)', fontSize: '0.8125rem' }}>
+                        {event.root_cause}
+                      </Typography>
+                    </Box>
+                  )}
 
                   {/* Confidence */}
                   <Box>
@@ -718,6 +729,7 @@ export default function AIDiagnostics() {
                 <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Problem</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Severity</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>AI Action</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Reasoning</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Confidence</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: 'var(--mono-700)', borderBottom: '2px solid var(--mono-400)', verticalAlign: 'top' }}>Status</TableCell>
               </TableRow>
@@ -750,7 +762,7 @@ export default function AIDiagnostics() {
                       {event.problem_type.replace('_', ' ')}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'var(--mono-500)' }}>
-                      {event.metric_value != null ? `${event.metric_value.toFixed(1)} / ${event.threshold}` : 'N/A'}
+                      {event.metric_value == null ? 'N/A' : `${event.metric_value.toFixed(1)} / ${event.threshold}`}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -772,6 +784,21 @@ export default function AIDiagnostics() {
                         {event.ai_action}
                       </Typography>
                     </Tooltip>
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: event.root_cause ? 'var(--mono-700)' : 'var(--mono-400)',
+                        maxWidth: 250,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontStyle: event.root_cause ? 'normal' : 'italic',
+                      }}
+                    >
+                      {event.root_cause || 'Pending analysis'}
+                    </Typography>
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -805,31 +832,15 @@ export default function AIDiagnostics() {
         )}
 
         {/* Load more trigger for infinite scroll */}
-        <Box
-          ref={loadMoreRef}
-          sx={{
-            padding: '16px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            minHeight: '60px',
-          }}
-        >
-          {isFetchingNextPage ? (
-            <CircularProgress size={24} />
-          ) : hasNextPage ? (
-            <Button
-              variant="text"
-              onClick={() => fetchNextPage()}
-              sx={{ color: 'var(--mono-600)' }}
-            >
-              Load more
-            </Button>
-          ) : events.length > 0 ? (
-            <Typography sx={{ fontSize: '0.875rem', color: 'var(--mono-500)' }}>
-              All {totalCount.toLocaleString()} diagnostic events loaded
-            </Typography>
-          ) : null}
+        <Box ref={loadMoreRef}>
+          <LoadMoreSection
+            isFetching={isFetchingNextPage}
+            hasMore={hasNextPage}
+            totalCount={totalCount}
+            itemCount={events.length}
+            onLoadMore={() => fetchNextPage()}
+            itemLabel="diagnostic events"
+          />
         </Box>
       </Card>
 

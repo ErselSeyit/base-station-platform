@@ -643,16 +643,16 @@ export const GRID_CONTENT_SIDEBAR_SX = {
 // Polling Intervals - For React Query refetchInterval
 // ============================================================================
 
-/** Polling interval constants (in milliseconds) - Optimized for performance */
+/** Polling interval constants (in milliseconds) - Optimized for fast AI response */
 export const POLLING_INTERVALS = {
-  /** Fast polling for real-time critical data (15 seconds) */
-  FAST: 15_000,
-  /** Standard polling for live dashboards (30 seconds) */
-  STANDARD: 30_000,
-  /** Normal polling for most data (60 seconds) */
-  NORMAL: 60_000,
-  /** Slow polling for less critical data (2 minutes) */
-  SLOW: 120_000,
+  /** Fast polling for real-time critical data (5 seconds) */
+  FAST: 5_000,
+  /** Standard polling for live dashboards (10 seconds) */
+  STANDARD: 10_000,
+  /** Normal polling for most data (20 seconds) */
+  NORMAL: 20_000,
+  /** Slow polling for less critical data (30 seconds) */
+  SLOW: 30_000,
 } as const
 
 // ============================================================================
