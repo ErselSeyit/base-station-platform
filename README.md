@@ -84,6 +84,18 @@ A full-stack microservices platform for 5G base station operations featuring AI-
 
 ---
 
+## Screenshots
+
+| Dashboard | Monitoring |
+|:-:|:-:|
+| ![Dashboard](docs/screenshots/dashboard.jpg) | ![Monitoring](docs/screenshots/monitoring.jpg) |
+
+| AI Diagnostics | Alert Analysis |
+|:-:|:-:|
+| ![AI Diagnostics](docs/screenshots/ai-diagnostics.jpg) | ![Alert Analysis](docs/screenshots/alert-analysis.jpg) |
+
+---
+
 ## Quick Start
 
 ```bash
