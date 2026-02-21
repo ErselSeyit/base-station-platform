@@ -63,6 +63,7 @@ public final class Roles {
     public static final String HAS_OPERATOR = "hasAnyRole('ADMIN', 'OPERATOR')";
     public static final String HAS_USER = "hasAnyRole('ADMIN', 'OPERATOR', 'USER')";
     public static final String HAS_SERVICE = "hasAnyRole('ADMIN', 'SERVICE')";
+    public static final String HAS_OPERATOR_OR_SERVICE = "hasAnyRole('ADMIN', 'OPERATOR', 'SERVICE')";
 
     // Prevent instantiation
     private Roles() {

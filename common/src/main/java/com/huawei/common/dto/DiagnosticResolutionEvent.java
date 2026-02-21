@@ -3,6 +3,7 @@ package com.huawei.common.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
  * Event DTO sent when a diagnostic session is resolved.
@@ -45,7 +46,7 @@ public record DiagnosticResolutionEvent(
                 stationId,
                 problemCode,
                 true,
-                LocalDateTime.now(),
+                Objects.requireNonNull(LocalDateTime.now()),
                 resolvedBy
         );
     }
@@ -65,7 +66,7 @@ public record DiagnosticResolutionEvent(
                 stationId,
                 problemCode,
                 false,
-                LocalDateTime.now(),
+                Objects.requireNonNull(LocalDateTime.now()),
                 resolvedBy
         );
     }

@@ -1,0 +1,141 @@
+{
+  "_comment": "Shared threshold configuration used by both Python AI diagnostic and Java backend",
+  "_version": "1.0.0",
+
+  "health_status": {
+    "critical_threshold": 0.4,
+    "warning_threshold": 0.6,
+    "degraded_threshold": 0.8,
+    "_comment": "Health score below threshold maps to that status"
+  },
+
+  "confidence": {
+    "auto_apply": 0.95,
+    "suggest_apply": 0.85,
+    "manual_review": 0.70,
+    "low": 0.70,
+    "auto_apply_low_risk": 0.90,
+    "auto_apply_medium_risk": 0.95
+  },
+
+  "learning": {
+    "high_success_rate": 0.80,
+    "low_success_rate": 0.50,
+    "max_confidence_boost": 0.10,
+    "max_confidence_penalty": 0.20,
+    "min_feedback_for_adjustment": 5
+  },
+
+  "equipment_thresholds": {
+    "temperature": {
+      "healthy": 50.0,
+      "warning": 70.0,
+      "critical": 80.0,
+      "ultra_critical": 95.0,
+      "unit": "celsius",
+      "higher_is_worse": true
+    },
+    "cpu": {
+      "healthy": 60.0,
+      "warning": 75.0,
+      "critical": 90.0,
+      "unit": "percent",
+      "higher_is_worse": true
+    },
+    "memory": {
+      "healthy": 70.0,
+      "warning": 85.0,
+      "critical": 95.0,
+      "unit": "percent",
+      "higher_is_worse": true
+    },
+    "battery_soc": {
+      "healthy": 50.0,
+      "warning": 20.0,
+      "critical": 10.0,
+      "unit": "percent",
+      "higher_is_worse": false
+    },
+    "signal_rsrp": {
+      "healthy": -80.0,
+      "warning": -100.0,
+      "critical": -110.0,
+      "unit": "dBm",
+      "higher_is_worse": false
+    },
+    "signal_sinr": {
+      "healthy": 10.0,
+      "warning": 0.0,
+      "critical": -5.0,
+      "unit": "dB",
+      "higher_is_worse": false
+    },
+    "latency": {
+      "healthy": 20.0,
+      "warning": 50.0,
+      "critical": 100.0,
+      "unit": "ms",
+      "higher_is_worse": true
+    },
+    "throughput": {
+      "healthy": 100.0,
+      "warning": 50.0,
+      "critical": 20.0,
+      "unit": "Mbps",
+      "higher_is_worse": false
+    },
+    "bler": {
+      "healthy": 5.0,
+      "warning": 15.0,
+      "critical": 30.0,
+      "unit": "percent",
+      "higher_is_worse": true
+    },
+    "power_consumption": {
+      "healthy": 2000.0,
+      "warning": 2500.0,
+      "critical": 3000.0,
+      "unit": "watts",
+      "higher_is_worse": true
+    },
+    "handover_success": {
+      "healthy": 98.0,
+      "warning": 95.0,
+      "critical": 90.0,
+      "unit": "percent",
+      "higher_is_worse": false
+    },
+    "interference": {
+      "healthy": -90.0,
+      "warning": -80.0,
+      "critical": -70.0,
+      "unit": "dBm",
+      "higher_is_worse": true
+    },
+    "fan_speed": {
+      "healthy": 3000.0,
+      "warning": 2000.0,
+      "critical": 1000.0,
+      "unit": "rpm",
+      "higher_is_worse": false
+    }
+  },
+
+  "risk_levels": {
+    "LOW": {
+      "description": "Minimal impact, easily reversible",
+      "examples": ["restart service", "clear cache", "adjust non-critical settings"],
+      "min_confidence_auto_apply": 0.90
+    },
+    "MEDIUM": {
+      "description": "May affect operations but recoverable",
+      "examples": ["restart device", "change network configuration"],
+      "min_confidence_auto_apply": 0.95
+    },
+    "HIGH": {
+      "description": "Significant impact, requires confirmation",
+      "examples": ["factory reset", "firmware update", "hardware reconfiguration"],
+      "min_confidence_auto_apply": null
+    }
+  }
+}

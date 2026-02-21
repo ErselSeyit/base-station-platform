@@ -47,6 +47,26 @@ public final class MessagingConstants {
     public static final String DIAGNOSTIC_RESOLUTION_QUEUE = "notification.diagnostic-resolution.queue";
 
     // ========================================
+    // THRESHOLD CONFIG MESSAGING
+    // ========================================
+
+    /**
+     * Exchange for threshold configuration updates.
+     * Used to broadcast config changes to all services.
+     */
+    public static final String THRESHOLD_CONFIG_EXCHANGE = "threshold.exchange";
+
+    /**
+     * Routing key for threshold config update events.
+     */
+    public static final String THRESHOLD_CONFIG_UPDATED_ROUTING_KEY = "threshold.updated";
+
+    /**
+     * Queue for services to receive threshold config updates.
+     */
+    public static final String THRESHOLD_CONFIG_QUEUE = "threshold.config.queue";
+
+    // ========================================
     // DEAD LETTER QUEUE
     // ========================================
 

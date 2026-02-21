@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.huawei</groupId>
-    <artifactId>base-station-platform</artifactId>
+    <artifactId>basestation-platform</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
 
@@ -41,8 +41,8 @@
         <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
         <testcontainers.version>1.20.4</testcontainers.version>
         <awaitility.version>4.2.2</awaitility.version>
-        <!-- Eclipse JKube for Kubernetes deployment -->
-        <fabric8.version>1.17.0</fabric8.version>
+        <flyway.version>10.22.0</flyway.version>
+        <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
     <dependencyManagement>
@@ -121,6 +121,17 @@
                 <artifactId>awaitility</artifactId>
                 <version>${awaitility.version}</version>
             </dependency>
+            <!-- Flyway database migrations -->
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-core</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-database-postgresql</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -141,26 +152,50 @@
                         <parameters>true</parameters>
                     </configuration>
                 </plugin>
-                <!-- Fabric8 Maven Plugin for Kubernetes -->
-                <plugin>
-                    <groupId>org.eclipse.jkube</groupId>
-                    <artifactId>kubernetes-maven-plugin</artifactId>
-                    <version>${fabric8.version}</version>
-                </plugin>
                 <!-- Surefire plugin with JVM args for Mockito on Java 21+ -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.2.5</version>
                     <configuration>
+                        <!-- @{argLine} allows JaCoCo agent to be injected -->
                         <argLine>
+                            @{argLine}
                             --add-opens java.base/java.lang=ALL-UNNAMED
                             --add-opens java.base/java.lang.reflect=ALL-UNNAMED
                         </argLine>
                     </configuration>
                 </plugin>
+                <!-- JaCoCo code coverage -->
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- JaCoCo applied to all modules for coverage reporting -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 </project>
 
