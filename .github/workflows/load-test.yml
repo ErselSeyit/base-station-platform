@@ -1,9 +1,9 @@
 name: Nightly Load Test
 
 on:
-  schedule:
-    - cron: '0 3 * * 1-5'  # 3 AM UTC, weekdays only
-  workflow_dispatch:  # Allow manual trigger
+  # schedule:
+  #   - cron: '0 3 * * 1-5'  # 3 AM UTC, weekdays only
+  workflow_dispatch:  # Allow manual trigger only
 
 permissions:
   contents: read

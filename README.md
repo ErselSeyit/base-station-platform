@@ -113,7 +113,7 @@ See [docs/QUICK_START.md](docs/QUICK_START.md) for setup details.
 
 | Category | Capabilities |
 |----------|--------------|
-| **Monitoring** | 100 metric types, WebSocket streaming, Prometheus/Grafana |
+| **Monitoring** | 80+ metric types, WebSocket streaming, Prometheus/Grafana |
 | **AI Diagnostics** | 15+ ML models, anomaly detection, predictive maintenance |
 | **SON** | MLB, MRO, CCO, Energy Saving with approval workflows |
 | **Edge** | Go bridge for MIPS, C protocol library, SNMP/MQTT/NETCONF adapters |

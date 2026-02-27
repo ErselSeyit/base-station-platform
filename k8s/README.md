@@ -9,7 +9,7 @@ External access is handled by **NGINX Ingress** (minikube addon):
 | Ingress Path | Backend | Description |
 |-------------|---------|-------------|
 | `/` | frontend:80 | React SPA |
-| `/api` | frontend:80 → api-gateway:8080 | API (proxied by frontend nginx) |
+| `/api` | api-gateway:8080 | REST API |
 | `/ws` | monitoring-service:8082 | WebSocket streaming |
 
 Access the platform at `http://basestation.local:{ingress-port}` after adding the minikube IP to `/etc/hosts`.

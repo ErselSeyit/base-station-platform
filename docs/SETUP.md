@@ -26,7 +26,7 @@ echo "$(minikube ip)  basestation.local" | sudo tee -a /etc/hosts
 
 Access the application:
 - **Dashboard**: `http://basestation.local:{ingress-port}` (check `kubectl get svc -n ingress-nginx`)
-- **API**: Proxied through the frontend nginx at `/api`
+- **API**: Via NGINX Ingress at `/api`
 
 Stop services:
 ```bash
@@ -104,7 +104,7 @@ Generate secrets:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SPRING_JPA_HIBERNATE_DDL_AUTO` | update | JPA schema mode (use 'validate' for prod) |
+| `SPRING_JPA_HIBERNATE_DDL_AUTO` | validate | JPA schema mode (use 'update' for initial setup) |
 | `CORS_ALLOWED_ORIGINS` | http://localhost:3000 | API Gateway CORS |
 | `WEBSOCKET_ALLOWED_ORIGINS` | * | WebSocket CORS |
 | `TRACING_SAMPLE_PROBABILITY` | 0.1 | Tracing sample rate (0-1) |
@@ -121,7 +121,7 @@ The platform uses **Kubernetes DNS** for service discovery. Services reference e
 
 External access is handled by **NGINX Ingress**, which routes:
 - `/` → `frontend:80` (React dashboard)
-- `/api` → `api-gateway:8080` (proxied by frontend nginx)
+- `/api` → `api-gateway:8080` (REST API)
 - `/ws` → `monitoring-service:8082` (WebSocket)
 
 ## Database Architecture

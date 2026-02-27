@@ -11,9 +11,8 @@ graph LR
 
     User --> Ingress
     Ingress -->|/| Client
-    Ingress -->|/api| Client
+    Ingress -->|/api| GW
     Ingress -->|/ws| MS
-    Client -->|/api proxy| GW
 
     GW --> AS[Auth<br/>:8084]
     GW --> BS[Base Station<br/>:8081]
@@ -45,11 +44,11 @@ graph LR
 
 | Service | Port | Database | Purpose |
 |---------|------|----------|---------|
-| **Frontend** | 3000 | - | React dashboard with real-time updates |
+| **Frontend** | 80 | - | React dashboard with real-time updates |
 | **API Gateway** | 8080 | Redis | Central routing, rate limiting, JWT validation |
 | **Auth Service** | 8084 | PostgreSQL | JWT authentication, user management |
 | **Base Station** | 8081 | PostgreSQL | Station CRUD, geospatial search |
-| **Monitoring** | 8082 | MongoDB | Real-time metrics, WebSocket streaming |
+| **Monitoring** | 8082 | MongoDB, Redis | Real-time metrics, WebSocket streaming |
 | **Notification** | 8083 | PostgreSQL | Alerts, event-driven notifications |
 | **AI Diagnostic** | 9091 | - | Python AI engine for problem detection |
 
@@ -60,10 +59,10 @@ External traffic enters through **NGINX Ingress** on `basestation.local`:
 | Ingress Path | Backend | Description |
 |--------------|---------|-------------|
 | `/` | frontend:80 | React SPA served by nginx |
-| `/api` | frontend:80 → api-gateway:8080 | API calls proxied by frontend nginx |
+| `/api` | api-gateway:8080 | REST API |
 | `/ws` | monitoring-service:8082 | WebSocket streaming |
 
-The frontend container runs nginx which proxies `/api` requests to the API Gateway internally, keeping the browser's origin consistent.
+In the default single-domain ingress mode, `/api` routes directly to the API Gateway. The frontend nginx also has a proxy rule for `/api` used in Docker Compose mode.
 
 ## Service Discovery
 
@@ -102,14 +101,14 @@ Services reference each other by service name (e.g., `http://auth-service:8084`)
 | **TanStack Query** | 5.x | Server state management |
 | **Recharts** | 2.x | Data visualization |
 | **Leaflet** | 1.9+ | Interactive maps |
-| **Framer Motion** | 11+ | Animations |
+| **Framer Motion** | 12.x | Animations |
 
 ### Infrastructure
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **PostgreSQL** | 18 | Consolidated database for stations, auth, notifications |
 | **MongoDB** | 8 | Time-series metrics storage |
-| **Redis** | 7 | Rate limiting, caching |
+| **Redis** | 8 | Rate limiting, caching |
 | **RabbitMQ** | 4 | Async messaging for alerts |
 | **Prometheus** | Latest | Metrics collection |
 | **Grafana** | Latest | Dashboards and visualization |
@@ -119,7 +118,7 @@ Services reference each other by service name (e.g., `http://auth-service:8084`)
 
 ### Consolidated PostgreSQL
 
-Previously used 3 separate PostgreSQL instances. Now consolidated to single instance with separate schemas:
+Previously used 3 separate PostgreSQL instances. Now consolidated to single instance with separate databases:
 - Reduces resource usage
 - Simplifies backup/restore
 - Appropriate for current scale
@@ -156,7 +155,7 @@ PostGIS-ready architecture for geospatial queries (stations within radius).
 
 ### Resilience
 - Circuit breakers prevent cascade failures
-- Rate limiting at gateway (10 req/s, 20-token burst)
+- Rate limiting at gateway (per-endpoint, e.g., auth 10 req/s, monitoring 100 req/s)
 - Retry logic with exponential backoff
 
 ### Security

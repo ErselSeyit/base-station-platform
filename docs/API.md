@@ -2,7 +2,7 @@
 
 ## Base URL
 
-All API endpoints are accessed through NGINX Ingress, which routes to the frontend nginx proxy, then to the API Gateway:
+All API endpoints are accessed through NGINX Ingress, which routes to the API Gateway:
 ```
 http://basestation.local:{ingress-port}/api/v1
 ```
@@ -156,10 +156,10 @@ All metrics are validated before storage:
 | CPU_USAGE | 0-100 | % |
 | MEMORY_USAGE | 0-100 | % |
 | TEMPERATURE | -50 to 150 | C |
-| POWER | 0-50,000 | W |
+| POWER_CONSUMPTION | 0-50,000 | W |
 | SIGNAL_STRENGTH | -120 to -20 | dBm |
-| THROUGHPUT | 0-100,000 | Mbps |
-| CONNECTIONS | 0-10,000 | count |
+| DATA_THROUGHPUT | 0-100,000 | Mbps |
+| CONNECTION_COUNT | 0-10,000 | count |
 
 Invalid values are rejected:
 ```json
@@ -174,12 +174,15 @@ Invalid values are rejected:
 ### Get Notifications
 ```bash
 GET /api/v1/notifications
-GET /api/v1/notifications?status=UNREAD
+GET /api/v1/notifications/station/{stationId}
+GET /api/v1/notifications/page?page=0&size=20
+GET /api/v1/notifications/counts
+GET /api/v1/notifications/recent
 ```
 
-### Mark as Read
+### Delete Notification
 ```bash
-PUT /api/v1/notifications/{id}/read
+DELETE /api/v1/notifications/{id}
 Authorization: Bearer <token>
 ```
 
@@ -194,22 +197,24 @@ X-HMAC-Signature: <hmac-signature>
 
 {
   "id": "alert-123",
+  "timestamp": "2026-01-27T10:30:00Z",
+  "station_id": "1",
+  "category": "thermal",
+  "severity": "HIGH",
   "code": "TEMPERATURE_HIGH",
-  "station_id": 1,
-  "station_name": "NYC-Manhattan-001",
-  "metric_type": "TEMPERATURE",
-  "current_value": 85.5,
-  "threshold": 75.0,
-  "description": "Temperature exceeds threshold"
+  "message": "Temperature exceeds threshold",
+  "metrics": {"temperature": 85.5, "threshold": 75.0}
 }
 
 # Response
 {
-  "id": "alert-123",
+  "problem_id": "alert-123",
   "action": "Increase cooling system capacity",
-  "confidence": 0.92,
+  "commands": ["increase_cooling", "check_hvac"],
+  "expected_outcome": "Temperature should drop below threshold",
   "risk_level": "HIGH",
-  "additional_checks": ["Check HVAC system", "Verify airflow"]
+  "confidence": 0.92,
+  "reasoning": "High temperature detected, cooling system adjustment needed"
 }
 ```
 

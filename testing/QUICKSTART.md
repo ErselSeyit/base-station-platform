@@ -190,7 +190,8 @@ python3 testing/live-data-simulator.py --stations 20 --scenario peak_hours
 
 ### Terminal 2: Watch Logs
 ```bash
-tail -f /tmp/simulator.log
+# Simulator outputs to stdout; watch service logs instead:
+kubectl logs -f deployment/monitoring-service -n basestation-platform
 ```
 
 ### Browser: Grafana

@@ -5,7 +5,7 @@
 | Area | Coverage | Test Count |
 |------|----------|------------|
 | Backend Services | 100% | 50 test classes |
-| Frontend | ~87% | 103 tests |
+| Frontend | ~87% | 345 tests (326 unit + 19 E2E) |
 
 ## Test Types
 
@@ -60,7 +60,7 @@ mvn -Ddemo.mode=true clean test
 DEMO_MODE=true mvn clean test
 ```
 
-In Demo Mode, integration suites in base-station-service are disabled:
+In Demo Mode, integration suites in base-station-service and monitoring-service are disabled:
 - `BaseStationIntegrationTest`
 - `BatchMetricsIntegrationTest`
 - `JwtFlowIntegrationTest`

@@ -128,7 +128,7 @@ python3 testing/live-data-simulator.py \
 - **Simulator**: Standalone, no external dependencies
 
 ### Common Parameters
-- `--api-url`: Platform API endpoint (default: `http://basestation.local:{ingress-port}`)
+- `--api-url`: Platform API endpoint (default: `http://localhost:30080`)
 - `--interval`: Update frequency in seconds
 - `--limit`: Maximum stations to monitor
 - `--area`: Geographic bounding box

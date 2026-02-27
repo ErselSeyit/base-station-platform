@@ -58,7 +58,7 @@ Sealed Secrets encrypt secrets before committing to Git. Only the Kubernetes clu
 
 2. **Generate random secrets:**
    ```bash
-   ./scripts/generate-secrets.sh
+   ./k8s/generate-secrets.sh
    ```
 
 3. **Create sealed secrets** (example for JWT):
@@ -245,7 +245,7 @@ If secrets were accidentally committed:
 
 3. **Rotate ALL exposed credentials immediately:**
    ```bash
-   ./scripts/generate-secrets.sh
+   ./k8s/generate-secrets.sh
    # Follow the output to create new sealed secrets
    ```
 

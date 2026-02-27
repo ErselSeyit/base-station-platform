@@ -30,7 +30,7 @@ kubectl get pods -n basestation-platform -w
 
 ## Access Points
 
-All traffic routes through the NGINX Ingress at `basestation.local`. The frontend's built-in nginx proxy handles `/api` routing to the API Gateway internally.
+All traffic routes through the NGINX Ingress at `basestation.local`. In the default single-domain mode, `/api` routes directly to the API Gateway.
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
@@ -52,7 +52,7 @@ kubectl get svc -n basestation-platform grafana prometheus zipkin
 | Path | Backend Service | Description |
 |------|----------------|-------------|
 | `/` | frontend:80 | React dashboard (SPA) |
-| `/api` | api-gateway:8080 | REST API (proxied by frontend nginx) |
+| `/api` | api-gateway:8080 | REST API |
 | `/ws` | monitoring-service:8082 | WebSocket streaming |
 
 ## Secret Management
@@ -113,7 +113,7 @@ kubectl rollout restart deployment -n basestation-platform
 The platform uses:
 - **Kubernetes DNS** for service discovery (no Eureka)
 - **NGINX Ingress** for external routing and path-based proxying
-- **Consolidated PostgreSQL** (single instance with schemas)
+- **Consolidated PostgreSQL** (single instance with separate databases)
 - **HMAC authentication** for service-to-service calls
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
