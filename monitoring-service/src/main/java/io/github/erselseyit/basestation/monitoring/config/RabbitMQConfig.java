@@ -128,6 +128,9 @@ public class RabbitMQConfig {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(messageConverter());
 
+        // Carry the correlation id across the async hop on every publish.
+        template.setBeforePublishPostProcessors(new CorrelationIdOutboundPostProcessor());
+
         // Enable publisher confirms and returns
         template.setMandatory(true);
 

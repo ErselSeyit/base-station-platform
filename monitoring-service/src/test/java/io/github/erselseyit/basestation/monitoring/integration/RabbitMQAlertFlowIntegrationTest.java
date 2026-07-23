@@ -10,8 +10,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIf;
+import org.slf4j.MDC;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -27,6 +29,7 @@ import org.testcontainers.utility.DockerImageName;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import io.github.erselseyit.basestation.common.constants.HttpHeaders;
 import io.github.erselseyit.basestation.common.dto.AlertEvent;
 import io.github.erselseyit.basestation.monitoring.support.MongoTestContainerConfig;
 import io.github.erselseyit.basestation.monitoring.config.RabbitMQConfig;
@@ -117,6 +120,40 @@ class RabbitMQAlertFlowIntegrationTest {
         amqpAdmin.purgeQueue(CAPTURE_QUEUE);
 
         rabbitTemplate.setReceiveTimeout(5000);
+    }
+
+
+    @Test
+    @DisplayName("Should carry the correlation id across the RabbitMQ hop")
+    void shouldPropagateCorrelationId() {
+        // The correlation id lives in the logging MDC for the duration of the
+        // request that triggers the alert.
+        String correlationId = "test-correlation-" + java.util.UUID.randomUUID();
+        MDC.put("correlationId", correlationId);
+        try {
+            MetricDataDTO metric = new MetricDataDTO();
+            metric.setStationId(8888L); // distinct station: alerts dedup per station
+            metric.setStationName("Correlation Test Station");
+            metric.setMetricType(MetricType.CPU_USAGE);
+            metric.setValue(95.0);
+
+            alertingService.evaluateMetric(metric);
+
+            await()
+                .atMost(10, TimeUnit.SECONDS)
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    Message raw = rabbitTemplate.receive(CAPTURE_QUEUE);
+                    assertThat(raw).as("a message should have been published").isNotNull();
+                    // The published message must carry the same id, both as the
+                    // header the consumer restores and the native AMQP property.
+                    assertThat((String) raw.getMessageProperties().getHeader(HttpHeaders.HEADER_CORRELATION_ID))
+                            .isEqualTo(correlationId);
+                    assertThat(raw.getMessageProperties().getCorrelationId()).isEqualTo(correlationId);
+                });
+        } finally {
+            MDC.remove("correlationId");
+        }
     }
 
     @Test

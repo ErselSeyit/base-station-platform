@@ -7,9 +7,11 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Exchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.boot.autoconfigure.amqp.SimpleRabbitListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -70,5 +72,21 @@ public class RabbitMQConfig {
         template.setMessageConverter(
                 Objects.requireNonNull(messageConverter(), "Message converter cannot be null"));
         return template;
+    }
+
+    /**
+     * Overrides Spring Boot's default listener container factory to keep all of
+     * its defaults (via the configurer) and add the correlation-id advice, so
+     * every {@code @RabbitListener} restores the inbound correlation id into the
+     * MDC for the duration of processing.
+     */
+    @Bean
+    public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
+            SimpleRabbitListenerContainerFactoryConfigurer configurer,
+            ConnectionFactory connectionFactory) {
+        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+        configurer.configure(factory, connectionFactory);
+        factory.setAdviceChain(new CorrelationIdInboundAdvice());
+        return factory;
     }
 }
