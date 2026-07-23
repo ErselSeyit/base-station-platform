@@ -82,10 +82,15 @@ func DecodeStatus(data []byte) (*StatusPayload, error) {
 }
 
 // EncodeCommandResult encodes a command result into wire format.
-// Format: [success(1)][return_code(1)][output_len(2)][output...]
+// Format: [success(1)][return_code(1)][output...]
+//
+// The output is not length-prefixed: the frame header already carries the
+// payload length, and the device encodes it this way (see mips_device.c,
+// which sends payload_len = 2 + len). An earlier version wrote an extra
+// 2-byte length here, which DecodeCommandResult and the device both read as
+// the first two bytes of the output.
 func EncodeCommandResult(result *CommandResultPayload) []byte {
-	outputLen := len(result.Output)
-	buf := make([]byte, 4+outputLen)
+	buf := make([]byte, 2+len(result.Output))
 
 	if result.Success {
 		buf[0] = 0x00
@@ -93,8 +98,7 @@ func EncodeCommandResult(result *CommandResultPayload) []byte {
 		buf[0] = 0x01
 	}
 	buf[1] = result.ReturnCode
-	binary.BigEndian.PutUint16(buf[2:4], uint16(outputLen))
-	copy(buf[4:], result.Output)
+	copy(buf[2:], result.Output)
 
 	return buf
 }
