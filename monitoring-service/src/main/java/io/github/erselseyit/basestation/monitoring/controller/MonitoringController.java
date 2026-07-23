@@ -83,11 +83,8 @@ public class MonitoringController {
         int effectiveLimit = Math.clamp(limit, 1, MAX_LIMIT);
         boolean sortAsc = "asc".equalsIgnoreCase(sort);
         log.debug("Getting metrics with time range: start={}, end={}, limit={}, sort={}", startTime, endTime, effectiveLimit, sort);
-        LocalDateTime start = parseDateTime(startTime);
-        LocalDateTime end = parseDateTime(endTime);
-
-        LocalDateTime effectiveEnd = Objects.requireNonNull(end != null ? end : LocalDateTime.now());
-        LocalDateTime effectiveStart = Objects.requireNonNull(start != null ? start : effectiveEnd.minusDays(1));
+        LocalDateTime effectiveEnd = parseDateTime(endTime).orElseGet(LocalDateTime::now);
+        LocalDateTime effectiveStart = parseDateTime(startTime).orElseGet(() -> effectiveEnd.minusDays(1));
 
         return ResponseEntity.ok(service.getMetricsByTimeRangeWithLimit(effectiveStart, effectiveEnd, effectiveLimit, sortAsc));
     }
@@ -490,14 +487,13 @@ public class MonitoringController {
         }
     }
 
-    @Nullable
-    private LocalDateTime parseDateTime(@Nullable String dateTimeStr) {
+    private Optional<LocalDateTime> parseDateTime(@Nullable String dateTimeStr) {
         if (dateTimeStr == null || dateTimeStr.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         if (dateTimeStr.endsWith("Z")) {
-            return ZonedDateTime.parse(dateTimeStr).toLocalDateTime();
+            return Optional.of(ZonedDateTime.parse(dateTimeStr).toLocalDateTime());
         }
-        return LocalDateTime.parse(dateTimeStr);
+        return Optional.of(LocalDateTime.parse(dateTimeStr));
     }
 }

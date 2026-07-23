@@ -519,11 +519,11 @@ public class AlertingService {
         }
 
         // Create or reuse session (deduplication handled in createSession)
-        DiagnosticSession session = createDiagnosticSession(sessionService, alert, problemId);
-
-        if (session == null) {
+        Optional<DiagnosticSession> created = createDiagnosticSession(sessionService, alert, problemId);
+        if (created.isEmpty()) {
             return;
         }
+        DiagnosticSession session = created.get();
 
         // Use the actual session's problem ID (may differ if session was reused)
         String actualProblemId = session.getProblemId();
@@ -597,19 +597,19 @@ public class AlertingService {
         return DiagnosticConstants.PROBLEM_ID_PREFIX + System.currentTimeMillis() + "-" + ruleId;
     }
 
-    @Nullable
-    private DiagnosticSession createDiagnosticSession(@Nullable DiagnosticSessionService sessionService,
-                                                       AlertEvent alert, String problemId) {
+    private Optional<DiagnosticSession> createDiagnosticSession(@Nullable DiagnosticSessionService sessionService,
+                                                                 AlertEvent alert, String problemId) {
         if (sessionService == null) {
-            return null;
+            return Optional.empty();
         }
         try {
             DiagnosticSession session = sessionService.createSession(alert, problemId);
             log.debug("Created/reused diagnostic session {} for problem {}", session.getId(), problemId);
-            return session;
+            return Optional.of(session);
         } catch (Exception e) {
-            log.warn("Failed to create diagnostic session: {}", e.getMessage(), e);
-            return null;
+            // Diagnosis is best-effort: alerting must continue without a session.
+            log.warn("Failed to create diagnostic session for problem {}", problemId, e);
+            return Optional.empty();
         }
     }
 

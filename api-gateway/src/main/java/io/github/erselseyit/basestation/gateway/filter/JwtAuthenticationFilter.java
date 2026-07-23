@@ -28,6 +28,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 import java.util.Objects;
 
 /**
@@ -84,12 +85,12 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
             }
 
             // Extract and validate token
-            String token = extractToken(request, path);
-            if (token == null) {
+            Optional<String> token = extractToken(request, path);
+            if (token.isEmpty()) {
                 return unauthorizedResponse(exchange, "Missing or invalid Authorization header");
             }
 
-            JwtValidator.ValidationResult validationResult = jwtValidator.validateToken(token);
+            JwtValidator.ValidationResult validationResult = jwtValidator.validateToken(token.get());
             if (!validationResult.isValid()) {
                 log.warn("Token validation failed for path {}: {}", path, validationResult.getErrorMessage());
                 return unauthorizedResponse(exchange, "Invalid token: " + validationResult.getErrorMessage());
@@ -108,12 +109,13 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private Mono<Void> handleActuatorRequest(ServerWebExchange exchange,
             org.springframework.cloud.gateway.filter.GatewayFilterChain chain,
             ServerHttpRequest request, String path) {
-        String clientIp = getClientIp(request);
-        if (!isAllowedActuatorIp(clientIp)) {
-            log.warn("Actuator access denied from IP: {} for path: {}", clientIp, path);
+        // An undeterminable client IP must deny access, not bypass the check.
+        Optional<String> clientIp = getClientIp(request);
+        if (clientIp.filter(this::isAllowedActuatorIp).isEmpty()) {
+            log.warn("Actuator access denied from IP: {} for path: {}", clientIp.orElse("unknown"), path);
             return forbiddenResponse(exchange, "Actuator access denied");
         }
-        log.debug("Actuator access allowed from internal IP: {}", clientIp);
+        log.debug("Actuator access allowed from internal IP: {}", clientIp.get());
         return chain.filter(exchange);
     }
 
@@ -122,14 +124,14 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
      * Priority: Authorization header > auth_token cookie
      * Returns null if neither source contains a valid token.
      */
-    private String extractToken(ServerHttpRequest request, String path) {
+    private Optional<String> extractToken(ServerHttpRequest request, String path) {
         // First, try Authorization header
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (authHeader != null && authHeader.startsWith(AuthConstants.BEARER_PREFIX)) {
             String token = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
             if (!token.isBlank()) {
                 log.debug("Token extracted from Authorization header for path: {}", path);
-                return token;
+                return Optional.of(token);
             }
         }
 
@@ -139,12 +141,12 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
             String token = cookies.getFirst().getValue();
             if (!token.isBlank()) {
                 log.debug("Token extracted from auth_token cookie for path: {}", path);
-                return token;
+                return Optional.of(token);
             }
         }
 
         log.warn("No valid token found in Authorization header or cookie for path: {}", path);
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -227,16 +229,16 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     /**
      * Extracts client IP from request, considering X-Forwarded-For header.
      */
-    private String getClientIp(ServerHttpRequest request) {
+    private Optional<String> getClientIp(ServerHttpRequest request) {
         String xForwardedFor = request.getHeaders().getFirst(HEADER_FORWARDED_FOR);
         if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            return xForwardedFor.split(",")[0].trim();
+            return Optional.of(xForwardedFor.split(",")[0].trim());
         }
         var remoteAddress = request.getRemoteAddress();
         if (remoteAddress != null && remoteAddress.getAddress() != null) {
-            return remoteAddress.getAddress().getHostAddress();
+            return Optional.of(remoteAddress.getAddress().getHostAddress());
         }
-        return null;
+        return Optional.empty();
     }
 
     /**

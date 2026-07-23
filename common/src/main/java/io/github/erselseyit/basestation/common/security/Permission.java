@@ -1,5 +1,9 @@
 package io.github.erselseyit.basestation.common.security;
 
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Optional;
+
 /**
  * Fine-grained permissions for resource-level access control.
  *
@@ -153,32 +157,56 @@ public enum Permission {
     }
 
     /**
-     * Find a permission by its resource and action.
+     * Finds a permission by its resource and action, case-insensitively.
      *
-     * @param resource the resource name
-     * @param action the action name
-     * @return the matching permission, or null if not found
+     * @param resource the resource name; may be null
+     * @param action the action name; may be null
+     * @return the matching permission, or empty if there is none
      */
-    public static Permission findByResourceAndAction(String resource, String action) {
-        for (Permission p : values()) {
-            if (p.resource.equalsIgnoreCase(resource) && p.action.equalsIgnoreCase(action)) {
-                return p;
-            }
+    public static Optional<Permission> findByResourceAndAction(String resource, String action) {
+        if (resource == null || action == null) {
+            return Optional.empty();
         }
-        return null;
+        return Arrays.stream(values())
+                .filter(p -> p.resource.equalsIgnoreCase(resource) && p.action.equalsIgnoreCase(action))
+                .findFirst();
     }
 
     /**
-     * Find a permission by its key (e.g., "station:update").
+     * Finds a permission by its key, e.g. {@code "station:update"}.
      *
-     * @param key the permission key
-     * @return the matching permission, or null if not found
+     * @param key the permission key; may be null
+     * @return the matching permission, or empty if the key is malformed or unknown
      */
-    public static Permission findByKey(String key) {
-        if (key == null || !key.contains(":")) {
-            return null;
+    public static Optional<Permission> findByKey(String key) {
+        if (key == null) {
+            return Optional.empty();
         }
-        String[] parts = key.split(":", 2);
+        String[] parts = key.split(":");
+        if (parts.length != 2) {
+            return Optional.empty();
+        }
         return findByResourceAndAction(parts[0], parts[1]);
+    }
+
+    /**
+     * Finds a permission by enum constant name, case-insensitively.
+     *
+     * <p>Preferred over {@link #valueOf(String)} when the name comes from
+     * outside the codebase: an unrecognised name is an expected outcome, and
+     * <em>Effective Java</em> item 69 warns against using exceptions for
+     * ordinary control flow.
+     *
+     * @param name the constant name; may be null
+     * @return the matching permission, or empty if there is none
+     */
+    public static Optional<Permission> fromName(String name) {
+        if (name == null) {
+            return Optional.empty();
+        }
+        String normalised = name.trim().toUpperCase(Locale.ROOT);
+        return Arrays.stream(values())
+                .filter(p -> p.name().equals(normalised))
+                .findFirst();
     }
 }

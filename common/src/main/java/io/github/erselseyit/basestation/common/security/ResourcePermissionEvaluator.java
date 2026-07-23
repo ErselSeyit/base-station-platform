@@ -1,5 +1,6 @@
 package io.github.erselseyit.basestation.common.security;
 
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.PermissionEvaluator;
@@ -60,11 +61,12 @@ public class ResourcePermissionEvaluator implements PermissionEvaluator {
             return false;
         }
 
-        Permission perm = resolvePermission(permission);
-        if (perm == null) {
+        Optional<Permission> resolved = resolvePermission(permission);
+        if (resolved.isEmpty()) {
             log.warn("Unknown permission: {}", permission);
             return false;
         }
+        Permission perm = resolved.get();
 
         // Check if user's role has the permission
         boolean granted = hasPermissionForAuthentication(authentication, perm);
@@ -94,11 +96,12 @@ public class ResourcePermissionEvaluator implements PermissionEvaluator {
             return false;
         }
 
-        Permission perm = resolvePermission(permission);
-        if (perm == null) {
+        Optional<Permission> resolved = resolvePermission(permission);
+        if (resolved.isEmpty()) {
             log.warn("Unknown permission: {}", permission);
             return false;
         }
+        Permission perm = resolved.get();
 
         // Check if user's role has the permission
         boolean granted = hasPermissionForAuthentication(authentication, perm);
@@ -132,21 +135,14 @@ public class ResourcePermissionEvaluator implements PermissionEvaluator {
      * - String enum name (e.g., "STATION_UPDATE")
      * - String key format (e.g., "station:update")
      */
-    private Permission resolvePermission(Object permission) {
-        if (permission instanceof Permission) {
-            return (Permission) permission;
-        }
-
-        if (permission instanceof String permStr) {
-            // Try as enum name first
-            try {
-                return Permission.valueOf(permStr.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                // Try as key format (resource:action)
-                return Permission.findByKey(permStr.toLowerCase());
-            }
-        }
-
-        return null;
+    private Optional<Permission> resolvePermission(Object permission) {
+        return switch (permission) {
+            case Permission p -> Optional.of(p);
+            // An unrecognised name is an expected outcome, so it is resolved by
+            // lookup rather than by catching IllegalArgumentException from
+            // valueOf (Effective Java item 69).
+            case String s -> Permission.fromName(s).or(() -> Permission.findByKey(s));
+            case null, default -> Optional.empty();
+        };
     }
 }

@@ -1,6 +1,8 @@
 package io.github.erselseyit.basestation.common.util;
 
 import io.github.erselseyit.basestation.common.constants.HttpHeaders;
+import java.util.Optional;
+
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
@@ -57,38 +59,38 @@ public final class RequestUtils {
      * Extracts the username from request headers set by API Gateway.
      *
      * @param request the HTTP servlet request
-     * @return the username, or null if not present
+     * @return the username, or empty if the request is null or the header absent
      */
-    public static String getUsername(HttpServletRequest request) {
+    public static Optional<String> getUsername(HttpServletRequest request) {
         if (request == null) {
-            return null;
+            return Optional.empty();
         }
-        return request.getHeader(HttpHeaders.HEADER_USER_NAME);
+        return Optional.ofNullable(request.getHeader(HttpHeaders.HEADER_USER_NAME));
     }
 
     /**
      * Extracts the user role from request headers set by API Gateway.
      *
      * @param request the HTTP servlet request
-     * @return the user role, or null if not present
+     * @return the user role, or empty if the request is null or the header absent
      */
-    public static String getUserRole(HttpServletRequest request) {
+    public static Optional<String> getUserRole(HttpServletRequest request) {
         if (request == null) {
-            return null;
+            return Optional.empty();
         }
-        return request.getHeader(HttpHeaders.HEADER_USER_ROLE);
+        return Optional.ofNullable(request.getHeader(HttpHeaders.HEADER_USER_ROLE));
     }
 
     /**
      * Extracts the correlation ID from request headers.
      *
      * @param request the HTTP servlet request
-     * @return the correlation ID, or null if not present
+     * @return the correlation ID, or empty if the request is null or the header absent
      */
-    public static String getCorrelationId(HttpServletRequest request) {
+    public static Optional<String> getCorrelationId(HttpServletRequest request) {
         if (request == null) {
-            return null;
+            return Optional.empty();
         }
-        return request.getHeader(HttpHeaders.HEADER_CORRELATION_ID);
+        return Optional.ofNullable(request.getHeader(HttpHeaders.HEADER_CORRELATION_ID));
     }
 }
