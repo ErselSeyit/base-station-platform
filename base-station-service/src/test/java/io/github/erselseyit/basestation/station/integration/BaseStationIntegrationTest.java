@@ -21,6 +21,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -60,6 +61,7 @@ import io.github.erselseyit.basestation.station.repository.BaseStationRepository
 @Testcontainers
 @DisabledIf("skipInDemoOrNoDocker")
 @DisplayName("Base Station API Integration Tests")
+@WithMockUser(roles = "ADMIN")  // controllers are guarded by @PreAuthorize; ADMIN satisfies every rule
 class BaseStationIntegrationTest {
     static boolean skipInDemoOrNoDocker() {
         try {
@@ -214,13 +216,21 @@ class BaseStationIntegrationTest {
                     .content(Objects.requireNonNull(objectMapper.writeValueAsString(updatedStation))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.stationName").value("BS-UPDATED"))
-                    .andExpect(jsonPath("$.status").value("MAINTENANCE"))
-                    .andExpect(jsonPath("$.powerConsumption").value(2500.0));
+                    // PUT deliberately does not apply status. PUT /{id} requires
+                    // OPERATOR while PATCH /{id}/status requires SERVICE — two
+                    // different roles. Honouring status here would let an OPERATOR
+                    // change it without the SERVICE role, bypassing that boundary.
+                    .andExpect(jsonPath("$.status").value("ACTIVE"))
+                    // powerConsumption is read-only on this endpoint (derived from
+                    // metrics), so the value sent in the payload is ignored.
+                    .andExpect(jsonPath("$.powerConsumption").doesNotExist());
 
             // Verify in database
             var updated = repository.findById(id).orElseThrow();
             assertThat(updated.getStationName()).isEqualTo("BS-UPDATED");
-            assertThat(updated.getStatus()).isEqualTo(StationStatus.MAINTENANCE);
+            assertThat(updated.getStatus())
+                    .as("status must only change via PATCH /{id}/status, which requires the SERVICE role")
+                    .isEqualTo(StationStatus.ACTIVE);
         }
 
         @Test

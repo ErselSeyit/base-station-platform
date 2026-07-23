@@ -10,16 +10,28 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
+// Resilience4j autoconfiguration is deliberately NOT excluded: Spring Cloud's
+// Resilience4JAutoConfiguration stays on the classpath and requires the
+// CircuitBreakerRegistry it creates, and BatchMetricsIntegrationTest exercises
+// circuit breaker fallback behaviour.
 @SpringBootApplication(exclude = {
         RedisAutoConfiguration.class,
-        RedisRepositoriesAutoConfiguration.class,
-        io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration.class,
-        io.github.resilience4j.springboot3.retry.autoconfigure.RetryAutoConfiguration.class,
-        io.github.resilience4j.springboot3.timelimiter.autoconfigure.TimeLimiterAutoConfiguration.class
+        RedisRepositoriesAutoConfiguration.class
 })
 @ComponentScan(
-        basePackages = "io.github.erselseyit.basestation.station",
+        basePackages = {"io.github.erselseyit.basestation.station",
+                        // BaseStationServiceApplication scans common too; the test
+                        // applications must match or beans like AuditLogger go missing.
+                        "io.github.erselseyit.basestation.common"},
         excludeFilters = {
+                @ComponentScan.Filter(
+                        type = FilterType.CUSTOM,
+                        classes = org.springframework.boot.context.TypeExcludeFilter.class
+                ),
+                @ComponentScan.Filter(
+                        type = FilterType.ASSIGNABLE_TYPE,
+                        classes = io.github.erselseyit.basestation.station.test.TestApplication.class
+                ),
                 @ComponentScan.Filter(
                         type = FilterType.ASSIGNABLE_TYPE,
                         classes = io.github.erselseyit.basestation.station.BaseStationServiceApplication.class

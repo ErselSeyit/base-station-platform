@@ -25,6 +25,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -73,6 +74,7 @@ import io.github.erselseyit.basestation.station.repository.BaseStationRepository
 @Testcontainers
 @DisabledIf("skipInDemoOrNoDocker")
 @DisplayName("Batch Metrics Integration Tests")
+@WithMockUser(roles = "ADMIN")  // controllers are guarded by @PreAuthorize; ADMIN satisfies every rule
 class BatchMetricsIntegrationTest {
     static boolean skipInDemoOrNoDocker() {
         try {

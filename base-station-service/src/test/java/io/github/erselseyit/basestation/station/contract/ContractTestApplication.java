@@ -16,8 +16,19 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
                 RedisRepositoriesAutoConfiguration.class
         })
 @ComponentScan(
-        basePackages = "io.github.erselseyit.basestation.station",
+        basePackages = {"io.github.erselseyit.basestation.station",
+                        // BaseStationServiceApplication scans common too; the test
+                        // applications must match or beans like AuditLogger go missing.
+                        "io.github.erselseyit.basestation.common"},
         excludeFilters = {
+                @ComponentScan.Filter(
+                        type = FilterType.CUSTOM,
+                        classes = org.springframework.boot.context.TypeExcludeFilter.class
+                ),
+                @ComponentScan.Filter(
+                        type = FilterType.ASSIGNABLE_TYPE,
+                        classes = io.github.erselseyit.basestation.station.test.TestApplication.class
+                ),
                 @ComponentScan.Filter(
                         type = FilterType.ASSIGNABLE_TYPE,
                         classes = io.github.erselseyit.basestation.station.BaseStationServiceApplication.class
