@@ -212,6 +212,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # Warm the local Maven cache so Trivy resolves POMs from ~/.m2 instead of
+      # hammering Maven Central, which rate-limits (429) and fails the scan.
+      - name: Populate Maven cache
+        run: mvn -B -q dependency:go-offline || true
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
