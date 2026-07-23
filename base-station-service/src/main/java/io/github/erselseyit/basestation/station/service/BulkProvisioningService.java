@@ -181,9 +181,8 @@ public class BulkProvisioningService {
                 item.stationType()
         );
         station.setOrganization(organization);
-        if (item.powerConsumption() != null) {
-            station.setPowerConsumption(item.powerConsumption());
-        }
+        // powerConsumption is telemetry (the POWER_CONSUMPTION metric), not
+        // provisioned, so it is never set here.
         if (item.description() != null) {
             station.setDescription(item.description());
         }
@@ -195,9 +194,7 @@ public class BulkProvisioningService {
         station.setLatitude(item.latitude());
         station.setLongitude(item.longitude());
         station.setStationType(item.stationType());
-        if (item.powerConsumption() != null) {
-            station.setPowerConsumption(item.powerConsumption());
-        }
+        // powerConsumption is telemetry, not provisioned; see createStationFromItem.
         if (item.description() != null) {
             station.setDescription(item.description());
         }

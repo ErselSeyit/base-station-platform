@@ -100,7 +100,6 @@ public class BulkProvisioningController {
                                 40.7128,
                                 -74.0060,
                                 io.github.erselseyit.basestation.station.model.StationType.MACRO_CELL,
-                                2500.0,
                                 "Example macro cell station")),
                 new BulkImportRequest.ImportOptions(true, false, true, false));
         return ResponseEntity.ok(sample);

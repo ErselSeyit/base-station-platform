@@ -38,7 +38,10 @@ public record BulkImportRequest(
             @NotNull(message = "Station type is required")
             StationType stationType,
 
-            @Nullable Double powerConsumption,
+            // No powerConsumption: it is telemetry the station reports (the
+            // POWER_CONSUMPTION metric), not a provisioned attribute. A value
+            // in an import file is ignored rather than rejected, since Spring
+            // ignores unknown JSON properties by default.
 
             @Nullable String description
     ) {}
