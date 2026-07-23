@@ -85,10 +85,15 @@ public final class Roles {
     }
 
     /**
-     * Check if a role string represents any valid user role.
+     * Check if a role string represents any valid user role (case-insensitive).
+     *
+     * <p>The USER and SERVICE comparisons were previously case-sensitive while
+     * the ADMIN and OPERATOR ones were not, so {@code isValidRole("admin")} was
+     * true but {@code isValidRole("user")} was false.
      */
     public static boolean isValidRole(String role) {
-        return isOperatorOrHigher(role) || ROLE_USER.equals(role) || USER.equals(role)
-                || ROLE_SERVICE.equals(role) || SERVICE.equals(role);
+        return isOperatorOrHigher(role)
+                || ROLE_USER.equalsIgnoreCase(role) || USER.equalsIgnoreCase(role)
+                || ROLE_SERVICE.equalsIgnoreCase(role) || SERVICE.equalsIgnoreCase(role);
     }
 }
