@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { showToast } from '../utils/toast'
 import {
   Box,
   Card,
@@ -90,6 +91,19 @@ export default function AnalyzeAlert() {
   })
 
   const handleAnalyze = () => {
+    if (import.meta.env.VITE_MOCK === 'true') {
+      if (rawAlert.trim().length < 10) { showToast.error('Please enter or select a sample alert first'); return }
+      const mockResults: Record<string, AlertAnalysisResponse> = {
+        'Signal Drop': { problemCode: "SIGNAL_DEGRADATION", suggestedFix: "Initiate automatic cell recovery and adjust antenna tilt parameters", reasoning: "RSSI at -115dBm indicates severe signal degradation. Combined with 45% handover failure rate, this suggests physical obstruction or hardware fault on the antenna system. Pattern matches 89 previous LINK_FAILURE cases.", confidence: 0.91, commands: ["cell_recovery --station bs-042 --mode auto", "adjust_tilt --station bs-042 --delta +2", "monitor_rssi --station bs-042 --duration 300"], riskLevel: "MEDIUM", expectedOutcome: "Restore RSSI to above -85dBm and reduce handover failure rate below 5% within 10 minutes", extractedMetrics: { RSSI: -115, HANDOVER_FAILURE_RATE: 45 }, detectedPatterns: ["Rapid signal degradation", "Cascading cell failure", "Handover storm"] },
+        'CPU Overload': { problemCode: "HIGH_CPU", suggestedFix: "Redistribute traffic load to neighboring cells and restart non-critical processes", reasoning: "CPU at 98% with baseband_proc consuming 45% indicates processing overload. Memory at 87% confirms resource exhaustion. This pattern resolved successfully in 112 previous cases with load balancing.", confidence: 0.87, commands: ["redistribute_load --from BTS-128 --percentage 30", "restart_process --station BTS-128 --process baseband_proc --graceful", "monitor_cpu --station BTS-128 --duration 300"], riskLevel: "LOW", expectedOutcome: "Reduce CPU usage to below 70% and memory below 75% within 5 minutes", extractedMetrics: { CPU_USAGE: 98, MEMORY_USAGE: 87, PROCESS_CPU: 45 }, detectedPatterns: ["CPU saturation", "Memory pressure", "Process resource leak"] },
+        'Temperature': { problemCode: "HIGH_TEMP", suggestedFix: "Activate emergency cooling and reduce transmission power to lower heat generation", reasoning: "Temperature at 78C exceeds 65C threshold with FAN2 failure. Power consumption 33% above normal (2.4kW vs 1.8kW) indicates cooling system degradation. 96.8% success rate for this pattern across 156 cases.", confidence: 0.96, commands: ["cooling_override --station ENB-045 --mode emergency", "reduce_tx_power --station ENB-045 --by 3dB", "dispatch_maintenance --station ENB-045 --type fan_replacement"], riskLevel: "LOW", expectedOutcome: "Reduce temperature below 60C within 15 minutes. Schedule fan replacement within 24 hours.", extractedMetrics: { TEMPERATURE: 78, POWER_CONSUMPTION: 2400, FAN_STATUS: 66 }, detectedPatterns: ["Thermal runaway risk", "Cooling system partial failure", "Power consumption anomaly"] },
+        'Backhaul': { problemCode: "LINK_FAILURE", suggestedFix: "Failover to backup microwave link and stabilize primary interface", reasoning: "S1 link down with 450ms latency and 12% packet loss indicates backhaul failure. Interface flapping (3 events in 5 min) suggests physical layer instability. Backup link available with 94.5% historical success rate.", confidence: 0.94, commands: ["switch_backhaul --station gNB-201 --link backup", "stabilize_interface --station gNB-201 --interface eth0", "verify_connectivity --timeout 30"], riskLevel: "LOW", expectedOutcome: "Restore S1 connectivity via backup link within 60 seconds. Stabilize primary interface for manual inspection.", extractedMetrics: { LATENCY: 450, PACKET_LOSS: 12, FLAP_COUNT: 3 }, detectedPatterns: ["Backhaul link failure", "Interface instability", "Latency spike"] },
+      }
+      const key = Object.keys(mockResults).find(k => rawAlert.includes(k.split(' ')[0])) || Object.keys(mockResults)[0]
+      setResult(mockResults[key])
+      showToast.success('AI analysis complete')
+      return
+    }
     if (rawAlert.trim().length < 10) return
     analyzeMutation.mutate({ rawAlert })
   }
@@ -126,32 +140,21 @@ export default function AnalyzeAlert() {
   return (
     <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, maxWidth: '1200px', margin: '0 auto' }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-        <Box
+      <Box sx={{ mb: 4 }}>
+        <Typography
+          variant="h4"
           sx={{
-            p: 1.5,
-            borderRadius: '12px',
-            background: 'var(--mono-950)',
-            color: 'var(--mono-50)',
+            fontWeight: 700,
+            color: 'var(--mono-950)',
+            letterSpacing: '-0.02em',
+            fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' },
           }}
         >
-          <AnalyzeIcon sx={{ fontSize: 28 }} />
-        </Box>
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              color: 'var(--mono-950)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Analyze Alert
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-            Paste any alert log and get instant AI-powered analysis
-          </Typography>
-        </Box>
+          Analyze Alert
+        </Typography>
+        <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+          Paste any alert log and get instant AI-powered analysis
+        </Typography>
       </Box>
 
       <Grid container spacing={3}>
@@ -209,12 +212,15 @@ export default function AnalyzeAlert() {
               rows={12}
               fullWidth
               value={rawAlert}
-              onChange={(e) => setRawAlert(e.target.value)}
-              placeholder="Paste syslog, SNMP trap, or any alert text here...
-
-Example:
-Feb 10 03:14:22 bs-042 CRITICAL: RSSI dropped to -115dBm
-Feb 10 03:14:23 bs-042 WARNING: Handover failure rate 45%"
+              onChange={(e) => {
+                if (import.meta.env.VITE_MOCK !== 'true') setRawAlert(e.target.value)
+              }}
+              InputProps={{ readOnly: import.meta.env.VITE_MOCK === 'true' }}
+              placeholder={
+                import.meta.env.VITE_MOCK === 'true'
+                  ? "Select a sample alert below to analyze..."
+                  : "Paste syslog, SNMP trap, or any alert text here..."
+              }
               sx={{
                 mb: 2,
                 '& .MuiOutlinedInput-root': {
@@ -247,16 +253,18 @@ Feb 10 03:14:23 bs-042 WARNING: Handover failure rate 45%"
               fullWidth
               size="large"
               onClick={handleAnalyze}
-              disabled={rawAlert.trim().length < 10 || analyzeMutation.isPending}
+              disabled={
+                import.meta.env.VITE_MOCK === 'true' ? false : (rawAlert.trim().length < 10 || analyzeMutation.isPending)
+              }
               sx={{
                 py: 1.5,
-                background: 'var(--mono-950)',
-                color: 'var(--mono-50)',
+                background: '#0a0a0a',
+                color: '#ffffff',
                 fontWeight: 600,
                 fontSize: '1rem',
                 borderRadius: '8px',
                 '&:hover': {
-                  background: 'var(--mono-900)',
+                  background: '#1f2937',
                 },
                 '&.Mui-disabled': {
                   background: 'var(--mono-300)',
