@@ -35,28 +35,28 @@ ON CONFLICT (site_id) DO NOTHING;
 -- Using realistic values based on SSV analysis
 
 -- Site 001 - Good performance
-INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time)
+INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, ul_grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time)
 SELECT id, 1, 'NR3500_N78', 100, 1358.22, 87.85, 1670.89, 1520.90, -78.6, 25.47, 12.84, 'RANK4', 26.19, 252, 6.30, 1503.25, 2.1, 1001, 'PASS', 'PASS', 100.0, NOW()
 FROM base_stations WHERE station_name = '5G-SITE-001';
 
-INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time)
+INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, ul_grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time)
 SELECT id, 2, 'NR3500_N78', 100, 1206.93, 109.72, 1552.63, 1420.92, -74.55, 31.23, 12.39, 'RANK4', 23.29, 248, 8.78, 1559.29, 1.8, 1002, 'PASS', 'PASS', 100.0, NOW()
 FROM base_stations WHERE station_name = '5G-SITE-001';
 
-INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time)
+INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, ul_grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time)
 SELECT id, 3, 'NR3500_N78', 100, 1324.31, 111.92, 1649.52, 1435.63, -71.29, 21.54, 12.77, 'RANK4', 22.53, 250, 7.95, 1484.22, 2.3, 1003, 'PASS', 'PASS', 100.0, NOW()
 FROM base_stations WHERE station_name = '5G-SITE-001';
 
 -- Site 005 - TX Imbalance issue (failing threshold)
-INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time, comments)
+INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, ul_grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time, comments)
 SELECT id, 1, 'NR3500_N78', 100, 1250.50, 85.20, 1580.00, 1380.00, -80.2, 22.10, 13.50, 'RANK4', 24.50, 245, 7.20, 1480.00, 5.6, 5001, 'PASS', 'PASS', 98.0, NOW(), 'TX imbalance exceeds 4dB threshold'
 FROM base_stations WHERE station_name = '5G-SITE-005';
 
-INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time, comments)
+INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, ul_grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time, comments)
 SELECT id, 2, 'NR3500_N78', 100, 1180.30, 95.40, 1490.00, 1320.00, -76.8, 28.50, 12.80, 'RANK4', 22.80, 240, 9.10, 1520.00, 16.7, 5002, 'PASS', 'PASS', 97.0, NOW(), 'CRITICAL: TX imbalance 16.7dB - requires immediate attention'
 FROM base_stations WHERE station_name = '5G-SITE-005';
 
-INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time, comments)
+INSERT INTO rf_measurements (station_id, sector_number, frequency_band, bandwidth, dl_throughput, ul_throughput, pdcp_throughput, rlc_throughput, rsrp, sinr, latency, rank_indicator, avg_mcs, rb_per_slot, initial_bler, ul_grant, tx_imbalance, pci, cross_connection_check, antenna_direction_check, handover_success_rate, measurement_time, comments)
 SELECT id, 3, 'NR3500_N78', 100, 1290.80, 102.30, 1610.00, 1410.00, -73.5, 19.80, 13.20, 'RANK4', 21.90, 248, 8.50, 1465.00, 5.5, 5003, 'PASS', 'PASS', 99.0, NOW(), 'TX imbalance exceeds 4dB threshold'
 FROM base_stations WHERE station_name = '5G-SITE-005';
 

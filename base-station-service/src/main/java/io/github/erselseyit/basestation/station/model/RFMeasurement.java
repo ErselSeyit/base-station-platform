@@ -58,6 +58,11 @@ public class RFMeasurement {
     private Double avgMcs;
     private Integer rbPerSlot;
     private Double initialBler; // %
+
+    // "grant" is a reserved SQL keyword; without an explicit column name
+    // Hibernate emits `grant float(53)`, which PostgreSQL rejects with a
+    // syntax error and no table is created.
+    @Column(name = "ul_grant")
     private Double grant;
 
     // RF quality
