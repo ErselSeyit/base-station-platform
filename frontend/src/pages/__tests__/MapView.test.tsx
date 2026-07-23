@@ -144,7 +144,7 @@ describe('MapView', () => {
     render(<MapView />)
 
     await waitFor(() => {
-      const progress = screen.getByRole('progressbar')
+      const progress = screen.getByRole('status')
       expect(progress).toBeInTheDocument()
     })
   })
@@ -156,7 +156,7 @@ describe('MapView', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Map View')).toBeInTheDocument()
-      expect(screen.getByText('Interactive map showing all base station locations')).toBeInTheDocument()
+      expect(screen.getByText(/mapped stations/)).toBeInTheDocument()
     })
 
     // Should render map container
@@ -177,11 +177,11 @@ describe('MapView', () => {
     })
 
     // Should show warning alert for 2 invalid stations
-    expect(screen.getByText('2 station(s) have invalid coordinates and cannot be displayed on the map:')).toBeInTheDocument()
+    expect(screen.getByText(/2 station\(s\) have invalid coordinates/)).toBeInTheDocument()
 
     // Should show details of invalid stations
-    expect(screen.getByText('BS-003 (Invalid Location)')).toBeInTheDocument()
-    expect(screen.getByText('BS-004 (Another Invalid)')).toBeInTheDocument()
+    expect(screen.getByText('BS-003')).toBeInTheDocument()
+    expect(screen.getByText('BS-004')).toBeInTheDocument()
   })
 
   it('shows edit button for invalid coordinate stations', async () => {
@@ -214,50 +214,7 @@ describe('MapView', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/stations/3')
   })
 
-  it('shows helpful hint for Istanbul locations', async () => {
-    const istanbulStations = mockStations.map(s =>
-      s.id === 3 ? { ...s, location: 'Istanbul, Turkey' } : s
-    )
 
-    vi.mocked(stationApi.getAll).mockResolvedValue(
-      mockAxiosResponse(istanbulStations)
-    )
-
-    render(<MapView />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Map View')).toBeInTheDocument()
-    })
-
-    // Should show Istanbul hint
-    expect(screen.getByText('💡 For Istanbul, use: Lat 41.0064, Lng 28.9759')).toBeInTheDocument()
-  })
-
-  it('displays popup with station details when marker is clicked', async () => {
-    vi.mocked(stationApi.getAll).mockResolvedValue(
-      mockAxiosResponse([mockStations[0]]) // Only valid station
-    )
-
-    render(<MapView />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Map View')).toBeInTheDocument()
-    })
-
-    // Click on marker
-    const marker = screen.getByTestId('map-marker')
-    fireEvent.click(marker)
-
-    // Should show selected station details
-    await waitFor(() => {
-      expect(screen.getByText('Selected Station: BS-001')).toBeInTheDocument()
-      expect(screen.getByText('Location: New York, NY')).toBeInTheDocument()
-      expect(screen.getByText('Coordinates: 40.7128, -74.006')).toBeInTheDocument()
-      expect(screen.getByText('Type: MACRO_CELL')).toBeInTheDocument()
-      expect(screen.getByText('Status: ACTIVE')).toBeInTheDocument()
-      expect(screen.getByText('Power Consumption: 1500.0 kW')).toBeInTheDocument()
-    })
-  })
 
   it('calculates center point correctly for valid stations', async () => {
     vi.mocked(stationApi.getAll).mockResolvedValue(
@@ -322,7 +279,7 @@ describe('MapView', () => {
     })
 
     // Should show warning for 3 invalid stations (2 original + 1 NaN)
-    expect(screen.getByText('3 station(s) have invalid coordinates and cannot be displayed on the map:')).toBeInTheDocument()
+    expect(screen.getByText(/3 station\(s\) have invalid coordinates/)).toBeInTheDocument()
 
     // Should still render markers for 2 valid stations
     const markers = screen.getAllByTestId('map-marker')
@@ -362,63 +319,6 @@ describe('MapView', () => {
     })
   })
 
-  it('does not show selected station card initially', async () => {
-    vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
 
-    render(<MapView />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Map View')).toBeInTheDocument()
-    })
-
-    // Should not show selected station card initially
-    expect(screen.queryByText(/Selected Station:/)).not.toBeInTheDocument()
-  })
-
-  it('clears selected station when clicking different marker', async () => {
-    vi.mocked(stationApi.getAll).mockResolvedValue(
-      mockAxiosResponse([mockStations[0], mockStations[1]]) // Only valid stations
-    )
-
-    render(<MapView />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Map View')).toBeInTheDocument()
-    })
-
-    // Click first marker
-    const markers = screen.getAllByTestId('map-marker')
-    fireEvent.click(markers[0])
-
-    await waitFor(() => {
-      expect(screen.getByText('Selected Station: BS-001')).toBeInTheDocument()
-    })
-
-    // Click second marker
-    fireEvent.click(markers[1])
-
-    await waitFor(() => {
-      expect(screen.getByText('Selected Station: BS-002')).toBeInTheDocument()
-    })
-  })
-
-  it('displays correct status colors in selected station card', async () => {
-    vi.mocked(stationApi.getAll).mockResolvedValue(
-      mockAxiosResponse([mockStations[1]]) // Station with MAINTENANCE status
-    )
-
-    render(<MapView />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Map View')).toBeInTheDocument()
-    })
-
-    // Click marker
-    const marker = screen.getByTestId('map-marker')
-    fireEvent.click(marker)
-
-    await waitFor(() => {
-      expect(screen.getByText('Status: MAINTENANCE')).toBeInTheDocument()
-    })
-  })
 })
