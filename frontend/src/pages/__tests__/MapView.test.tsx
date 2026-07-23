@@ -321,4 +321,25 @@ describe('MapView', () => {
 
 
 
+
+  it('suggests correct coordinates for stations located in Istanbul', async () => {
+    vi.mocked(stationApi.getAll).mockResolvedValue(
+      mockAxiosResponse([
+        {
+          ...mockStations[0],
+          id: 99,
+          stationName: 'BS-IST',
+          location: 'Istanbul, TR',
+          latitude: 999,
+          longitude: 999,
+        },
+      ])
+    )
+
+    render(<MapView />)
+
+    // The operator's goal is to fix a bad coordinate, so the page offers the
+    // correct value for the station's location.
+    expect(await screen.findByText(/Suggested: Lat 41.0064, Lng 28.9759/)).toBeInTheDocument()
+  })
 })

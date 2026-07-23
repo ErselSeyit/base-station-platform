@@ -389,4 +389,29 @@ describe('Metrics', () => {
       expect(screen.getByText(new RegExp(`3 data points`))).toBeInTheDocument() // Filtered count
     })
   })
+
+  it('polls for fresh live metrics without user interaction', async () => {
+    // The operator's goal is a dashboard that stays current while they watch
+    // it. Deleting this test would let someone remove refetchInterval and the
+    // page would go stale silently.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
+      vi.mocked(metricsApi.getAll).mockResolvedValue(mockAxiosResponse(mockMetrics))
+
+      render(<Metrics />)
+
+      await waitFor(() => expect(metricsApi.getAll).toHaveBeenCalled())
+      const callsAfterMount = vi.mocked(metricsApi.getAll).mock.calls.length
+
+      // POLLING_INTERVALS.NORMAL is 20s; advance past one tick.
+      await vi.advanceTimersByTimeAsync(21_000)
+
+      await waitFor(() =>
+        expect(vi.mocked(metricsApi.getAll).mock.calls.length).toBeGreaterThan(callsAfterMount)
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
