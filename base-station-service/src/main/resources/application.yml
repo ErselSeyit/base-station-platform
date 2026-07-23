@@ -54,7 +54,7 @@ monitoring:
 logging:
   level:
     root: INFO
-    com.huawei.basestation: INFO
+    io.github.erselseyit.basestation.station: INFO
 
 resilience4j:
   circuitbreaker:

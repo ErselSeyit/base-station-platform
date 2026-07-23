@@ -6,7 +6,7 @@
 
 -- ---------------------------------------------------------------------------
 -- Table: notifications
--- Entity: com.huawei.notification.model.Notification
+-- Entity: io.github.erselseyit.basestation.notification.model.Notification
 -- ---------------------------------------------------------------------------
 CREATE TABLE notifications (
     id              BIGSERIAL       PRIMARY KEY,

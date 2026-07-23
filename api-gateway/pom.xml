@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.huawei</groupId>
+        <groupId>io.github.erselseyit</groupId>
         <artifactId>basestation-platform</artifactId>
         <version>1.0.0</version>
     </parent>
@@ -20,7 +20,7 @@
     <dependencies>
         <!-- Common module for shared constants and utilities -->
         <dependency>
-            <groupId>com.huawei</groupId>
+            <groupId>io.github.erselseyit</groupId>
             <artifactId>common</artifactId>
             <version>${project.version}</version>
         </dependency>

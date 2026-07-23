@@ -34,5 +34,5 @@ security:
 logging:
   level:
     root: WARN
-    com.huawei.auth: DEBUG
+    io.github.erselseyit.basestation.auth: DEBUG
     org.springframework.security: DEBUG

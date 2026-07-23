@@ -39,8 +39,8 @@
             <appender-ref ref="CONSOLE"/>
         </root>
         
-        <logger name="com.huawei.notification" level="DEBUG"/>
-        <logger name="com.huawei.notification.listener" level="DEBUG"/>
+        <logger name="io.github.erselseyit.basestation.notification" level="DEBUG"/>
+        <logger name="io.github.erselseyit.basestation.notification.listener" level="DEBUG"/>
         <logger name="org.springframework.web" level="INFO"/>
         <logger name="org.hibernate.SQL" level="DEBUG"/>
         <logger name="org.springframework.amqp" level="DEBUG"/>
@@ -63,10 +63,10 @@
         </root>
         
         <!-- Application: INFO for delivery tracking -->
-        <logger name="com.huawei.notification" level="INFO"/>
+        <logger name="io.github.erselseyit.basestation.notification" level="INFO"/>
         
         <!-- RabbitMQ listeners: INFO for message consumption -->
-        <logger name="com.huawei.notification.listener" level="INFO"/>
+        <logger name="io.github.erselseyit.basestation.notification.listener" level="INFO"/>
         
         <!-- Spring AMQP: INFO for connection events -->
         <logger name="org.springframework.amqp" level="INFO"/>

@@ -6,7 +6,7 @@
 
 -- ---------------------------------------------------------------------------
 -- Table: organizations
--- Entity: com.huawei.basestation.model.Organization
+-- Entity: io.github.erselseyit.basestation.station.model.Organization
 -- ---------------------------------------------------------------------------
 CREATE TABLE organizations (
     id                BIGSERIAL       PRIMARY KEY,
@@ -43,7 +43,7 @@ CREATE TABLE organization_features (
 
 -- ---------------------------------------------------------------------------
 -- Table: base_stations
--- Entity: com.huawei.basestation.model.BaseStation
+-- Entity: io.github.erselseyit.basestation.station.model.BaseStation
 -- ---------------------------------------------------------------------------
 CREATE TABLE base_stations (
     id                    BIGSERIAL           PRIMARY KEY,
@@ -72,7 +72,7 @@ CREATE INDEX idx_station_org ON base_stations (organization_id);
 
 -- ---------------------------------------------------------------------------
 -- Table: connection_profiles
--- Entity: com.huawei.basestation.model.ConnectionProfile
+-- Entity: io.github.erselseyit.basestation.station.model.ConnectionProfile
 -- ---------------------------------------------------------------------------
 CREATE TABLE connection_profiles (
     id                      BIGSERIAL       PRIMARY KEY,
@@ -98,7 +98,7 @@ CREATE INDEX idx_profile_protocol ON connection_profiles (protocol);
 
 -- ---------------------------------------------------------------------------
 -- Table: device_commands
--- Entity: com.huawei.basestation.model.DeviceCommand
+-- Entity: io.github.erselseyit.basestation.station.model.DeviceCommand
 -- @GeneratedValue(strategy = GenerationType.UUID) -> VARCHAR(255) PK
 -- ---------------------------------------------------------------------------
 CREATE TABLE device_commands (
@@ -135,7 +135,7 @@ CREATE TABLE command_params (
 
 -- ---------------------------------------------------------------------------
 -- Table: edge_bridge_instances
--- Entity: com.huawei.basestation.model.EdgeBridgeInstance
+-- Entity: io.github.erselseyit.basestation.station.model.EdgeBridgeInstance
 -- ---------------------------------------------------------------------------
 CREATE TABLE edge_bridge_instances (
     id                  BIGSERIAL           PRIMARY KEY,

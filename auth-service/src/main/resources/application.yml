@@ -76,4 +76,4 @@ management:
 logging:
   level:
     root: INFO
-    com.huawei.auth: INFO
+    io.github.erselseyit.basestation.auth: INFO

@@ -140,7 +140,7 @@ logging:
   level:
     root: INFO
     org.springframework.cloud.gateway: INFO
-    com.huawei: INFO
+    io.github.erselseyit: INFO
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://frontend:80}

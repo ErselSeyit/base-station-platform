@@ -1,0 +1,668 @@
+package io.github.erselseyit.basestation.monitoring.service;
+
+import io.github.erselseyit.basestation.common.constants.DiagnosticConstants;
+import io.github.erselseyit.basestation.common.constants.MessagingConstants;
+import io.github.erselseyit.basestation.common.dto.AlertEvent;
+import io.github.erselseyit.basestation.common.dto.DiagnosticResolutionEvent;
+import io.github.erselseyit.basestation.common.dto.DiagnosticResponse;
+import io.github.erselseyit.basestation.monitoring.model.AISolution;
+import io.github.erselseyit.basestation.monitoring.model.DiagnosticSession;
+import io.github.erselseyit.basestation.monitoring.model.DiagnosticStatus;
+import io.github.erselseyit.basestation.monitoring.model.LearnedPattern;
+import io.github.erselseyit.basestation.monitoring.model.SolutionFeedback;
+import io.github.erselseyit.basestation.monitoring.repository.DiagnosticSessionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.lang.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.transaction.annotation.Transactional;
+
+import static io.github.erselseyit.basestation.common.constants.ServiceNames.SYSTEM_ACTOR;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Scheduled;
+
+/**
+ * Service for managing diagnostic sessions.
+ * Handles session lifecycle from creation through diagnosis to resolution.
+ *
+ * @see LearningPatternService for learning pattern management
+ */
+@Service
+@SuppressWarnings("null") // Spring Data repositories and Optional operations guarantee non-null for present values
+public class DiagnosticSessionService {
+
+    private static final Logger log = LoggerFactory.getLogger(DiagnosticSessionService.class);
+
+    private final DiagnosticSessionRepository sessionRepository;
+    private final LearningPatternService learningPatternService;
+    private final RabbitTemplate rabbitTemplate;
+
+    public DiagnosticSessionService(DiagnosticSessionRepository sessionRepository,
+                                    LearningPatternService learningPatternService,
+                                    RabbitTemplate rabbitTemplate) {
+        this.sessionRepository = sessionRepository;
+        this.learningPatternService = learningPatternService;
+        this.rabbitTemplate = rabbitTemplate;
+    }
+
+    private static final String DEFAULT_SEVERITY = "medium";
+    private static final String DEFAULT_CATEGORY = "unknown";
+    private static final String UNKNOWN_METRIC_KEY = "unknown_metric";
+
+    /**
+     * Creates a new diagnostic session from an alert event, or returns existing active session.
+     * Uses pre-processing to prevent duplicate sessions for the same station+problemCode.
+     *
+     * @param alert the alert event (must not be null)
+     * @param problemId the problem identifier (must not be null)
+     * @return the created or existing session
+     */
+    @Transactional
+    public DiagnosticSession createSession(AlertEvent alert, String problemId) {
+        Objects.requireNonNull(alert, "AlertEvent must not be null");
+        Objects.requireNonNull(problemId, "problemId must not be null");
+
+        String problemCode = mapAlertToProblemCode(alert);
+        Long stationId = alert.getStationId();
+
+        // Pre-processing: Check for existing active session to prevent duplicates
+        if (stationId != null) {
+            List<DiagnosticSession> activeSessions = sessionRepository
+                    .findActiveByStationIdAndProblemCode(stationId, problemCode);
+            if (!activeSessions.isEmpty()) {
+                DiagnosticSession existing = activeSessions.get(0);
+                log.debug("Reusing existing active session {} for station {} problem {}",
+                        existing.getId(), stationId, problemCode);
+                // Update the metrics snapshot with latest values
+                updateMetricsSnapshot(existing, alert);
+                try {
+                    return sessionRepository.save(existing);
+                } catch (Exception e) {
+                    // Concurrent modification - return existing session without saving metrics update
+                    // This is safe because the session ID is still valid for diagnosis
+                    log.debug("Concurrent save conflict for session {}, returning existing: {}",
+                            existing.getId(), e.getMessage());
+                    return existing;
+                }
+            }
+        }
+
+        // Use Optional to safely extract and transform nullable values
+        String category = Optional.ofNullable(alert.getMetricType())
+                .map(this::mapMetricTypeToCategory)
+                .orElse(DEFAULT_CATEGORY);
+
+        String severity = Optional.ofNullable(alert.getSeverity())
+                .map(String::toLowerCase)
+                .orElse(DEFAULT_SEVERITY);
+
+        DiagnosticSession session = new DiagnosticSession(
+                problemId,
+                stationId,
+                alert.getStationName(),
+                category,
+                severity,
+                problemCode,
+                alert.getMessage()
+        );
+
+        // Capture metrics snapshot - use safe key for null metric type
+        updateMetricsSnapshot(session, alert);
+
+        try {
+            DiagnosticSession saved = sessionRepository.save(session);
+            log.info("Created new diagnostic session {} for station {} problem {}",
+                    problemId, stationId, problemCode);
+            return saved;
+        } catch (DuplicateKeyException e) {
+            // Race condition: Another thread created a session for the same station+problemCode
+            // This is caught by the unique partial index on active sessions
+            log.debug("Race condition detected - another thread created session for station {} problem {}",
+                    stationId, problemCode);
+            // Return the existing session created by the other thread
+            if (stationId != null) {
+                List<DiagnosticSession> existing = sessionRepository
+                        .findActiveByStationIdAndProblemCode(stationId, problemCode);
+                if (!existing.isEmpty()) {
+                    return Objects.requireNonNull(existing.get(0));
+                }
+            }
+            // Fallback: try to find by problemId
+            return Objects.requireNonNull(sessionRepository.findByProblemId(problemId).orElse(session));
+        }
+    }
+
+    /**
+     * Updates the metrics snapshot with values from an alert event.
+     * Validates metric values to prevent storing null/invalid data.
+     */
+    private void updateMetricsSnapshot(DiagnosticSession session, AlertEvent alert) {
+        Map<String, Object> metrics = session.getMetricsSnapshot();
+        if (metrics == null) {
+            metrics = new HashMap<>();
+        }
+        String metricKey = Objects.requireNonNullElse(alert.getMetricType(), UNKNOWN_METRIC_KEY);
+
+        // Validate metric value - log warning if null and use placeholder
+        Double metricValue = alert.getMetricValue();
+        if (metricValue == null) {
+            log.warn("Null metric value in alert for station {} (metricType={}, alertRule={}). " +
+                     "Using -1.0 as placeholder.",
+                     alert.getStationId(), alert.getMetricType(), alert.getAlertRuleId());
+            metricValue = -1.0; // Placeholder indicating missing value
+        }
+        metrics.put(metricKey, metricValue);
+
+        // Validate threshold as well
+        Double threshold = alert.getThreshold();
+        if (threshold != null) {
+            metrics.put("threshold", threshold);
+        } else {
+            log.debug("No threshold in alert for station {} (metricType={})",
+                     alert.getStationId(), alert.getMetricType());
+        }
+
+        log.debug("Updated metrics snapshot for session {}: {}={}, threshold={}",
+                 session.getProblemId(), metricKey, metricValue, threshold);
+        session.setMetricsSnapshot(metrics);
+    }
+
+    /**
+     * Records an AI diagnosis for a session.
+     * If confidence is high enough based on risk level, auto-applies the solution.
+     *
+     * Thread-safety: Uses optimistic locking (@Version) to prevent concurrent modifications.
+     * Only processes sessions in DETECTED status to prevent double processing.
+     *
+     * @return the updated session, or empty if session not found or already processed
+     */
+    @Transactional
+    public Optional<DiagnosticSession> recordDiagnosis(String problemId, DiagnosticResponse diagnosis) {
+        Optional<DiagnosticSession> sessionOpt = sessionRepository.findByProblemId(problemId);
+        if (sessionOpt.isEmpty()) {
+            log.warn("No session found for problem ID: {}", problemId);
+            return Objects.requireNonNull(Optional.empty());
+        }
+
+        DiagnosticSession session = sessionOpt.get();
+
+        // Guard: Only process sessions in DETECTED status (prevents double processing)
+        if (session.getStatus() != DiagnosticStatus.DETECTED) {
+            log.debug("Skipping diagnosis for session {} - already in {} status (race condition avoided)",
+                    problemId, session.getStatus());
+            return Objects.requireNonNull(Optional.of(session));
+        }
+
+        AISolution solution = new AISolution(
+                diagnosis.getAction(),
+                diagnosis.getCommands(),
+                diagnosis.getExpectedOutcome(),
+                diagnosis.getRiskLevel(),
+                diagnosis.getConfidence(),
+                diagnosis.getReasoning()
+        );
+
+        // Check for learned pattern adjustments (best-effort — diagnosis proceeds on failure)
+        try {
+            learningPatternService.adjustConfidenceFromPattern(solution, Objects.requireNonNull(session.getProblemCode()));
+        } catch (Exception e) {
+            log.warn("Failed to adjust confidence for {}: {}. Using original confidence.",
+                    session.getProblemCode(), e.getMessage());
+        }
+
+        session.markDiagnosed(solution);
+        log.info("Marked session {} as DIAGNOSED with confidence={}", problemId, solution.getConfidence());
+
+        // Check if solution qualifies for auto-confirmation (no operator approval needed)
+        if (shouldAutoApply(solution)) {
+            session.markApplied();
+            session.setAutoApplied(true);
+            autoResolveSolution(session, solution);
+            log.info("AUTO-APPLIED solution for session {} (confidence={}, risk={})",
+                    session.getId(), solution.getConfidence(), solution.getRiskLevel());
+        }
+
+        try {
+            DiagnosticSession saved = sessionRepository.save(session);
+            log.info("Saved diagnostic session {} with status={}", saved.getProblemId(), saved.getStatus());
+            return Objects.requireNonNull(Optional.of(saved));
+        } catch (OptimisticLockingFailureException e) {
+            // Another thread modified the session - this is expected in concurrent scenarios
+            log.info("Optimistic locking conflict for session {} - another thread processed it first", problemId);
+            // Return the current state from database
+            return sessionRepository.findByProblemId(problemId);
+        }
+    }
+
+    /**
+     * Determines if a solution should be auto-applied based on confidence and risk level.
+     * HIGH risk actions always require operator confirmation.
+     * MEDIUM risk requires 95%+ confidence.
+     * LOW risk requires 90%+ confidence.
+     *
+     * @see DiagnosticConstants for threshold values
+     */
+    private boolean shouldAutoApply(@Nullable AISolution solution) {
+        if (solution == null || solution.getConfidence() == null) {
+            return false;
+        }
+
+        double confidence = solution.getConfidence();
+        String riskLevel = solution.getRiskLevel() != null
+                ? solution.getRiskLevel().toUpperCase()
+                : "MEDIUM";
+
+        // HIGH risk always requires confirmation regardless of confidence
+        if ("HIGH".equals(riskLevel)) {
+            return false;
+        }
+
+        // LOW risk can auto-apply at lower confidence threshold
+        if ("LOW".equals(riskLevel)) {
+            return confidence >= DiagnosticConstants.CONFIDENCE_AUTO_APPLY_LOW_RISK;
+        }
+
+        // MEDIUM (or unknown) risk requires higher confidence
+        return confidence >= DiagnosticConstants.CONFIDENCE_AUTO_APPLY_MEDIUM_RISK;
+    }
+
+    /**
+     * Auto-resolves a solution that was automatically applied.
+     * Creates system feedback indicating automatic resolution.
+     */
+    private void autoResolveSolution(DiagnosticSession session, AISolution solution) {
+        SolutionFeedback feedback = new SolutionFeedback(
+                true, // wasEffective - assumed true for auto-applied high-confidence solutions
+                5,    // rating - auto-applied solutions get max rating initially
+                "Auto-applied due to high confidence (" +
+                        String.format("%.1f%%", solution.getConfidence() * 100) + ")",
+                "Solution auto-applied based on confidence threshold",
+                SYSTEM_ACTOR
+        );
+        session.markResolved(feedback);
+
+        // Update learning pattern with auto-apply success
+        learningPatternService.updateLearningPattern(session, true, 5);
+
+        log.info("Auto-resolved session {} for problem code {}",
+                session.getId(), session.getProblemCode());
+
+        // Publish resolution event to notification service
+        publishResolutionEvent(session, true, SYSTEM_ACTOR);
+    }
+
+    /**
+     * Publishes a resolution event to notify other services (e.g., notification-service)
+     * that a diagnostic session has been resolved.
+     *
+     * @param session the resolved diagnostic session
+     * @param wasEffective whether the solution was effective
+     * @param resolvedBy who resolved the session (username or "system")
+     */
+    private void publishResolutionEvent(DiagnosticSession session, boolean wasEffective, String resolvedBy) {
+        try {
+            DiagnosticResolutionEvent event = wasEffective
+                    ? DiagnosticResolutionEvent.success(
+                            session.getId(),
+                            session.getProblemId(),
+                            session.getStationId(),
+                            session.getProblemCode(),
+                            resolvedBy)
+                    : DiagnosticResolutionEvent.failure(
+                            session.getId(),
+                            session.getProblemId(),
+                            session.getStationId(),
+                            session.getProblemCode(),
+                            resolvedBy);
+
+            rabbitTemplate.convertAndSend(
+                    MessagingConstants.ALERTS_EXCHANGE,
+                    MessagingConstants.DIAGNOSTIC_RESOLVED_ROUTING_KEY,
+                    event);
+
+            log.info("Published resolution event for session {} (effective={}, problemId={})",
+                    session.getId(), wasEffective, session.getProblemId());
+        } catch (Exception e) {
+            // Log but don't fail the main operation - resolution events are non-critical
+            log.warn("Failed to publish resolution event for session {}: {}",
+                    session.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Marks a session as having its solution applied.
+     * @return the updated session, or empty if session not found
+     */
+    @Transactional
+    public Optional<DiagnosticSession> markApplied(String sessionId) {
+        return Objects.requireNonNull(sessionRepository.findById(sessionId)
+                .map(session -> {
+                    session.markApplied();
+                    session.markPendingConfirmation();
+                    return sessionRepository.save(session);
+                }));
+    }
+
+    /**
+     * Submits feedback for a diagnostic session and updates learning patterns.
+     * @return the updated session, or empty if session not found
+     */
+    @Transactional
+    public Optional<DiagnosticSession> submitFeedback(String sessionId, boolean wasEffective,
+                                                       @Nullable Integer rating, @Nullable String operatorNotes,
+                                                       @Nullable String actualOutcome, String confirmedBy) {
+        Optional<DiagnosticSession> sessionOpt = sessionRepository.findById(sessionId);
+        if (sessionOpt.isEmpty()) {
+            log.warn("No session found for ID: {}", sessionId);
+            return Objects.requireNonNull(Optional.empty());
+        }
+
+        DiagnosticSession session = sessionOpt.get();
+        SolutionFeedback feedback = new SolutionFeedback(
+                wasEffective,
+                rating,
+                operatorNotes,
+                actualOutcome,
+                confirmedBy
+        );
+
+        if (wasEffective) {
+            session.markResolved(feedback);
+        } else {
+            session.markFailed(feedback);
+        }
+
+        DiagnosticSession savedSession = sessionRepository.save(session);
+
+        // Update learning patterns
+        learningPatternService.updateLearningPattern(session, wasEffective, rating);
+
+        // Publish resolution event to notification service
+        publishResolutionEvent(session, wasEffective, confirmedBy);
+
+        log.info("Feedback recorded for session {}: effective={}, rating={}",
+                sessionId, wasEffective, rating);
+
+        return Objects.requireNonNull(Optional.of(savedSession));
+    }
+
+    /**
+     * Gets all diagnostic sessions ordered by creation date (most recent first).
+     */
+    @Transactional(readOnly = true)
+    public List<DiagnosticSession> getAllSessions() {
+        return sessionRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    /**
+     * Gets the most recent diagnostic sessions with a limit.
+     * Used for performance optimization on the AI Diagnostics page.
+     *
+     * @param limit maximum number of sessions to return
+     * @return list of recent sessions, ordered by creation date (most recent first)
+     */
+    @Transactional(readOnly = true)
+    public List<DiagnosticSession> getRecentSessions(int limit) {
+        PageRequest pageRequest = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return sessionRepository.findAllBy(pageRequest);
+    }
+
+    /**
+     * Gets diagnostic sessions with full pagination support.
+     *
+     * @param pageable pagination parameters
+     * @return page of sessions with total count for infinite scroll
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<DiagnosticSession> getSessionsPaged(org.springframework.data.domain.Pageable pageable) {
+        return sessionRepository.findBy(pageable);
+    }
+
+    /**
+     * Gets diagnostic sessions filtered by status with pagination support.
+     *
+     * @param status the status to filter by (null for all)
+     * @param pageable pagination parameters
+     * @return page of sessions with total count for infinite scroll
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<DiagnosticSession> getSessionsPagedByStatus(
+            @Nullable DiagnosticStatus status,
+            org.springframework.data.domain.Pageable pageable) {
+        if (status == null) {
+            return sessionRepository.findBy(pageable);
+        }
+        return sessionRepository.findByStatus(status, pageable);
+    }
+
+    /**
+     * Gets all sessions pending confirmation.
+     */
+    @Transactional(readOnly = true)
+    public List<DiagnosticSession> getPendingConfirmation() {
+        return sessionRepository.findPendingConfirmation();
+    }
+
+    /**
+     * Gets all sessions pending confirmation for a station.
+     */
+    @Transactional(readOnly = true)
+    public List<DiagnosticSession> getPendingConfirmationForStation(Long stationId) {
+        return sessionRepository.findByStationIdAndStatusOrderByCreatedAtDesc(
+                stationId, DiagnosticStatus.PENDING_CONFIRMATION);
+    }
+
+    /**
+     * Marks a session as failed due to a diagnosis error (e.g., AI service unavailable).
+     * This prevents sessions from being stuck in DETECTED status forever.
+     *
+     * @param problemId the problem identifier
+     * @param reason the failure reason
+     * @return the updated session, or empty if not found
+     */
+    @Transactional
+    public Optional<DiagnosticSession> markSessionError(String problemId, String reason) {
+        Optional<DiagnosticSession> sessionOpt = sessionRepository.findByProblemId(problemId);
+        if (sessionOpt.isEmpty()) {
+            log.warn("Cannot mark session error - no session found for problem ID: {}", problemId);
+            return Optional.empty();
+        }
+
+        DiagnosticSession session = sessionOpt.get();
+
+        // Only mark as failed if still in DETECTED status (not yet processed)
+        if (session.getStatus() != DiagnosticStatus.DETECTED) {
+            log.debug("Skipping error marking for session {} - already in {} status",
+                    problemId, session.getStatus());
+            return Optional.of(session);
+        }
+
+        // Create a failed feedback entry with the error reason
+        SolutionFeedback errorFeedback = new SolutionFeedback(
+                false,  // wasEffective
+                0,      // rating
+                reason, // operatorNotes
+                "Diagnosis service error", // actualOutcome
+                "SYSTEM" // confirmedBy
+        );
+
+        session.markFailed(errorFeedback);
+        DiagnosticSession saved = sessionRepository.save(session);
+
+        log.info("Marked session {} as FAILED due to diagnosis error: {}", problemId, reason);
+        return Optional.of(saved);
+    }
+
+    /**
+     * Gets a session by ID.
+     */
+    @Transactional(readOnly = true)
+    public Optional<DiagnosticSession> getSession(String sessionId) {
+        return sessionRepository.findById(sessionId);
+    }
+
+    /**
+     * Gets a session by problem ID.
+     */
+    @Transactional(readOnly = true)
+    public Optional<DiagnosticSession> getSessionByProblemId(String problemId) {
+        return sessionRepository.findByProblemId(problemId);
+    }
+
+    /**
+     * Gets all sessions for a station.
+     */
+    @Transactional(readOnly = true)
+    public List<DiagnosticSession> getSessionsForStation(Long stationId) {
+        return sessionRepository.findByStationIdOrderByCreatedAtDesc(stationId);
+    }
+
+    /**
+     * Gets sessions by status.
+     */
+    @Transactional(readOnly = true)
+    public List<DiagnosticSession> getSessionsByStatus(DiagnosticStatus status) {
+        return sessionRepository.findByStatusOrderByCreatedAtDesc(status);
+    }
+
+    /**
+     * Gets learning statistics.
+     * @see LearningPatternService#getLearningStats()
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getLearningStats() {
+        return learningPatternService.getLearningStats();
+    }
+
+    /**
+     * Gets the learned pattern for a problem code.
+     * @see LearningPatternService#getLearnedPattern(String)
+     */
+    @Transactional(readOnly = true)
+    public Optional<LearnedPattern> getLearnedPattern(String problemCode) {
+        return learningPatternService.getLearnedPattern(problemCode);
+    }
+
+    /**
+     * Gets all learned patterns.
+     * @see LearningPatternService#getAllPatterns()
+     */
+    @Transactional(readOnly = true)
+    public List<LearnedPattern> getAllPatterns() {
+        return learningPatternService.getAllPatterns();
+    }
+
+    /**
+     * Maps metric type to problem category.
+     * Contract: metricType is guaranteed non-null by caller (using Optional).
+     */
+    private String mapMetricTypeToCategory(String metricType) {
+        // Caller guarantees non-null via Optional.map() - no defensive check needed
+        return switch (metricType.toUpperCase()) {
+            case "CPU_USAGE", "MEMORY_USAGE", "FAN_SPEED" -> "hardware";
+            case "TEMPERATURE", "POWER_CONSUMPTION" -> "power";
+            case "SIGNAL_STRENGTH", "DATA_THROUGHPUT", "CONNECTION_COUNT" -> "network";
+            default -> "software";
+        };
+    }
+
+    private static final String UNKNOWN_PROBLEM_CODE = "UNKNOWN";
+
+    /**
+     * Maps alert to a problem code that matches AI diagnostic service codes.
+     * Returns empty collections pattern: always returns a valid code, never null.
+     */
+    private String mapAlertToProblemCode(AlertEvent alert) {
+        return Objects.requireNonNull(Optional.ofNullable(alert.getMetricType())
+                .map(String::toUpperCase)
+                .map(this::metricTypeToProblemCode)
+                .orElse(UNKNOWN_PROBLEM_CODE));
+    }
+
+    /**
+     * Maps a metric type to its corresponding problem code.
+     * Contract: metricType is guaranteed non-null and uppercase by caller.
+     */
+    private String metricTypeToProblemCode(String metricType) {
+        return switch (metricType) {
+            case "CPU_USAGE", "TEMPERATURE" -> "CPU_OVERHEAT";
+            case "MEMORY_USAGE" -> "MEMORY_PRESSURE";
+            case "SIGNAL_STRENGTH" -> "SIGNAL_DEGRADATION";
+            case "POWER_CONSUMPTION" -> "HIGH_POWER_CONSUMPTION";
+            case "INITIAL_BLER" -> "HIGH_BLOCK_ERROR_RATE";
+            case "BATTERY_SOC" -> "LOW_BATTERY";
+            case "LATENCY_PING" -> "HIGH_LATENCY";
+            case "DATA_THROUGHPUT" -> "LOW_THROUGHPUT";
+            case "HANDOVER_SUCCESS_RATE" -> "HANDOVER_FAILURE";
+            case "INTERFERENCE_LEVEL" -> "HIGH_INTERFERENCE";
+            default -> metricType + "_ISSUE";
+        };
+    }
+
+    // ========================================
+    // Stale Session Cleanup
+    // ========================================
+
+    /** Sessions stuck in DETECTED for longer than this are considered stale. */
+    private static final long STALE_SESSION_THRESHOLD_MINUTES = 2;
+
+    /**
+     * Scheduled task to clean up stale diagnostic sessions.
+     * Runs every 30 seconds to find sessions stuck in DETECTED status and marks them as FAILED.
+     * This prevents sessions from being stuck indefinitely due to AI service failures.
+     */
+    @Scheduled(fixedRate = 30_000) // Run every 30 seconds for faster cleanup
+    @Transactional
+    public void cleanupStaleSessions() {
+        LocalDateTime threshold = LocalDateTime.now().minusMinutes(STALE_SESSION_THRESHOLD_MINUTES);
+
+        List<DiagnosticSession> staleSessions = sessionRepository
+                .findByStatusOrderByCreatedAtDesc(DiagnosticStatus.DETECTED)
+                .stream()
+                .filter(session -> {
+                    LocalDateTime createdAt = session.getCreatedAt();
+                    return createdAt != null && createdAt.isBefore(threshold);
+                })
+                .toList();
+
+        if (staleSessions.isEmpty()) {
+            return;
+        }
+
+        log.info("Found {} stale diagnostic sessions (stuck in DETECTED for >{}min), marking as FAILED",
+                staleSessions.size(), STALE_SESSION_THRESHOLD_MINUTES);
+
+        for (DiagnosticSession session : staleSessions) {
+            try {
+                SolutionFeedback errorFeedback = new SolutionFeedback(
+                        false,  // wasEffective
+                        0,      // rating
+                        "Session timed out - stuck in DETECTED status", // operatorNotes
+                        "AI diagnosis did not complete within timeout", // actualOutcome
+                        "SYSTEM_CLEANUP" // confirmedBy
+                );
+                session.markFailed(errorFeedback);
+                sessionRepository.save(session);
+                log.debug("Marked stale session {} as FAILED (created at {})",
+                        session.getProblemId(), session.getCreatedAt());
+            } catch (Exception e) {
+                log.warn("Failed to mark stale session {} as FAILED: {}",
+                        session.getProblemId(), e.getMessage());
+            }
+        }
+
+        log.info("Cleaned up {} stale diagnostic sessions", staleSessions.size());
+    }
+}

@@ -1,0 +1,24 @@
+package io.github.erselseyit.basestation.notification.model;
+
+/**
+ * Status of a notification.
+ * <p>
+ * Lifecycle: UNREAD -> READ (user action) or UNREAD -> SENT (if delivery required)
+ * or UNREAD -> RESOLVED (if AI diagnostics resolves the issue)
+ * </p>
+ */
+public enum NotificationStatus {
+    /** Notification created but not yet viewed by user */
+    UNREAD,
+    /** User has viewed/acknowledged the notification */
+    READ,
+    /** Notification pending delivery (email, SMS, etc.) */
+    PENDING,
+    /** Notification successfully delivered */
+    SENT,
+    /** Notification delivery failed */
+    FAILED,
+    /** Alert was resolved by AI diagnostics or manual intervention */
+    RESOLVED
+}
+

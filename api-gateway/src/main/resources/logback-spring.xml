@@ -40,7 +40,7 @@
             <appender-ref ref="CONSOLE"/>
         </root>
         
-        <logger name="com.huawei.gateway" level="DEBUG"/>
+        <logger name="io.github.erselseyit.basestation.gateway" level="DEBUG"/>
         <logger name="org.springframework.cloud.gateway" level="DEBUG"/>
         <logger name="org.springframework.cloud.gateway.filter.ratelimit" level="DEBUG"/>
     </springProfile>
@@ -62,7 +62,7 @@
         </root>
         
         <!-- Gateway routing: INFO for request flow -->
-        <logger name="com.huawei.gateway" level="INFO"/>
+        <logger name="io.github.erselseyit.basestation.gateway" level="INFO"/>
         <logger name="org.springframework.cloud.gateway" level="INFO"/>
         
         <!-- Rate limiting: INFO for throttle events -->

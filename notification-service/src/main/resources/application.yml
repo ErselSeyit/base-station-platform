@@ -51,7 +51,7 @@ management:
 logging:
   level:
     root: INFO
-    com.huawei.notification: INFO
+    io.github.erselseyit.basestation.notification: INFO
 
 # Notification executor configuration (single source of truth)
 notification:
