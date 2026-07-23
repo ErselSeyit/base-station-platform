@@ -855,7 +855,15 @@ static void handle_client(int client_fd)
             if (n <= 0) break;
 
             devproto_message_t msgs[4];
-            int count = devproto_frame_parse(&parser, rx_buf, (size_t)n, msgs, 4);
+            /* Payloads are copied into this pool so that every message stays
+             * valid: devproto_frame_parse() would hand back pointers into the
+             * parser's buffer, and all but the last would already have been
+             * overwritten by the following frame. One read cannot yield more
+             * payload bytes than it read. */
+            uint8_t payload_pool[sizeof(rx_buf)];
+            int count = devproto_frame_parse_into(&parser, rx_buf, (size_t)n,
+                                                  msgs, 4,
+                                                  payload_pool, sizeof(payload_pool));
             for (int i = 0; i < count; i++)
                 handle_message(client_fd, &msgs[i]);
             devproto_frame_parser_reset(&parser);

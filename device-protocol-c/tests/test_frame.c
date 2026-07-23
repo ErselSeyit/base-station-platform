@@ -355,6 +355,102 @@ void test_frame_build(void)
     PASS();
 }
 
+/**
+ * Two payload-bearing frames in a single parse call must both survive.
+ *
+ * devproto_frame_get_message hands back a pointer into the parser's own
+ * buffer. When one parse call completes more than one frame, the parser
+ * keeps writing into that buffer, so every message but the last aliases
+ * data that has already been overwritten.
+ */
+static void test_parse_multiple_frames_with_payloads(void)
+{
+    TEST("multiple frames with payloads keep their own data");
+
+    devproto_frame_parser_t parser;
+    devproto_frame_parser_init(&parser);
+
+    const uint8_t payload1[] = {0x11, 0x22, 0x33, 0x44};
+    const uint8_t payload2[] = {0xAA, 0xBB, 0xCC, 0xDD};
+
+    uint8_t frame1[16], frame2[16];
+    int len1 = build_test_frame(frame1, sizeof(frame1),
+                                DEVPROTO_MSG_METRICS_RESPONSE, 0x01, payload1, sizeof(payload1));
+    int len2 = build_test_frame(frame2, sizeof(frame2),
+                                DEVPROTO_MSG_METRICS_RESPONSE, 0x02, payload2, sizeof(payload2));
+    if (len1 < 0 || len2 < 0) {
+        FAIL("could not build test frames");
+        return;
+    }
+
+    uint8_t combined[64];
+    memcpy(combined, frame1, (size_t)len1);
+    memcpy(combined + len1, frame2, (size_t)len2);
+
+    devproto_message_t msgs[4];
+    uint8_t pool[64];
+    int count = devproto_frame_parse_into(&parser, combined, (size_t)(len1 + len2),
+                                          msgs, 4, pool, sizeof(pool));
+
+    if (count != 2) {
+        printf("(got %d) ", count);
+        FAIL("expected 2 messages");
+        return;
+    }
+    if (msgs[0].payload == NULL || msgs[1].payload == NULL) {
+        FAIL("payload pointer was NULL");
+        return;
+    }
+    if (msgs[0].payload == msgs[1].payload) {
+        FAIL("both messages alias the same payload storage");
+        return;
+    }
+    if (memcmp(msgs[0].payload, payload1, sizeof(payload1)) != 0) {
+        FAIL("first message payload was overwritten by the second frame");
+        return;
+    }
+    if (memcmp(msgs[1].payload, payload2, sizeof(payload2)) != 0) {
+        FAIL("second message payload is wrong");
+        return;
+    }
+
+    PASS();
+}
+
+/**
+ * A pool too small to hold every payload must fail loudly rather than
+ * silently truncating or writing past the end.
+ */
+static void test_parse_into_rejects_undersized_pool(void)
+{
+    TEST("undersized payload pool is rejected");
+
+    devproto_frame_parser_t parser;
+    devproto_frame_parser_init(&parser);
+
+    const uint8_t payload[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+    uint8_t frame[24];
+    int len = build_test_frame(frame, sizeof(frame),
+                               DEVPROTO_MSG_METRICS_RESPONSE, 0x01, payload, sizeof(payload));
+    if (len < 0) {
+        FAIL("could not build test frame");
+        return;
+    }
+
+    devproto_message_t msgs[2];
+    uint8_t pool[4]; /* deliberately smaller than the payload */
+    int count = devproto_frame_parse_into(&parser, frame, (size_t)len,
+                                          msgs, 2, pool, sizeof(pool));
+
+    if (count != 0) {
+        printf("(got %d) ", count);
+        FAIL("expected the message to be dropped, not truncated");
+        return;
+    }
+
+    PASS();
+}
+
 int main(void)
 {
     printf("=== Frame Parser Unit Tests ===\n");
@@ -367,6 +463,8 @@ int main(void)
     test_crc_error();
     test_sync_recovery();
     test_multiple_frames();
+    test_parse_multiple_frames_with_payloads();
+    test_parse_into_rejects_undersized_pool();
     test_frame_build();
 
     printf("\n");

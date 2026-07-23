@@ -92,6 +92,13 @@ void devproto_frame_parser_reset(devproto_frame_parser_t *parser);
  * Note: Caller is responsible for freeing payload buffers in out_messages
  * if they were dynamically allocated.
  */
+/*
+ * WARNING: the payloads reported by this function point into the parser's own
+ * frame buffer, which is overwritten as soon as the next frame starts. If more
+ * than one payload-bearing message is returned by a single call, only the last
+ * one holds valid data. Use devproto_frame_parse_into() whenever max_messages
+ * is greater than 1 or payloads must outlive the call.
+ */
 int devproto_frame_parse(devproto_frame_parser_t *parser,
                          const uint8_t *data, size_t len,
                          devproto_message_t *out_messages,
@@ -111,6 +118,34 @@ int devproto_frame_parse_byte(devproto_frame_parser_t *parser, uint8_t byte);
  * @param msg     Output message structure
  * @return        0 on success, -1 if no complete message
  */
+/**
+ * Parse a buffer, copying each payload into a caller-owned pool.
+ *
+ * devproto_frame_parse() reports payloads as pointers into the parser's own
+ * frame buffer, which the parser overwrites as soon as it starts the next
+ * frame. That is only safe while at most one completed message is live, so
+ * this variant copies each payload into @p payload_pool instead and the
+ * returned messages stay valid independently of the parser.
+ *
+ * A message whose payload does not fit in the remaining pool space is
+ * dropped rather than truncated.
+ *
+ * @param parser        Parser context
+ * @param data          Bytes to parse
+ * @param len           Number of bytes
+ * @param out_messages  Caller array to fill
+ * @param max_messages  Capacity of out_messages
+ * @param payload_pool  Caller-owned storage for payloads (may be NULL only
+ *                      if pool_size is 0)
+ * @param pool_size     Size of payload_pool in bytes
+ * @return number of messages written, or a negative devproto_frame_error_t
+ */
+int devproto_frame_parse_into(devproto_frame_parser_t *parser,
+                              const uint8_t *data, size_t len,
+                              devproto_message_t *out_messages,
+                              size_t max_messages,
+                              uint8_t *payload_pool, size_t pool_size);
+
 int devproto_frame_get_message(devproto_frame_parser_t *parser,
                                devproto_message_t *msg);
 

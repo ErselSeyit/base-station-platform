@@ -13,6 +13,15 @@ CFLAGS = $(CSTD) -Wall -Wextra -Werror -O2 -fPIC
 CFLAGS += -I$(CURDIR)/include
 CFLAGS += -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L
 
+# Hardening. This library parses untrusted bytes off the wire, so the
+# mitigations are worth their small cost.
+#   -fstack-protector-strong  stack canaries (Seacord, ch. 2 and 6)
+#   -Wformat-security         reject non-literal format strings
+#   _FORTIFY_SOURCE           compile-time/runtime bounds checks on mem*/str*
+#                             functions; requires optimization, so it is added
+#                             only to the optimized build below.
+CFLAGS += -fstack-protector-strong -Wformat -Wformat-security
+
 # MIPS-specific flags (applied when cross-compiling)
 ifneq ($(findstring mips,$(CROSS_COMPILE)),)
     MIPS_FLAGS = -march=mips32r2 -mtune=mips32r2 -mabi=32
@@ -22,9 +31,11 @@ endif
 # Debug build
 DEBUG ?= 0
 ifeq ($(DEBUG),1)
+    # _FORTIFY_SOURCE is deliberately omitted: it warns without optimization,
+    # and -Werror would turn that warning into a build failure.
     CFLAGS += -g -O0 -DDEBUG
 else
-    CFLAGS += -DNDEBUG
+    CFLAGS += -DNDEBUG -D_FORTIFY_SOURCE=2
 endif
 
 # TLS support (requires mbedTLS)

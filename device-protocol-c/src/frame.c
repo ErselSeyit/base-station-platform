@@ -211,15 +211,61 @@ int devproto_frame_parse(devproto_frame_parser_t *parser,
         int result = devproto_frame_parse_byte(parser, data[i]);
 
         if (result == 1) {
-            /* Frame complete */
+            /* Frame complete. The payload reported here points into the
+             * parser's own buffer, which the next frame overwrites, so only
+             * one payload-bearing message may be live at a time. Callers
+             * needing more should use devproto_frame_parse_into(). */
             if (devproto_frame_get_message(parser, &out_messages[msg_count]) == 0) {
-                /* Copy payload to separate buffer so parser can be reset */
-                if (out_messages[msg_count].payload_len > 0) {
-                    /* Note: In production, you'd allocate and copy here.
-                     * For simplicity, we just point to parser buffer.
-                     * Caller must use before next parse. */
-                }
                 msg_count++;
+            }
+            devproto_frame_parser_reset(parser);
+        } else if (result < 0) {
+            /* Error - parser already reset, continue scanning */
+        }
+    }
+
+    return (int)msg_count;
+}
+
+int devproto_frame_parse_into(devproto_frame_parser_t *parser,
+                              const uint8_t *data, size_t len,
+                              devproto_message_t *out_messages,
+                              size_t max_messages,
+                              uint8_t *payload_pool, size_t pool_size)
+{
+    if (!parser || !data || !out_messages || max_messages == 0) {
+        return DEVPROTO_FRAME_ERR_INVALID;
+    }
+    if (pool_size > 0 && !payload_pool) {
+        return DEVPROTO_FRAME_ERR_INVALID;
+    }
+
+    if (max_messages > (size_t)INT32_MAX) {
+        max_messages = (size_t)INT32_MAX;
+    }
+
+    size_t msg_count = 0;
+    size_t pool_used = 0;
+
+    for (size_t i = 0; i < len && msg_count < max_messages; i++) {
+        int result = devproto_frame_parse_byte(parser, data[i]);
+
+        if (result == 1) {
+            devproto_message_t msg;
+            if (devproto_frame_get_message(parser, &msg) == 0) {
+                if (msg.payload_len == 0) {
+                    msg.payload = NULL;
+                    out_messages[msg_count++] = msg;
+                } else if (msg.payload_len <= pool_size - pool_used) {
+                    /* pool_size - pool_used cannot underflow: pool_used only
+                     * ever grows by an amount that passed this same test. */
+                    uint8_t *slot = payload_pool + pool_used;
+                    memcpy(slot, msg.payload, msg.payload_len);
+                    pool_used += msg.payload_len;
+                    msg.payload = slot;
+                    out_messages[msg_count++] = msg;
+                }
+                /* else: no room left; drop rather than truncate */
             }
             devproto_frame_parser_reset(parser);
         } else if (result < 0) {
