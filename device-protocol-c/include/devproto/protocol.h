@@ -28,7 +28,7 @@ extern "C" {
 #define DEVPROTO_HEADER_BYTE0       0xAA
 #define DEVPROTO_HEADER_BYTE1       0x55
 #define DEVPROTO_HEADER_MAGIC       0xAA55
-#define DEVPROTO_VERSION            0x01
+#define DEVPROTO_VERSION            0x02
 #define DEVPROTO_MAX_PAYLOAD_SIZE   4096
 #define DEVPROTO_HEADER_SIZE        6       /* header(2) + length(2) + type(1) + seq(1) */
 #define DEVPROTO_CRC_SIZE           2

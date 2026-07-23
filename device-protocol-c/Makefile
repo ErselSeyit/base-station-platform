@@ -70,7 +70,8 @@ LIB_SHARED = $(BUILD_DIR)/libdevproto.so
 
 # Test sources
 TEST_SRCS = $(TEST_DIR)/test_crc16.c \
-            $(TEST_DIR)/test_frame.c
+            $(TEST_DIR)/test_frame.c \
+            $(TEST_DIR)/test_metrics.c
 
 TEST_BINS = $(TEST_SRCS:$(TEST_DIR)/%.c=$(BUILD_DIR)/%)
 
