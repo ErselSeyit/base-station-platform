@@ -383,8 +383,22 @@ export const CATEGORY_CONFIG = {
 /**
  * Get metric config by type. Returns undefined if not found.
  */
+/**
+ * Reconstructs the band-suffixed display key from a band-neutral metric type
+ * and its band. The API now sends (metricType, band) — e.g. DL_THROUGHPUT +
+ * N78 — while the display config and 5G groupings are keyed by the historical
+ * names (DL_THROUGHPUT_NR3500). N78 maps to NR3500, N28 to NR700.
+ */
+export function metricDisplayKey(metricType: string, band?: string): string {
+  if (band === 'N78') return `${metricType}_NR3500`
+  if (band === 'N28') return `${metricType}_NR700`
+  return metricType
+}
+
 export function getMetricConfig(metricType: string): MetricConfig | undefined {
-  return METRICS_CONFIG[metricType]
+  // Band-neutral NR types (DL_THROUGHPUT, RSRP, ...) fall back to the n78
+  // variant's config for display, so a reading with no band still resolves.
+  return METRICS_CONFIG[metricType] ?? METRICS_CONFIG[`${metricType}_NR3500`]
 }
 
 /**
@@ -436,22 +450,19 @@ export function getSSVMetrics(): Record<string, MetricConfig> {
  * Evaluate a metric value and return its health status.
  */
 export function evaluateMetric(metricType: string, value: number): HealthStatus | undefined {
-  const config = METRICS_CONFIG[metricType]
-  return config?.getStatus(value)
+  return getMetricConfig(metricType)?.getStatus(value)
 }
 
 /**
  * Evaluate a metric value and return its metric status (pass/warn/fail).
  */
 export function evaluateMetricStatus(metricType: string, value: number): MetricStatus | undefined {
-  const config = METRICS_CONFIG[metricType]
-  return config?.getMetricStatus(value)
+  return getMetricConfig(metricType)?.getMetricStatus(value)
 }
 
 /**
  * Format a metric value according to its configuration.
  */
 export function formatMetricValue(metricType: string, value: number): string {
-  const config = METRICS_CONFIG[metricType]
-  return config?.format(value) ?? value.toString()
+  return getMetricConfig(metricType)?.format(value) ?? value.toString()
 }
