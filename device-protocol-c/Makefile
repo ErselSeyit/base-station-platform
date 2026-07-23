@@ -122,7 +122,7 @@ test: host $(TEST_BINS)
 	@echo "Running tests..."
 	@for test in $(TEST_BINS); do \
 		echo "=== Running $$test ==="; \
-		./$$test || exit 1; \
+		LD_LIBRARY_PATH=$(BUILD_DIR) ./$$test || exit 1; \
 	done
 	@echo "All tests passed!"
 

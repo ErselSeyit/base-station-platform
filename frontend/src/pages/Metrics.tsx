@@ -486,7 +486,7 @@ export default function Metrics() {
         }
         return point
       })
-  }, [dailyAggregates, days, dateFormat])
+  }, [dailyAggregates, dateFormat]) // days is covered by dateFormat and the query key
 
   if (isLoadingHistorical) {
     return <LoadingSpinner />

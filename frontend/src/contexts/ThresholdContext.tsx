@@ -16,6 +16,10 @@
  *   const { thresholds, isLoading, refresh } = useThresholds()
  *   const cpuWarning = thresholds.equipment.cpu?.warning ?? 85
  */
+// The consumer hooks (useThresholds, useThresholdValue) are co-located with
+// the provider by design — that is the standard React context pattern. This
+// only affects dev fast-refresh, not the build, so the rule is disabled here.
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react'
 import { thresholdsApi, AllThresholds, DEFAULT_THRESHOLDS } from '../services/api/thresholds'
 import { logger } from '../services/logger'
