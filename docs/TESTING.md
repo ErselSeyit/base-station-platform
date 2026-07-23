@@ -1,11 +1,21 @@
 # Testing Guide
 
-## Coverage
+## Test Suites
 
-| Area | Coverage | Test Count |
-|------|----------|------------|
-| Backend Services | 100% | 50 test classes |
-| Frontend | ~87% | 345 tests (326 unit + 19 E2E) |
+| Area | Framework | Count |
+| ---- | --------- | ----- |
+| Backend (Java) | JUnit 5 + Mockito + Testcontainers | 56 test classes, 881 tests |
+| Frontend | Vitest + React Testing Library | 315 unit tests (14 files) |
+| Frontend E2E | Playwright | 19 cases (5 specs) |
+| Edge bridge (Go) | `go test` | 6 packages under test |
+| Device protocol (C) | custom harness | 16 tests (`make -C device-protocol-c test`) |
+
+Coverage is tracked as an indicator, not a gate. Following Khorikov's
+*Unit Testing* (ch. 1), we do not target a fixed coverage percentage:
+an assertion-free test can hit 100% and verify nothing. The Go `config`
+package sits at ~94% because it is pure validation logic worth covering
+closely; hardware-facing adapters are deliberately lower and belong in
+integration tests against a real device.
 
 ## Test Types
 
@@ -15,9 +25,29 @@
 - **Contract tests**: Spring Cloud Contract
 - **Resilience tests**: WireMock + Circuit Breakers
 
+Integration tests need Docker: they start real PostgreSQL, MongoDB and
+RabbitMQ containers. From a clean checkout, bring the datastores up first
+(`docker compose up -d postgres mongodb redis rabbitmq`) or run in Demo
+Mode (below).
+
 ### Frontend
 - **Unit tests**: Vitest + React Testing Library
 - **E2E tests**: Playwright
+
+### Edge bridge (Go)
+
+```bash
+cd edge-bridge
+go test ./...        # unit tests
+go test -race ./...  # with the race detector
+go vet ./...
+```
+
+### Device protocol (C)
+
+```bash
+make -C device-protocol-c test   # release build, hardened flags
+```
 
 ## Running Tests
 
