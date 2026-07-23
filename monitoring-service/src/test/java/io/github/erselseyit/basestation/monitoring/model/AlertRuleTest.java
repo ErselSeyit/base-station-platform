@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AlertRuleTest {
 
@@ -49,6 +50,43 @@ class AlertRuleTest {
                     .contains("CPU_USAGE")
                     .contains("GREATER_THAN")
                     .contains("90.0");
+        }
+    }
+
+    @Nested
+    class RequiredFields {
+
+        // Effective Java item 49: enforce restrictions at construction, so a
+        // malformed rule fails immediately rather than throwing a
+        // NullPointerException later inside alert evaluation, where the
+        // operator/threshold are unboxed on a background path.
+
+        @Test
+        void rejectsAMissingThreshold() {
+            assertThatThrownBy(() -> cpuRule().threshold(null).build())
+                    .isInstanceOf(NullPointerException.class)
+                    .hasMessageContaining("threshold");
+        }
+
+        @Test
+        void rejectsAMissingOperator() {
+            assertThatThrownBy(() -> cpuRule().operator(null).build())
+                    .isInstanceOf(NullPointerException.class)
+                    .hasMessageContaining("operator");
+        }
+
+        @Test
+        void rejectsAMissingMetricType() {
+            assertThatThrownBy(() -> cpuRule().metricType(null).build())
+                    .isInstanceOf(NullPointerException.class)
+                    .hasMessageContaining("metricType");
+        }
+
+        @Test
+        void withThresholdRejectsNull() {
+            assertThatThrownBy(() -> cpuRule().build().withThreshold(null))
+                    .isInstanceOf(NullPointerException.class)
+                    .hasMessageContaining("threshold");
         }
     }
 

@@ -31,11 +31,15 @@ public final class AlertRule {
     }
 
     private AlertRule(Builder builder) {
+        // Enforced here rather than left to fail later: evaluateRule unboxes
+        // the threshold and switches on the operator on a background alerting
+        // path, where a NullPointerException would surface far from its cause
+        // (Effective Java item 49).
+        this.metricType = Objects.requireNonNull(builder.metricType, "metricType must not be null");
+        this.operator = Objects.requireNonNull(builder.operator, "operator must not be null");
+        this.threshold = Objects.requireNonNull(builder.threshold, "threshold must not be null");
         this.id = builder.id;
         this.name = builder.name;
-        this.metricType = builder.metricType;
-        this.operator = builder.operator;
-        this.threshold = builder.threshold;
         this.severity = builder.severity;
         this.message = builder.message;
         this.enabled = builder.enabled;
