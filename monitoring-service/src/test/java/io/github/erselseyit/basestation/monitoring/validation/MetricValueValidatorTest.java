@@ -145,13 +145,13 @@ class MetricValueValidatorTest {
 
         @Test
         void acceptsNonNegativeThroughput() {
-            assertThat(validate(MetricType.DL_THROUGHPUT_NR700, 0)).isTrue();
-            assertThat(validate(MetricType.DL_THROUGHPUT_NR700, 850.5)).isTrue();
+            assertThat(validate(MetricType.DL_THROUGHPUT, 0)).isTrue();
+            assertThat(validate(MetricType.DL_THROUGHPUT, 850.5)).isTrue();
         }
 
         @Test
         void rejectsNegativeThroughput() {
-            assertThat(validate(MetricType.DL_THROUGHPUT_NR700, -1)).isFalse();
+            assertThat(validate(MetricType.DL_THROUGHPUT, -1)).isFalse();
         }
     }
 

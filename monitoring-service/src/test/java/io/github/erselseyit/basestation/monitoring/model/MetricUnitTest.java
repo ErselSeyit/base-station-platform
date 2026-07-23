@@ -41,8 +41,8 @@ class MetricUnitTest {
         void representativeUnitsAreUnchanged() {
             assertThat(MetricType.CPU_USAGE.getUnit()).isEqualTo(MetricUnit.PERCENTAGE);
             assertThat(MetricType.TEMPERATURE.getUnit()).isEqualTo(MetricUnit.CELSIUS);
-            assertThat(MetricType.RSRP_NR700.getUnit()).isEqualTo(MetricUnit.DBM);
-            assertThat(MetricType.SINR_NR3500.getUnit()).isEqualTo(MetricUnit.DB);
+            assertThat(MetricType.RSRP.getUnit()).isEqualTo(MetricUnit.DBM);
+            assertThat(MetricType.SINR.getUnit()).isEqualTo(MetricUnit.DB);
             assertThat(MetricType.SITE_POWER_KWH.getUnit()).isEqualTo(MetricUnit.KWH);
         }
     }

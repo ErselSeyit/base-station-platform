@@ -37,9 +37,8 @@ class MetricTypeThreeGppTest {
 
         @Test
         void radioThroughputMapsToTheDrbUeThroughputCounters() {
-            assertThat(MetricType.DL_THROUGHPUT_NR700.threeGppCounter()).contains("DRB.UEThpDl");
-            assertThat(MetricType.UL_THROUGHPUT_NR700.threeGppCounter()).contains("DRB.UEThpUl");
-            assertThat(MetricType.DL_THROUGHPUT_NR3500.threeGppCounter()).contains("DRB.UEThpDl");
+            assertThat(MetricType.DL_THROUGHPUT.threeGppCounter()).contains("DRB.UEThpDl");
+            assertThat(MetricType.UL_THROUGHPUT.threeGppCounter()).contains("DRB.UEThpUl");
         }
 
         @Test

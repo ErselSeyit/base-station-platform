@@ -19,6 +19,8 @@ public class MetricData {
     private Long stationId;
     private String stationName;
     private MetricType metricType;
+    /** NR band for radio metrics; NONE for metrics with no band. */
+    private Band band = Band.NONE;
     private Double value;
     private String unit;
     @Indexed(name = "idx_ttl_cleanup", expireAfter = "90d") // 90-day retention
@@ -68,6 +70,14 @@ public class MetricData {
 
     public void setMetricType(MetricType metricType) {
         this.metricType = metricType;
+    }
+
+    public Band getBand() {
+        return band;
+    }
+
+    public void setBand(Band band) {
+        this.band = band == null ? Band.NONE : band;
     }
 
     public Double getValue() {
@@ -131,8 +141,8 @@ public class MetricData {
             case TEMPERATURE -> this.value > 85.0 || this.value < 0;  // Outside 0-85°C
             case POWER_CONSUMPTION -> this.value < 0;                  // Negative power invalid
             case SIGNAL_STRENGTH -> this.value < -110.0;              // Below -110 dBm is poor
-            case RSRP_NR700, RSRP_NR3500 -> this.value < -120.0;      // Poor RSRP
-            case SINR_NR700, SINR_NR3500 -> this.value < 0.0;         // Negative SINR is poor
+            case RSRP -> this.value < -120.0;                          // Poor RSRP
+            case SINR -> this.value < 0.0;                             // Negative SINR is poor
             case INITIAL_BLER -> this.value > 10.0;                   // > 10% BLER is high
             case HANDOVER_SUCCESS_RATE -> this.value < 95.0;          // < 95% success rate
             case VSWR -> this.value > 2.0;                            // VSWR > 2:1 indicates issues
@@ -155,7 +165,7 @@ public class MetricData {
             case CPU_USAGE, MEMORY_USAGE -> this.value > 98.0;        // Near 100%
             case TEMPERATURE -> this.value > 95.0;                     // Overheating
             case SIGNAL_STRENGTH -> this.value < -120.0;              // Very poor signal
-            case RSRP_NR700, RSRP_NR3500 -> this.value < -130.0;      // Very poor RSRP
+            case RSRP -> this.value < -130.0;                          // Very poor RSRP
             case INITIAL_BLER -> this.value > 30.0;                   // Very high BLER
             case HANDOVER_SUCCESS_RATE -> this.value < 80.0;          // High handover failures
             case VSWR -> this.value > 3.0;                            // High VSWR indicates damage
@@ -187,8 +197,7 @@ public class MetricData {
             return false;
         }
         return switch (this.metricType) {
-            case DATA_THROUGHPUT, DL_THROUGHPUT_NR700, UL_THROUGHPUT_NR700,
-                 DL_THROUGHPUT_NR3500, UL_THROUGHPUT_NR3500,
+            case DATA_THROUGHPUT, DL_THROUGHPUT, UL_THROUGHPUT,
                  PDCP_THROUGHPUT, RLC_THROUGHPUT,
                  CA_DL_THROUGHPUT, CA_UL_THROUGHPUT -> true;
             default -> false;
@@ -205,8 +214,7 @@ public class MetricData {
             return false;
         }
         return switch (this.metricType) {
-            case SIGNAL_STRENGTH, RSRP_NR700, RSRP_NR3500,
-                 SINR_NR700, SINR_NR3500, TX_IMBALANCE,
+            case SIGNAL_STRENGTH, RSRP, SINR, TX_IMBALANCE,
                  INTERFERENCE_LEVEL, VSWR -> true;
             default -> false;
         };

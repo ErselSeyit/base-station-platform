@@ -10,6 +10,8 @@ import java.util.Objects;
 
 import org.springframework.lang.Nullable;
 
+import io.github.erselseyit.basestation.monitoring.model.Band;
+
 @ValidMetricUnit
 @ValidMetricValue
 public class MetricDataDTO {
@@ -23,6 +25,9 @@ public class MetricDataDTO {
 
     @NotNull(message = "Metric type is required")
     private MetricType metricType;
+
+    /** NR band for radio metrics; defaults to NONE when absent from the payload. */
+    private Band band = Band.NONE;
 
     @NotNull(message = "Value is required")
     private Double value;
@@ -71,6 +76,14 @@ public class MetricDataDTO {
 
     public void setMetricType(@Nullable MetricType metricType) {
         this.metricType = metricType;
+    }
+
+    public Band getBand() {
+        return band;
+    }
+
+    public void setBand(@Nullable Band band) {
+        this.band = band == null ? Band.NONE : band;
     }
 
     @Nullable

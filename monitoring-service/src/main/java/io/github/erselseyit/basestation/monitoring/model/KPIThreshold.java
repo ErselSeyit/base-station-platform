@@ -44,7 +44,7 @@ public class KPIThreshold {
     @SuppressWarnings("java:S100") // Method names match domain conventions
     public static KPIThreshold dlThroughputNR3500_100MHz() {
         KPIThreshold kpi = new KPIThreshold();
-        kpi.setMetricType(MetricType.DL_THROUGHPUT_NR3500);
+        kpi.setMetricType(MetricType.DL_THROUGHPUT);
         kpi.setDescription("DL Throughput for NR3500 100MHz RANK4 256QAM");
         kpi.setMinValue(1000.0);
         kpi.setWarningMin(1100.0);
@@ -59,7 +59,7 @@ public class KPIThreshold {
     @SuppressWarnings("java:S100")
     public static KPIThreshold dlThroughputNR3500_40MHz() {
         KPIThreshold kpi = new KPIThreshold();
-        kpi.setMetricType(MetricType.DL_THROUGHPUT_NR3500);
+        kpi.setMetricType(MetricType.DL_THROUGHPUT);
         kpi.setDescription("DL Throughput for NR3500 40MHz RANK4 256QAM");
         kpi.setMinValue(400.0);
         kpi.setWarningMin(450.0);
@@ -74,7 +74,7 @@ public class KPIThreshold {
     @SuppressWarnings("java:S100")
     public static KPIThreshold ulThroughputNR3500_100MHz() {
         KPIThreshold kpi = new KPIThreshold();
-        kpi.setMetricType(MetricType.UL_THROUGHPUT_NR3500);
+        kpi.setMetricType(MetricType.UL_THROUGHPUT);
         kpi.setDescription("UL Throughput for NR3500 100MHz RANK1 256QAM");
         kpi.setMinValue(75.0);
         kpi.setWarningMin(85.0);
@@ -88,7 +88,7 @@ public class KPIThreshold {
 
     public static KPIThreshold dlThroughputNR700() {
         KPIThreshold kpi = new KPIThreshold();
-        kpi.setMetricType(MetricType.DL_THROUGHPUT_NR700);
+        kpi.setMetricType(MetricType.DL_THROUGHPUT);
         kpi.setDescription("DL Throughput for NR700 10MHz RANK2 256QAM");
         kpi.setMinValue(50.0);
         kpi.setWarningMin(60.0);
@@ -102,7 +102,7 @@ public class KPIThreshold {
 
     public static KPIThreshold ulThroughputNR700() {
         KPIThreshold kpi = new KPIThreshold();
-        kpi.setMetricType(MetricType.UL_THROUGHPUT_NR700);
+        kpi.setMetricType(MetricType.UL_THROUGHPUT);
         kpi.setDescription("UL Throughput for NR700 10MHz RANK1 256QAM");
         kpi.setMinValue(20.0);
         kpi.setWarningMin(25.0);

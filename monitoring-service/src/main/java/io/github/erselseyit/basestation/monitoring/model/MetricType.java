@@ -39,17 +39,13 @@ public enum MetricType {
     SIGNAL_STRENGTH(MetricUnit.DBM),
     DATA_THROUGHPUT(MetricUnit.MBPS),
 
-    // 5G NR700 (n28) Metrics - 700MHz Band
-    DL_THROUGHPUT_NR700(MetricUnit.MBPS, "DRB.UEThpDl"),
-    UL_THROUGHPUT_NR700(MetricUnit.MBPS, "DRB.UEThpUl"),
-    RSRP_NR700(MetricUnit.DBM),
-    SINR_NR700(MetricUnit.DB),
-
-    // 5G NR3500 (n78) Metrics - 3.5GHz Band
-    DL_THROUGHPUT_NR3500(MetricUnit.MBPS, "DRB.UEThpDl"),
-    UL_THROUGHPUT_NR3500(MetricUnit.MBPS, "DRB.UEThpUl"),
-    RSRP_NR3500(MetricUnit.DBM),
-    SINR_NR3500(MetricUnit.DB),
+    // 5G NR radio metrics. Band-neutral: the carrier a reading belongs to
+    // travels in MetricData.band (per the 3GPP measured-object model), not in
+    // the metric name.
+    DL_THROUGHPUT(MetricUnit.MBPS, "DRB.UEThpDl"),
+    UL_THROUGHPUT(MetricUnit.MBPS, "DRB.UEThpUl"),
+    RSRP(MetricUnit.DBM),
+    SINR(MetricUnit.DB),
 
     // 5G Radio Metrics
     PDCP_THROUGHPUT(MetricUnit.MBPS, "DRB.PdcpSduVolumeDL"),

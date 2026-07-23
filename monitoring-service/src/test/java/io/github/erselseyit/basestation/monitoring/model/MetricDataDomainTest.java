@@ -163,7 +163,7 @@ class MetricDataDomainTest {
         @Test
         @DisplayName("should detect very poor RSRP as critical")
         void isCritical_VeryPoorRsrp_ReturnsTrue() {
-            metric.setMetricType(MetricType.RSRP_NR700);
+            metric.setMetricType(MetricType.RSRP);
             metric.setValue(-135.0);  // Below -130 dBm
 
             assertThat(metric.isCritical()).isTrue();
@@ -218,7 +218,7 @@ class MetricDataDomainTest {
             metric.setMetricType(MetricType.DATA_THROUGHPUT);
             assertThat(metric.isThroughputMetric()).isTrue();
 
-            metric.setMetricType(MetricType.DL_THROUGHPUT_NR700);
+            metric.setMetricType(MetricType.DL_THROUGHPUT);
             assertThat(metric.isThroughputMetric()).isTrue();
 
             metric.setMetricType(MetricType.PDCP_THROUGHPUT);
@@ -254,7 +254,7 @@ class MetricDataDomainTest {
             metric.setMetricType(MetricType.SIGNAL_STRENGTH);
             assertThat(metric.isRfQualityMetric()).isTrue();
 
-            metric.setMetricType(MetricType.RSRP_NR700);
+            metric.setMetricType(MetricType.RSRP);
             assertThat(metric.isRfQualityMetric()).isTrue();
 
             metric.setMetricType(MetricType.VSWR);

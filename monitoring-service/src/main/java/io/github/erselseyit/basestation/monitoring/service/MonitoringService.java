@@ -221,6 +221,7 @@ public class MonitoringService {
         metric.setStationId(dto.getStationId());
         metric.setStationName(dto.getStationName());
         metric.setMetricType(dto.getMetricType());
+        metric.setBand(dto.getBand());
         metric.setValue(dto.getValue());
         metric.setUnit(dto.getUnit());
         metric.setTimestamp(dto.getTimestamp());
@@ -234,6 +235,7 @@ public class MonitoringService {
         dto.setStationId(metric.getStationId());
         dto.setStationName(metric.getStationName());
         dto.setMetricType(metric.getMetricType());
+        dto.setBand(metric.getBand());
         dto.setValue(metric.getValue());
         dto.setUnit(metric.getUnit());
         dto.setTimestamp(metric.getTimestamp());

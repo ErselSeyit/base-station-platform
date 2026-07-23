@@ -64,22 +64,21 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
             case POWER_CONSUMPTION, SITE_POWER_KWH -> validatePowerConsumption(value);
 
             // Signal strength metrics (dBm)
-            case SIGNAL_STRENGTH, RSRP_NR700, RSRP_NR3500 -> validateSignalStrength(value);
+            case SIGNAL_STRENGTH, RSRP -> validateSignalStrength(value);
 
             // Count metrics
             case CONNECTION_COUNT, RB_PER_SLOT, GPS_SATELLITES -> validateConnectionCount(value);
 
             // Throughput metrics (Mbps)
-            case DATA_THROUGHPUT, DL_THROUGHPUT_NR700, UL_THROUGHPUT_NR700,
-                 DL_THROUGHPUT_NR3500, UL_THROUGHPUT_NR3500, PDCP_THROUGHPUT,
-                 RLC_THROUGHPUT, CA_DL_THROUGHPUT, CA_UL_THROUGHPUT,
+            case DATA_THROUGHPUT, DL_THROUGHPUT, UL_THROUGHPUT,
+                 PDCP_THROUGHPUT, RLC_THROUGHPUT, CA_DL_THROUGHPUT, CA_UL_THROUGHPUT,
                  GTP_THROUGHPUT, SLICE_THROUGHPUT -> validateDataThroughput(value);
 
             // Fan speed
             case FAN_SPEED -> validateFanSpeed(value);
 
             // SINR metrics
-            case SINR_NR700, SINR_NR3500, MW_SNR -> validateSinr(value);
+            case SINR, MW_SNR -> validateSinr(value);
 
             // Latency metrics (ms)
             case LATENCY_PING, ETH_LATENCY, PACKET_DELAY, SLICE_LATENCY, PTP_OFFSET ->
