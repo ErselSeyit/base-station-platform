@@ -42,12 +42,63 @@ def _ensure_sklearn():
 
 
 class AlarmSeverity(Enum):
-    """Alarm severity levels."""
+    """
+    Alarm severity per ITU-T X.733 and 3GPP TS 28.111 clause 6
+    (alarmRecord perceivedSeverity).
+
+    The allowed values are fixed by the specification. Declaration order is
+    most urgent first; `AlarmCluster.severity` relies on it.
+
+    INFO is retained only for backward compatibility with stored alarms — it
+    is not an X.733 value, and `from_string` normalises it to INDETERMINATE.
+    """
     CRITICAL = "critical"
     MAJOR = "major"
     MINOR = "minor"
     WARNING = "warning"
-    INFO = "info"
+    INDETERMINATE = "indeterminate"
+    CLEARED = "cleared"
+    INFO = "info"  # deprecated: pre-X.733 alias for INDETERMINATE
+
+    @classmethod
+    def from_string(cls, value: str) -> "AlarmSeverity":
+        """
+        Parse a severity name, case-insensitively.
+
+        Accepts the legacy value "info", which maps to INDETERMINATE: X.733 has
+        no informational severity and INDETERMINATE is the closest equivalent
+        that does not escalate urgency.
+
+        Raises ValueError for unrecognised values rather than coercing them —
+        a silently downgraded alarm is worse than a loud failure.
+        """
+        if value is None:
+            raise ValueError("perceivedSeverity must not be null")
+        normalised = str(value).strip().lower()
+        if normalised == "info":
+            return cls.INDETERMINATE
+        for severity in cls:
+            if severity.value == normalised:
+                return severity
+        raise ValueError(
+            f"Unknown perceivedSeverity: {value!r}. Allowed values per 3GPP TS 28.111: "
+            "CRITICAL, MAJOR, MINOR, WARNING, INDETERMINATE, CLEARED"
+        )
+
+    def is_active(self) -> bool:
+        """
+        Whether an alarm carrying this severity is still active.
+
+        Per TS 28.111 clause 6, an alarm remains in the alarm list while its
+        perceivedSeverity is not CLEARED.
+        """
+        return self is not AlarmSeverity.CLEARED
+
+    def to_perceived_severity(self) -> str:
+        """The X.733 attribute value, uppercase as the standard writes it."""
+        if self is AlarmSeverity.INFO:
+            return AlarmSeverity.INDETERMINATE.name
+        return self.name
 
 
 class CorrelationType(Enum):
@@ -60,7 +111,14 @@ class CorrelationType(Enum):
 
 @dataclass
 class Alarm:
-    """Alarm event data structure."""
+    """
+    Alarm event, modelled on the 3GPP TS 28.111 clause 6 alarmRecord.
+
+    The correlation attributes exist because this service performs alarm
+    correlation, and TS 28.111 states: "At least one of these attributes
+    [rootCauseIndicator, correlatedNotifications] shall be supported if the
+    MnS producer supports alarm correlation."
+    """
     alarm_id: str
     station_id: str
     alarm_type: str
@@ -73,7 +131,35 @@ class Alarm:
     cleared_at: Optional[datetime] = None
     acknowledged: bool = False
 
+    # --- TS 28.111 alarmRecord attributes ---
+
+    #: Qualifies the alarm beyond alarmType. Should be the most specific
+    #: applicable value (TS 28.111 clause 6).
+    probable_cause: Optional[str] = None
+
+    #: Further refinement of probable_cause (ITU-T X.733 clause 8.1.2.2).
+    specific_problem: Optional[str] = None
+
+    #: True when this record is the root cause of the events captured by the
+    #: notifications listed in `correlated_notifications`.
+    root_cause_indicator: bool = False
+
+    #: Identifiers of the notifications this record explains. Populated only
+    #: on the root-cause record.
+    correlated_notifications: List[str] = field(default_factory=list)
+
+    #: Distinguished name of the managed object the alarm is raised against,
+    #: e.g. "ManagedElement=1,NRCellDU=3". `station_id` names a site, which is
+    #: coarser than the standard expects.
+    object_instance: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
+        """
+        Serialise the alarm.
+
+        Emits both the original snake_case keys (existing consumers depend on
+        them) and the TS 28.111 attribute names.
+        """
         return {
             "alarm_id": self.alarm_id,
             "station_id": self.station_id,
@@ -85,7 +171,14 @@ class Alarm:
             "metric_value": self.metric_value,
             "cleared": self.cleared,
             "cleared_at": self.cleared_at.isoformat() if self.cleared_at else None,
-            "acknowledged": self.acknowledged
+            "acknowledged": self.acknowledged,
+            # TS 28.111 alarmRecord attribute names
+            "perceivedSeverity": self.severity.to_perceived_severity(),
+            "probableCause": self.probable_cause,
+            "specificProblem": self.specific_problem,
+            "rootCauseIndicator": self.root_cause_indicator,
+            "correlatedNotifications": list(self.correlated_notifications),
+            "objectInstance": self.object_instance,
         }
 
 
@@ -103,13 +196,19 @@ class AlarmCluster:
 
     @property
     def severity(self) -> AlarmSeverity:
-        """Highest severity in the cluster."""
+        """
+        Highest severity in the cluster, ordered by X.733 urgency.
+
+        An empty cluster reports CLEARED — nothing to escalate.
+        """
         severity_order = [AlarmSeverity.CRITICAL, AlarmSeverity.MAJOR,
-                        AlarmSeverity.MINOR, AlarmSeverity.WARNING, AlarmSeverity.INFO]
+                          AlarmSeverity.MINOR, AlarmSeverity.WARNING,
+                          AlarmSeverity.INFO, AlarmSeverity.INDETERMINATE,
+                          AlarmSeverity.CLEARED]
         for sev in severity_order:
             if any(a.severity == sev for a in self.alarms):
                 return sev
-        return AlarmSeverity.INFO
+        return AlarmSeverity.CLEARED
 
     @property
     def station_ids(self) -> Set[str]:
@@ -355,7 +454,35 @@ class AlarmCorrelationService:
                 cluster.recommended_action = pattern.get("action", cluster.recommended_action)
                 cluster.correlation_types.append(CorrelationType.PATTERN)
 
+            self._mark_root_cause_record(cluster)
+
         return clusters
+
+    def _mark_root_cause_record(self, cluster: AlarmCluster) -> None:
+        """
+        Record the correlation result on the alarms themselves, per TS 28.111.
+
+        `cluster.root_cause` names an alarm *type*; the standard expresses
+        correlation on the alarm *records*. The earliest alarm of that type
+        becomes the root-cause record and carries the identifiers of the
+        notifications it explains.
+        """
+        if not cluster.root_cause:
+            return
+
+        candidates = [a for a in cluster.alarms if a.alarm_type == cluster.root_cause]
+        if not candidates:
+            return
+
+        root = min(candidates, key=lambda a: a.timestamp)
+        for alarm in cluster.alarms:
+            alarm.root_cause_indicator = alarm is root
+            if alarm is root:
+                alarm.correlated_notifications = [
+                    a.alarm_id for a in cluster.alarms if a is not root
+                ]
+            else:
+                alarm.correlated_notifications = []
 
     def _get_action_for_cause(self, cause: str) -> str:
         """Get recommended action for a known root cause."""
