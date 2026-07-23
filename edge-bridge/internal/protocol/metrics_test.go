@@ -9,8 +9,8 @@ import (
 
 func TestEncodeDecodeMetricsRoundTrip(t *testing.T) {
 	in := []Metric{
-		{Type: MetricType(1), Value: 42.5},
-		{Type: MetricType(7), Value: -1.25},
+		{Type: MetricDLThroughput, Band: BandN28, Value: 42.5},
+		{Type: MetricDLThroughput, Band: BandN78, Value: -1.25},
 	}
 
 	out, err := DecodeMetrics(EncodeMetrics(in))
@@ -21,9 +21,9 @@ func TestEncodeDecodeMetricsRoundTrip(t *testing.T) {
 		t.Fatalf("got %d metrics, want %d", len(out), len(in))
 	}
 	for i := range in {
-		if out[i].Type != in[i].Type || out[i].Value != in[i].Value {
-			t.Errorf("metric %d = {%v, %v}, want {%v, %v}",
-				i, out[i].Type, out[i].Value, in[i].Type, in[i].Value)
+		if out[i].Type != in[i].Type || out[i].Band != in[i].Band || out[i].Value != in[i].Value {
+			t.Errorf("metric %d = {%v, %v, %v}, want {%v, %v, %v}",
+				i, out[i].Type, out[i].Band, out[i].Value, in[i].Type, in[i].Band, in[i].Value)
 		}
 	}
 }
@@ -116,5 +116,29 @@ func TestVerifyCRC16RejectsCorruptedFrame(t *testing.T) {
 	framed[2] ^= 0xFF
 	if VerifyCRC16(framed) {
 		t.Error("a corrupted message must not verify")
+	}
+}
+
+
+func TestDecodeMetricsKeepsBandsDistinct(t *testing.T) {
+	// Same measurement on two carriers must stay separate — the whole point of
+	// carrying the band as a dimension.
+	in := []Metric{
+		{Type: MetricRSRP, Band: BandN28, Value: -82},
+		{Type: MetricRSRP, Band: BandN78, Value: -78},
+	}
+
+	out, err := DecodeMetrics(EncodeMetrics(in))
+	if err != nil {
+		t.Fatalf("DecodeMetrics returned an error: %v", err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("got %d metrics, want 2", len(out))
+	}
+	if out[0].Band != BandN28 || out[1].Band != BandN78 {
+		t.Errorf("bands crossed: got %v, %v", out[0].Band, out[1].Band)
+	}
+	if out[0].Value != -82 || out[1].Value != -78 {
+		t.Errorf("values crossed: got %v, %v", out[0].Value, out[1].Value)
 	}
 }

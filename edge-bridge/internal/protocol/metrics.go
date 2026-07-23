@@ -12,11 +12,12 @@ var (
 	ErrMetricBufferTooSmall = errors.New("buffer too small for metrics")
 )
 
-// MetricEntrySize is the size of a single metric entry (1 byte type + 4 bytes float32).
-const MetricEntrySize = 5
+// MetricEntrySize is the size of a single metric entry
+// (1 byte type + 1 byte band + 4 bytes float32).
+const MetricEntrySize = 6
 
 // EncodeMetrics encodes a slice of metrics into wire format.
-// Format: [type(1)][value(4 float32 big-endian)]...
+// Format: [type(1)][band(1)][value(4 float32 big-endian)]...
 func EncodeMetrics(metrics []Metric) []byte {
 	if len(metrics) == 0 {
 		return nil
@@ -27,7 +28,8 @@ func EncodeMetrics(metrics []Metric) []byte {
 
 	for _, m := range metrics {
 		buf[offset] = byte(m.Type)
-		binary.BigEndian.PutUint32(buf[offset+1:], math.Float32bits(m.Value))
+		buf[offset+1] = byte(m.Band)
+		binary.BigEndian.PutUint32(buf[offset+2:], math.Float32bits(m.Value))
 		offset += MetricEntrySize
 	}
 
@@ -50,7 +52,8 @@ func DecodeMetrics(data []byte) ([]Metric, error) {
 	for i := 0; i < count; i++ {
 		offset := i * MetricEntrySize
 		metrics[i].Type = MetricType(data[offset])
-		metrics[i].Value = math.Float32frombits(binary.BigEndian.Uint32(data[offset+1:]))
+		metrics[i].Band = Band(data[offset+1])
+		metrics[i].Value = math.Float32frombits(binary.BigEndian.Uint32(data[offset+2:]))
 	}
 
 	return metrics, nil

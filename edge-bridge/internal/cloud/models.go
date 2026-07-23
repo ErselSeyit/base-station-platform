@@ -18,7 +18,10 @@ type LoginResponse struct {
 
 // MetricData represents a single metric for upload.
 type MetricData struct {
-	Type      string    `json:"type"`
+	Type string `json:"type"`
+	// Band is the NR frequency band the reading was measured on ("N28",
+	// "N78"), omitted for metrics with no band.
+	Band      string    `json:"band,omitempty"`
 	Value     float64   `json:"value"`
 	Timestamp time.Time `json:"timestamp"`
 }

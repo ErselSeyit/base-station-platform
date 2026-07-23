@@ -76,17 +76,14 @@ const (
 	MetricUptime           MetricType = 0x31
 	MetricErrorCount       MetricType = 0x32
 
-	// 5G NR700 (n28) metrics (0x40-0x4F)
-	MetricDLThroughputNR700 MetricType = 0x40
-	MetricULThroughputNR700 MetricType = 0x41
-	MetricRSRPNR700         MetricType = 0x42
-	MetricSINRNR700         MetricType = 0x43
-
-	// 5G NR3500 (n78) metrics (0x50-0x5F)
-	MetricDLThroughputNR3500 MetricType = 0x50
-	MetricULThroughputNR3500 MetricType = 0x51
-	MetricRSRPNR3500         MetricType = 0x52
-	MetricSINRNR3500         MetricType = 0x53
+	// 5G NR radio metrics (0x40-0x4F). Band-neutral: the carrier a reading
+	// belongs to travels in Metric.Band, not the type code, per the 3GPP
+	// model where a measurement is reported against a measured object
+	// (NRCellDU) that carries the frequency.
+	MetricDLThroughput MetricType = 0x40
+	MetricULThroughput MetricType = 0x41
+	MetricRSRP         MetricType = 0x42
+	MetricSINR         MetricType = 0x43
 
 	// 5G Radio metrics (0x60-0x6F)
 	MetricPDCPThroughput      MetricType = 0x60
@@ -193,9 +190,7 @@ const (
 
 	// RF signal aliases (generic, not band-specific)
 	MetricRSSI = MetricSignalStrength
-	MetricRSRP = MetricRSRPNR3500
 	MetricRSRQ = MetricSignalQuality
-	MetricSINR = MetricSINRNR3500
 
 	// Call/Handover metrics
 	MetricHandoverSuccess = MetricHandoverSuccessRate
@@ -236,17 +231,11 @@ var metricTypeNames = map[MetricType]string{
 	MetricUptime:       "UPTIME",
 	MetricErrorCount:   "ERROR_COUNT",
 
-	// 5G NR700 (n28) metrics
-	MetricDLThroughputNR700: "DL_THROUGHPUT_NR700",
-	MetricULThroughputNR700: "UL_THROUGHPUT_NR700",
-	MetricRSRPNR700:         "RSRP_NR700",
-	MetricSINRNR700:         "SINR_NR700",
-
-	// 5G NR3500 (n78) metrics
-	MetricDLThroughputNR3500: "DL_THROUGHPUT_NR3500",
-	MetricULThroughputNR3500: "UL_THROUGHPUT_NR3500",
-	MetricRSRPNR3500:         "RSRP_NR3500",
-	MetricSINRNR3500:         "SINR_NR3500",
+	// 5G NR radio metrics (band-neutral; band travels alongside)
+	MetricDLThroughput: "DL_THROUGHPUT",
+	MetricULThroughput: "UL_THROUGHPUT",
+	MetricRSRP:         "RSRP",
+	MetricSINR:         "SINR",
 
 	// 5G Radio metrics
 	MetricPDCPThroughput:  "PDCP_THROUGHPUT",
@@ -366,9 +355,34 @@ type Message struct {
 	Payload  []byte
 }
 
-// Metric represents a single metric value.
+// Band is the NR frequency band a metric was measured on, carried as a
+// dimension of the reading rather than baked into its type.
+type Band byte
+
+const (
+	BandNone Band = 0x00
+	BandN28  Band = 0x01 // 700 MHz
+	BandN78  Band = 0x02 // 3.5 GHz
+)
+
+// String returns the band's short name.
+func (b Band) String() string {
+	switch b {
+	case BandNone:
+		return "NONE"
+	case BandN28:
+		return "N28"
+	case BandN78:
+		return "N78"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// Metric represents a single metric value on a given band.
 type Metric struct {
 	Type  MetricType
+	Band  Band
 	Value float32
 }
 
