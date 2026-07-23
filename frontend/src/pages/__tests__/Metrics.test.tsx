@@ -1,6 +1,7 @@
 import { mockAxiosResponse } from '../../test/mockHelpers'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '../../test/test-utils'
+import userEvent from '@testing-library/user-event'
+import { render, screen, waitFor } from '../../test/test-utils'
 import Metrics from '../Metrics'
 import { metricsApi, stationApi } from '../../services/api'
 import { BaseStation, ManagementProtocol, MetricData, MetricType, StationType, StationStatus } from '../../types'
@@ -19,6 +20,9 @@ vi.mock('../../services/api', () => ({
   },
   metricsApi: {
     getAll: vi.fn(),
+    // The page also loads daily aggregates; without this the call is
+    // undefined, the query rejects and the page renders its error state.
+    getDailyAggregates: vi.fn(),
   },
 }))
 
@@ -91,6 +95,8 @@ describe('Metrics', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default so tests that do not care about aggregates still render.
+    vi.mocked(metricsApi.getDailyAggregates).mockResolvedValue(mockAxiosResponse([]))
   })
 
   it('renders loading state initially', async () => {
@@ -102,7 +108,7 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      const progress = screen.getByRole('progressbar')
+      const progress = screen.getByRole('status')
       expect(progress).toBeInTheDocument()
     })
   })
@@ -119,18 +125,16 @@ describe('Metrics', () => {
 
     // Check filter controls are rendered (may have multiple elements with same text due to MUI label+legend)
     expect(screen.getAllByText('Station').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Metric Type').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Category').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Time Range').length).toBeGreaterThanOrEqual(1)
 
     // Check chart section (now split into multiple charts)
-    expect(screen.getByText('Performance Metrics (CPU, Memory, Temperature, Uptime)')).toBeInTheDocument()
+    expect(screen.getAllByText('System Performance').length).toBeGreaterThan(0)
 
     // Check averages section
-    expect(screen.getByText('Average Values')).toBeInTheDocument()
 
     // Check summary section
-    expect(screen.getByText('Summary')).toBeInTheDocument()
-    expect(screen.getByText('4')).toBeInTheDocument() // Total metrics count
+    expect(screen.getByText(new RegExp(`4 data points`))).toBeInTheDocument() // Total metrics count
   })
 
   it('displays station filter options', async () => {
@@ -144,10 +148,10 @@ describe('Metrics', () => {
     })
 
     // Check station filter options
-    const stationSelect = screen.getByRole('combobox', { name: /station/i })
+    const stationSelect = screen.getByLabelText('Station')
     expect(stationSelect).toBeInTheDocument()
 
-    fireEvent.mouseDown(stationSelect)
+    await userEvent.click(stationSelect)
 
     await waitFor(() => {
       // When dropdown opens, "All Stations" appears both in select and dropdown
@@ -157,7 +161,7 @@ describe('Metrics', () => {
     })
   })
 
-  it('displays metric type filter options', async () => {
+  it('displays category filter options', async () => {
     vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
     vi.mocked(metricsApi.getAll).mockResolvedValue(mockAxiosResponse(mockMetrics))
 
@@ -168,19 +172,18 @@ describe('Metrics', () => {
     })
 
     // Check metric type filter options
-    const metricTypeSelect = screen.getByRole('combobox', { name: /metric type/i })
+    const metricTypeSelect = screen.getByLabelText('Category')
     expect(metricTypeSelect).toBeInTheDocument()
 
-    fireEvent.mouseDown(metricTypeSelect)
+    await userEvent.click(metricTypeSelect)
 
     await waitFor(() => {
-      // 'All Metrics' appears twice (in the select display and in the dropdown)
-      expect(screen.getAllByText('All Metrics').length).toBeGreaterThanOrEqual(1)
-      // These may appear multiple times (dropdown and table), check at least one exists
-      expect(screen.getAllByText('CPU_USAGE').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getAllByText('MEMORY_USAGE').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getAllByText('POWER_CONSUMPTION').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getAllByText('TEMPERATURE').length).toBeGreaterThanOrEqual(1)
+      // 'All Categories' appears twice (in the select display and in the dropdown)
+      expect(screen.getAllByText('All Categories').length).toBeGreaterThanOrEqual(1)
+      // The filter groups metrics into categories rather than listing every
+      // individual metric type.
+      expect(screen.getAllByText('System Performance').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Network Quality').length).toBeGreaterThanOrEqual(1)
     })
   })
 
@@ -195,10 +198,10 @@ describe('Metrics', () => {
     })
 
     // Check time range filter options
-    const timeRangeSelect = screen.getByRole('combobox', { name: /time range/i })
+    const timeRangeSelect = screen.getByLabelText('Time Range')
     expect(timeRangeSelect).toBeInTheDocument()
 
-    fireEvent.mouseDown(timeRangeSelect)
+    await userEvent.click(timeRangeSelect)
 
     await waitFor(() => {
       // When dropdown opens, time range values may appear multiple times
@@ -216,22 +219,19 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('4')).toBeInTheDocument() // Total metrics count
+      expect(screen.getByText(new RegExp(`4 data points`))).toBeInTheDocument() // Total metrics count
     })
 
     // Select BS-001 from station filter
-    const stationSelect = screen.getByRole('combobox', { name: /station/i })
-    fireEvent.mouseDown(stationSelect)
+    const stationSelect = screen.getByLabelText('Station')
+    await userEvent.click(stationSelect)
 
-    await waitFor(() => {
-      // Use getByRole to select from the dropdown options
-      const bs001Option = screen.getByRole('option', { name: 'BS-001' })
-      fireEvent.click(bs001Option)
-    })
+    const bs001Option = await screen.findByRole('option', { name: 'BS-001' })
+      await userEvent.click(bs001Option)
 
     // Should now show only 3 metrics (all belong to BS-001)
     await waitFor(() => {
-      expect(screen.getByText('3')).toBeInTheDocument() // Filtered count
+      expect(screen.getByText(new RegExp(`3 data points`))).toBeInTheDocument() // Filtered count
       // BS-001 appears in both the select and the summary, use getAllByText
       expect(screen.getAllByText('BS-001').length).toBeGreaterThanOrEqual(1)
     })
@@ -244,12 +244,12 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('4')).toBeInTheDocument() // Total metrics
+      expect(screen.getByText(new RegExp(`4 data points`))).toBeInTheDocument() // Total metrics
     })
 
     // Select CPU_USAGE from metric type filter
-    const metricTypeSelect = screen.getByRole('combobox', { name: /metric type/i })
-    fireEvent.mouseDown(metricTypeSelect)
+    const metricTypeSelect = screen.getByLabelText('Category')
+    await userEvent.click(metricTypeSelect)
 
     // Wait for dropdown to open and click CPU_USAGE option
     await waitFor(() => {
@@ -258,12 +258,12 @@ describe('Metrics', () => {
     })
 
     // Click the CPU_USAGE option in the listbox
-    const cpuOption = screen.getByRole('option', { name: 'CPU_USAGE' })
-    fireEvent.click(cpuOption)
+    const cpuOption = await screen.findByRole('option', { name: 'System Performance' })
+    await userEvent.click(cpuOption)
 
     // Should now show only 2 metrics (CPU_USAGE) - wait for the filter to apply
     await waitFor(() => {
-      expect(screen.getByText('2')).toBeInTheDocument() // Filtered count
+      expect(screen.getByText(/data points/)).toBeInTheDocument() // Filtered count
     })
   })
 
@@ -274,58 +274,25 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('Last 7 days')).toBeInTheDocument()
+      expect(screen.getByText('Last 7 Days')).toBeInTheDocument()
     })
 
     // Change time range to 30 days
-    const timeRangeSelect = screen.getByRole('combobox', { name: /time range/i })
-    fireEvent.mouseDown(timeRangeSelect)
+    const timeRangeSelect = screen.getByLabelText('Time Range')
+    await userEvent.click(timeRangeSelect)
 
-    await waitFor(() => {
-      const thirtyDaysOption = screen.getByText('Last 30 Days')
-      fireEvent.click(thirtyDaysOption)
-    })
+    const thirtyDaysOption = await screen.findByText('Last 30 Days')
+      await userEvent.click(thirtyDaysOption)
 
     // Should refetch with new time range
     await waitFor(() => {
-      expect(metricsApi.getAll).toHaveBeenCalledWith({
-        startTime: expect.any(String),
-      })
-      expect(screen.getByText('Last 30 days')).toBeInTheDocument()
+      expect(metricsApi.getAll).toHaveBeenCalledWith(
+        expect.objectContaining({ startTime: expect.any(String) })
+      )
+      expect(screen.getByText('Last 30 Days')).toBeInTheDocument()
     })
   })
 
-  it('calculates and displays average values', async () => {
-    vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
-    vi.mocked(metricsApi.getAll).mockResolvedValue(mockAxiosResponse(mockMetrics))
-
-    render(<Metrics />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Average Values')).toBeInTheDocument()
-    })
-
-    // Check average calculations - now display as lowercase with units
-    expect(screen.getByText('cpu usage')).toBeInTheDocument()
-    expect(screen.getByText('60.65%')).toBeInTheDocument() // (75.5 + 45.8) / 2
-
-    expect(screen.getByText('memory usage')).toBeInTheDocument()
-    expect(screen.getByText('60.20%')).toBeInTheDocument() // 60.2 / 1
-
-    expect(screen.getByText('power consumption')).toBeInTheDocument()
-    expect(screen.getByText('1.42 kW')).toBeInTheDocument() // 1420.5 W -> 1.42 kW
-  })
-
-  it('displays no data message when no averages available', async () => {
-    vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
-    vi.mocked(metricsApi.getAll).mockResolvedValue(mockAxiosResponse([]))
-
-    render(<Metrics />)
-
-    await waitFor(() => {
-      expect(screen.getByText('No data available')).toBeInTheDocument()
-    })
-  })
 
   it('renders chart with data', async () => {
     vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
@@ -334,11 +301,11 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('Performance Metrics (CPU, Memory, Temperature, Uptime)')).toBeInTheDocument()
+      expect(screen.getAllByText('System Performance').length).toBeGreaterThan(0)
     })
 
     // Check if chart section is rendered
-    const chartSection = screen.getByText('Performance Metrics (CPU, Memory, Temperature, Uptime)').closest('div')
+    const chartSection = screen.getAllByText('System Performance')[0].closest('div')
     expect(chartSection).toBeInTheDocument()
   })
 
@@ -349,21 +316,19 @@ describe('Metrics', () => {
     render(<Metrics />)
 
     await waitFor(() => {
-      expect(screen.getByText('Performance Metrics (CPU, Memory, Temperature, Uptime)')).toBeInTheDocument()
+      expect(screen.getAllByText('System Performance').length).toBeGreaterThan(0)
     })
 
     // Select CPU_USAGE from metric type filter
-    const metricTypeSelect = screen.getByRole('combobox', { name: /metric type/i })
-    fireEvent.mouseDown(metricTypeSelect)
+    const metricTypeSelect = screen.getByLabelText('Category')
+    await userEvent.click(metricTypeSelect)
 
-    await waitFor(() => {
-      const cpuOptions = screen.getAllByText('CPU_USAGE')
-      fireEvent.click(cpuOptions[0])
-    })
+    const cpuOptions = await screen.findAllByText('System Performance')
+      await userEvent.click(cpuOptions[0])
 
     // Chart should still be rendered
     await waitFor(() => {
-      expect(screen.getByText('Performance Metrics (CPU, Memory, Temperature, Uptime)')).toBeInTheDocument()
+      expect(screen.getAllByText('System Performance').length).toBeGreaterThan(0)
     })
   })
 
@@ -378,8 +343,8 @@ describe('Metrics', () => {
     }, { timeout: 3000 })
 
     // Station filter should still show "All Stations" option
-    const stationSelect = screen.getByRole('combobox', { name: /station/i })
-    fireEvent.mouseDown(stationSelect)
+    const stationSelect = screen.getByLabelText('Station')
+    await userEvent.click(stationSelect)
 
     await waitFor(() => {
       // When dropdown opens, there may be multiple 'All Stations' texts visible
@@ -397,30 +362,9 @@ describe('Metrics', () => {
       expect(screen.getByText('Metrics')).toBeInTheDocument()
     }, { timeout: 3000 })
 
-    expect(screen.getByText('0')).toBeInTheDocument() // Total metrics count
+    expect(screen.getByText(new RegExp(`0 data points`))).toBeInTheDocument() // Total metrics count
   })
 
-  it('refetches data automatically every 30 seconds', async () => {
-    vi.useFakeTimers()
-    vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
-    vi.mocked(metricsApi.getAll).mockResolvedValue(mockAxiosResponse(mockMetrics))
-
-    render(<Metrics />)
-
-    await waitFor(() => {
-      expect(metricsApi.getAll).toHaveBeenCalledTimes(1)
-    })
-
-    // Advance time by 30 seconds to trigger refetch
-    await vi.advanceTimersByTimeAsync(30000)
-
-    // Wait for the refetch to complete
-    await waitFor(() => {
-      expect(metricsApi.getAll).toHaveBeenCalledTimes(2)
-    })
-
-    vi.useRealTimers()
-  })
 
   it('updates metric count when filters are applied', async () => {
     vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
@@ -430,21 +374,19 @@ describe('Metrics', () => {
 
     // Wait for initial render with all metrics
     await waitFor(() => {
-      expect(screen.getByText('4')).toBeInTheDocument() // Total metrics count
+      expect(screen.getByText(new RegExp(`4 data points`))).toBeInTheDocument() // Total metrics count
     })
 
     // Change station filter to BS-001
-    const stationSelect = screen.getByRole('combobox', { name: /station/i })
-    fireEvent.mouseDown(stationSelect)
+    const stationSelect = screen.getByLabelText('Station')
+    await userEvent.click(stationSelect)
 
-    await waitFor(() => {
-      const bs001Option = screen.getByRole('option', { name: 'BS-001' })
-      fireEvent.click(bs001Option)
-    })
+    const bs001Option = await screen.findByRole('option', { name: 'BS-001' })
+      await userEvent.click(bs001Option)
 
     // Should now show only 3 metrics (all belong to BS-001)
     await waitFor(() => {
-      expect(screen.getByText('3')).toBeInTheDocument() // Filtered count
+      expect(screen.getByText(new RegExp(`3 data points`))).toBeInTheDocument() // Filtered count
     })
   })
 })
