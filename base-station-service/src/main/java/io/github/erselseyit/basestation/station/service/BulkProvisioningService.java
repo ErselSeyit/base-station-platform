@@ -148,7 +148,7 @@ public class BulkProvisioningService {
             }
 
         } catch (Exception e) {
-            log.error("Failed to import station '{}': {}", stationName, e.getMessage());
+            log.error("Failed to import station '{}': {}", stationName, e.getMessage(), e);
             return new ImportResult(stationName, ImportResult.Status.FAILED,
                     "Import error: " + e.getMessage(), null);
         }

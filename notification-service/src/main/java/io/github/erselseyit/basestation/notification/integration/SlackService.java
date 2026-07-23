@@ -134,7 +134,7 @@ public class SlackService implements AlertIntegration {
 
             return "ok".equals(response);
         } catch (Exception e) {
-            log.error("Slack connection test failed: {}", e.getMessage());
+            log.error("Slack connection test failed: {}", e.getMessage(), e);
             return false;
         }
     }

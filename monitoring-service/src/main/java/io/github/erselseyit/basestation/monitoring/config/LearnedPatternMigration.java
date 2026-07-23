@@ -111,7 +111,7 @@ public class LearnedPatternMigration {
                     .ensureIndex(new Index().on("problemCode", Sort.Direction.ASC).unique());
             log.info("Ensured unique index on LearnedPattern.problemCode");
         } catch (Exception e) {
-            log.error("Failed to create unique index on problemCode: {}", e.getMessage());
+            log.error("Failed to create unique index on problemCode: {}", e.getMessage(), e);
         }
     }
 

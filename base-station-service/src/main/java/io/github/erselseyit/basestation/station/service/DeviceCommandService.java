@@ -153,7 +153,7 @@ public class DeviceCommandService {
 
             log.debug("Notified monitoring service about SON execution start: {}", sonRecommendationId);
         } catch (Exception e) {
-            log.warn("Failed to notify monitoring service about SON execution start: {}", e.getMessage());
+            log.warn("Failed to notify monitoring service about SON execution start: {}", e.getMessage(), e);
         }
     }
 
@@ -265,7 +265,7 @@ public class DeviceCommandService {
 
             log.debug("Notified monitoring service about command result: {}", command.getId());
         } catch (Exception e) {
-            log.warn("Failed to notify monitoring service: {}", e.getMessage());
+            log.warn("Failed to notify monitoring service: {}", e.getMessage(), e);
         }
     }
 
@@ -360,7 +360,7 @@ public class DeviceCommandService {
 
             log.debug("Notified monitoring service about SON result: {}", sonRecommendationId);
         } catch (Exception e) {
-            log.warn("Failed to notify monitoring service about SON result: {}", e.getMessage());
+            log.warn("Failed to notify monitoring service about SON result: {}", e.getMessage(), e);
         }
     }
 

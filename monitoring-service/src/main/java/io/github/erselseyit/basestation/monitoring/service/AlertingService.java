@@ -585,7 +585,7 @@ public class AlertingService {
             sessionService.markSessionError(problemId, reason);
             log.info("Marked session {} as FAILED due to: {}", problemId, reason);
         } catch (Exception e) {
-            log.warn("Failed to mark session {} as failed: {}", problemId, e.getMessage());
+            log.warn("Failed to mark session {} as failed: {}", problemId, e.getMessage(), e);
         }
     }
 
@@ -608,7 +608,7 @@ public class AlertingService {
             log.debug("Created/reused diagnostic session {} for problem {}", session.getId(), problemId);
             return session;
         } catch (Exception e) {
-            log.warn("Failed to create diagnostic session: {}", e.getMessage());
+            log.warn("Failed to create diagnostic session: {}", e.getMessage(), e);
             return null;
         }
     }

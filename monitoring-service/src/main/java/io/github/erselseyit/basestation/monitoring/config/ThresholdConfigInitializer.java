@@ -30,7 +30,7 @@ public class ThresholdConfigInitializer implements ApplicationRunner {
         try {
             thresholdConfigService.initializeDefaults();
         } catch (Exception e) {
-            log.error("Failed to initialize threshold configs: {}", e.getMessage());
+            log.error("Failed to initialize threshold configs: {}", e.getMessage(), e);
             // Don't fail startup - the service can still work with hardcoded defaults
         }
     }

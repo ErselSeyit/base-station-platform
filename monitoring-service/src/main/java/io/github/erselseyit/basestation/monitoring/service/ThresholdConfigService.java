@@ -287,7 +287,7 @@ public class ThresholdConfigService {
             log.debug("Broadcast threshold update: configType={}", configType);
         } catch (Exception e) {
             // Don't fail the update if broadcast fails
-            log.warn("Failed to broadcast threshold update for {}: {}", configType, e.getMessage());
+            log.warn("Failed to broadcast threshold update for {}: {}", configType, e.getMessage(), e);
         }
     }
 
