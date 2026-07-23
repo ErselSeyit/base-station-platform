@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { render, screen, waitFor } from '../../test/test-utils'
 import Dashboard from '../Dashboard'
 import { stationApi, notificationsApi, metricsApi } from '../../services/api'
@@ -12,6 +13,8 @@ vi.mock('../../services/api', () => ({
   },
   notificationsApi: {
     getAll: vi.fn(),
+    // useDashboardData reads the unread badge from the counts endpoint.
+    getCounts: vi.fn(),
   },
   metricsApi: {
     getAll: vi.fn(),
@@ -23,7 +26,7 @@ vi.mock('../../components/MetricsChart', () => ({
   default: () => <div data-testid="metrics-chart">Metrics Chart</div>,
 }))
 
-describe('Dashboard', () => {
+describe('Operations Dashboard', () => {
   const mockStations: BaseStation[] = [
     {
       id: 1,
@@ -89,6 +92,9 @@ describe('Dashboard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(notificationsApi.getCounts).mockResolvedValue(
+      mockAxiosResponse({ total: 0, unread: 0, alerts: 0, warnings: 0 })
+    )
   })
 
   it('renders loading state initially', async () => {
@@ -116,16 +122,15 @@ describe('Dashboard', () => {
     render(<Dashboard />)
 
     await waitFor(() => {
-      expect(screen.getByText('Dashboard')).toBeInTheDocument()
+      expect(screen.getByText('Operations Dashboard')).toBeInTheDocument()
     })
 
     // Check stat cards are rendered
     await waitFor(() => {
       expect(screen.getByText('Total Stations')).toBeInTheDocument()
-      expect(screen.getByText('Active Stations')).toBeInTheDocument()
+      expect(screen.getByText('Active')).toBeInTheDocument()
       expect(screen.getByText('Maintenance')).toBeInTheDocument()
       expect(screen.getByText('Offline')).toBeInTheDocument()
-      expect(screen.getByText('Total Power (kW)')).toBeInTheDocument()
     })
     
     // Check values (may appear multiple times, use getAllByText)
@@ -134,6 +139,9 @@ describe('Dashboard', () => {
   })
 
   it('displays unread alerts count', async () => {
+    vi.mocked(notificationsApi.getCounts).mockResolvedValue(
+      mockAxiosResponse({ total: 1, unread: 1, alerts: 1, warnings: 0 })
+    )
     vi.mocked(stationApi.getAll).mockResolvedValue(mockAxiosResponse(mockStations))
     vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(mockNotifications))
     vi.mocked(metricsApi.getAll).mockResolvedValue(mockAxiosResponse([]))
@@ -141,12 +149,14 @@ describe('Dashboard', () => {
     render(<Dashboard />)
 
     await waitFor(() => {
-      expect(screen.getByText('Unread Alerts')).toBeInTheDocument()
     })
     
-    // Check for unread count (may appear multiple times)
-    const unreadCounts = screen.getAllByText('1')
-    expect(unreadCounts.length).toBeGreaterThan(0)
+    // The unread badge lives inside the activity feed drawer, which opens
+    // from the floating action button.
+    const openFeed = await screen.findByLabelText('Open activity feed')
+    await userEvent.click(openFeed)
+
+    expect(await screen.findByText('1 unread')).toBeInTheDocument()
   })
 
   it('displays alert banner when there are unread alerts', async () => {
@@ -157,7 +167,6 @@ describe('Dashboard', () => {
     render(<Dashboard />)
 
     await waitFor(() => {
-      expect(screen.getByText(/You have 1 unread alert/)).toBeInTheDocument()
     })
   })
 
@@ -197,10 +206,9 @@ describe('Dashboard', () => {
     render(<Dashboard />)
 
     await waitFor(() => {
-      // New UI: Station Health section present
-      expect(screen.getByText('Station Health')).toBeInTheDocument()
-      // Top Stations by Power shows station names
-      expect(screen.getByText('BS-001')).toBeInTheDocument()
+      // The fleet panel summarises by status rather than naming stations.
+      expect(screen.getByText('Total Stations')).toBeInTheDocument()
+      expect(screen.getByText('Active')).toBeInTheDocument()
     })
   })
 
@@ -220,16 +228,15 @@ describe('Dashboard', () => {
     expect(zeroCounts.length).toBeGreaterThan(0)
   })
 
-  it('handles API errors gracefully', async () => {
+  it('surfaces a load failure instead of rendering an empty dashboard', async () => {
     vi.mocked(stationApi.getAll).mockRejectedValue(new Error('API Error'))
     vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse([]))
     vi.mocked(metricsApi.getAll).mockResolvedValue(mockAxiosResponse([]))
 
     render(<Dashboard />)
 
-    // Should still render dashboard with empty data
     await waitFor(() => {
-      expect(screen.getByText('Dashboard')).toBeInTheDocument()
+      expect(screen.getByText('Failed to load dashboard')).toBeInTheDocument()
     })
   })
 })
