@@ -154,7 +154,7 @@ describe('StationDetail', () => {
     render(<StationDetail />)
 
     await waitFor(() => {
-      const progress = screen.getByRole('progressbar')
+      const progress = screen.getByRole('status')
       expect(progress).toBeInTheDocument()
     })
   })
@@ -172,7 +172,7 @@ describe('StationDetail', () => {
 
     // Check station information is displayed
     expect(screen.getByText('Station Information')).toBeInTheDocument()
-    expect(screen.getByText('1')).toBeInTheDocument() // Station ID
+    expect(screen.getByText(/Station ID: #1/)).toBeInTheDocument()
     expect(screen.getByText('MACRO_CELL')).toBeInTheDocument() // Station Type
     expect(screen.getByText('New York, NY')).toBeInTheDocument() // Location
     expect(screen.getByText('40.7128, -74.006')).toBeInTheDocument() // Coordinates
@@ -202,7 +202,7 @@ describe('StationDetail', () => {
     render(<StationDetail />)
 
     await waitFor(() => {
-      expect(screen.getByText('Metrics History')).toBeInTheDocument()
+      expect(screen.getByText(/Metrics Chart/)).toBeInTheDocument()
     })
 
     // Check metrics chart is rendered
@@ -350,8 +350,8 @@ describe('StationDetail', () => {
       expect(screen.getByText('Current Metrics')).toBeInTheDocument()
     })
 
-    // Should display 'No date available' for missing timestamps (may be multiple)
-    expect(screen.getAllByText('No date available').length).toBeGreaterThanOrEqual(1)
+    // formatTimestamp renders 'N/A' when a timestamp is missing.
+    expect(screen.getAllByText('N/A').length).toBeGreaterThanOrEqual(1)
   })
 
   it('handles missing alert timestamps', async () => {
@@ -370,8 +370,8 @@ describe('StationDetail', () => {
       expect(screen.getByText('Recent Alerts')).toBeInTheDocument()
     })
 
-    // Should display 'No date available' for missing timestamps (may be multiple)
-    expect(screen.getAllByText('No date available').length).toBeGreaterThanOrEqual(1)
+    // formatTimestamp renders 'N/A' when a timestamp is missing.
+    expect(screen.getAllByText('N/A').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows station not found when station is null', async () => {
