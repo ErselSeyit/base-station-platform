@@ -1,9 +1,15 @@
 package io.github.erselseyit.basestation.monitoring.model;
 
+import java.util.Objects;
+
 /**
  * Immutable value object representing an alerting rule.
- * 
- * Uses builder pattern for clean construction and withX methods for immutable updates.
+ *
+ * <p>Built via {@link Builder}; {@code withX} methods return modified copies
+ * (<em>Effective Java</em> item 2). Being a value class, it overrides
+ * {@code equals}, {@code hashCode} and {@code toString} (items 10, 11 and 12) —
+ * without them, two identical rules compared unequal and rules could not be
+ * used reliably in sets or as map keys.
  */
 public final class AlertRule {
 
@@ -39,8 +45,13 @@ public final class AlertRule {
         return new Builder();
     }
 
-    // Immutable update methods
-    public AlertRule withEnabled(boolean enabled) {
+    /**
+     * A builder pre-populated with this rule's fields.
+     *
+     * <p>The {@code withX} methods below all delegate here, so adding a field
+     * to this class cannot leave one of them silently dropping it.
+     */
+    public Builder toBuilder() {
         return new Builder()
                 .id(this.id)
                 .name(this.name)
@@ -49,21 +60,16 @@ public final class AlertRule {
                 .threshold(this.threshold)
                 .severity(this.severity)
                 .message(this.message)
-                .enabled(enabled)
-                .build();
+                .enabled(this.enabled);
+    }
+
+    // Immutable update methods
+    public AlertRule withEnabled(boolean enabled) {
+        return toBuilder().enabled(enabled).build();
     }
 
     public AlertRule withThreshold(Double threshold) {
-        return new Builder()
-                .id(this.id)
-                .name(this.name)
-                .metricType(this.metricType)
-                .operator(this.operator)
-                .threshold(threshold)
-                .severity(this.severity)
-                .message(this.message)
-                .enabled(this.enabled)
-                .build();
+        return toBuilder().threshold(threshold).build();
     }
 
     // Getters
@@ -75,6 +81,40 @@ public final class AlertRule {
     public AlertSeverity getSeverity() { return severity; }
     public String getMessage() { return message; }
     public boolean isEnabled() { return enabled; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof AlertRule)) {
+            return false;
+        }
+        AlertRule other = (AlertRule) o;
+        return enabled == other.enabled
+                && Objects.equals(id, other.id)
+                && Objects.equals(name, other.name)
+                && metricType == other.metricType
+                && operator == other.operator
+                && Objects.equals(threshold, other.threshold)
+                && severity == other.severity
+                && Objects.equals(message, other.message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, name, metricType, operator, threshold, severity, message, enabled);
+    }
+
+    @Override
+    public String toString() {
+        return "AlertRule{id=" + id
+                + ", name=" + name
+                + ", condition=" + metricType + " " + operator + " " + threshold
+                + ", severity=" + severity
+                + ", enabled=" + enabled
+                + '}';
+    }
 
     public static class Builder {
         private String id;
@@ -100,4 +140,3 @@ public final class AlertRule {
         }
     }
 }
-
