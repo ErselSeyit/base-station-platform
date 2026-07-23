@@ -10,6 +10,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIf;
+import org.springframework.amqp.core.AmqpAdmin;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,9 +24,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import io.github.erselseyit.basestation.common.dto.AlertEvent;
+import io.github.erselseyit.basestation.monitoring.support.MongoTestContainerConfig;
 import io.github.erselseyit.basestation.monitoring.config.RabbitMQConfig;
 import io.github.erselseyit.basestation.monitoring.dto.MetricDataDTO;
 import io.github.erselseyit.basestation.monitoring.model.MetricType;
@@ -41,6 +47,7 @@ import io.github.erselseyit.basestation.monitoring.service.AlertingService;
  */
 @SpringBootTest
 @Testcontainers
+@Import(MongoTestContainerConfig.class)
 @ActiveProfiles("test")
 @DisplayName("RabbitMQ Alert Flow Integration Tests")
 @DisabledIf("skipInDemoOrNoDocker")
@@ -87,9 +94,28 @@ class RabbitMQAlertFlowIntegrationTest {
     @Autowired
     private RabbitTemplate rabbitTemplate;
 
+    @Autowired
+    private AmqpAdmin amqpAdmin;
+
+    /**
+     * Queue used only by this test to capture what the service publishes.
+     *
+     * monitoring-service declares the alerts exchange but no queue bound to it —
+     * the consumer queue belongs to notification-service. A topic exchange drops
+     * messages that match no binding, so the test must bind its own queue before
+     * publishing or it would assert against a queue that never exists.
+     */
+    private static final String CAPTURE_QUEUE = "test.alerts.capture";
+
     @BeforeEach
     void setUp() {
-        // Configure RabbitTemplate to receive messages for testing
+        amqpAdmin.declareQueue(new Queue(CAPTURE_QUEUE, true, false, false));
+        amqpAdmin.declareBinding(
+                BindingBuilder.bind(new Queue(CAPTURE_QUEUE, true, false, false))
+                        .to(new TopicExchange(RabbitMQConfig.ALERTS_EXCHANGE, true, false))
+                        .with(RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY));
+        amqpAdmin.purgeQueue(CAPTURE_QUEUE);
+
         rabbitTemplate.setReceiveTimeout(5000);
     }
 
@@ -111,8 +137,7 @@ class RabbitMQAlertFlowIntegrationTest {
             .atMost(10, TimeUnit.SECONDS)
             .pollInterval(Duration.ofMillis(500))
             .untilAsserted(() -> {
-                AlertEvent receivedEvent = (AlertEvent) rabbitTemplate.receiveAndConvert(
-                        RabbitMQConfig.ALERTS_EXCHANGE + "." + RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY);
+                AlertEvent receivedEvent = (AlertEvent) rabbitTemplate.receiveAndConvert(CAPTURE_QUEUE);
 
                 if (receivedEvent != null) {
                     assertThat(receivedEvent.getAlertRuleId()).isEqualTo("cpu-critical");
@@ -146,8 +171,7 @@ class RabbitMQAlertFlowIntegrationTest {
             .atMost(10, TimeUnit.SECONDS)
             .pollInterval(Duration.ofMillis(500))
             .untilAsserted(() -> {
-                AlertEvent receivedEvent = (AlertEvent) rabbitTemplate.receiveAndConvert(
-                        RabbitMQConfig.ALERTS_EXCHANGE + "." + RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY);
+                AlertEvent receivedEvent = (AlertEvent) rabbitTemplate.receiveAndConvert(CAPTURE_QUEUE);
 
                 if (receivedEvent != null) {
                     assertThat(receivedEvent.getAlertRuleId()).isEqualTo("cpu-warning");
@@ -175,8 +199,7 @@ class RabbitMQAlertFlowIntegrationTest {
             .atMost(10, TimeUnit.SECONDS)
             .pollInterval(Duration.ofMillis(500))
             .untilAsserted(() -> {
-                AlertEvent receivedEvent = (AlertEvent) rabbitTemplate.receiveAndConvert(
-                        RabbitMQConfig.ALERTS_EXCHANGE + "." + RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY);
+                AlertEvent receivedEvent = (AlertEvent) rabbitTemplate.receiveAndConvert(CAPTURE_QUEUE);
 
                 if (receivedEvent != null) {
                     assertThat(receivedEvent.getAlertRuleId()).isEqualTo("memory-critical");
@@ -198,7 +221,7 @@ class RabbitMQAlertFlowIntegrationTest {
 
         // Record queue depth before
         Long countBefore = rabbitTemplate.execute(channel ->
-            channel.messageCount(RabbitMQConfig.ALERTS_EXCHANGE + "." + RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY));
+            channel.messageCount(CAPTURE_QUEUE));
         long messageCountBefore = countBefore != null ? countBefore : 0L;
 
         // When
@@ -209,7 +232,7 @@ class RabbitMQAlertFlowIntegrationTest {
                 .atMost(Duration.ofSeconds(2))
                 .untilAsserted(() -> {
                     Long count = rabbitTemplate.execute(channel ->
-                        channel.messageCount(RabbitMQConfig.ALERTS_EXCHANGE + "." + RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY));
+                        channel.messageCount(CAPTURE_QUEUE));
                     long currentCount = count != null ? count : 0L;
                     assertThat(currentCount).isEqualTo(messageCountBefore);
                 });
@@ -233,8 +256,7 @@ class RabbitMQAlertFlowIntegrationTest {
             .atMost(10, TimeUnit.SECONDS)
             .pollInterval(Duration.ofMillis(500))
             .untilAsserted(() -> {
-                AlertEvent receivedEvent = (AlertEvent) rabbitTemplate.receiveAndConvert(
-                        RabbitMQConfig.ALERTS_EXCHANGE + "." + RabbitMQConfig.ALERT_TRIGGERED_ROUTING_KEY);
+                AlertEvent receivedEvent = (AlertEvent) rabbitTemplate.receiveAndConvert(CAPTURE_QUEUE);
 
                 if (receivedEvent != null) {
                     assertThat(receivedEvent.getAlertRuleId()).isEqualTo("temperature-critical");

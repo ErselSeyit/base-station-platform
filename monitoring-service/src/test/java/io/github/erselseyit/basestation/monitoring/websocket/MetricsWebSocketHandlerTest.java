@@ -20,11 +20,13 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.lang.NonNull;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.erselseyit.basestation.monitoring.support.MongoTestContainerConfig;
 import io.github.erselseyit.basestation.monitoring.dto.MetricDataDTO;
 import io.github.erselseyit.basestation.monitoring.model.MetricType;
 
@@ -34,6 +36,7 @@ import io.github.erselseyit.basestation.monitoring.model.MetricType;
  * Tests WebSocket connection management and message broadcasting.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(MongoTestContainerConfig.class)
 @ActiveProfiles("test")
 @DisplayName("MetricsWebSocketHandler Tests")
 @DisabledIf("skipInDemoOrNoDocker")
