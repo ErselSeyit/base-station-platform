@@ -52,6 +52,22 @@ class MonitoringControllerTest {
     @MockitoBean
     private MonitoringService monitoringService;
 
+
+    @Test
+    @DisplayName("GET /api/v1/metrics/catalog - lists every metric with unit and 3GPP counter")
+    void getMetricCatalog_ReturnsEveryMetricType() throws Exception {
+        // The catalog is derived from the enum, so it needs no service call.
+        mockMvc.perform(get("/api/v1/metrics/catalog"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(MetricType.values().length))
+                // A mapped RAN metric carries its 3GPP counter name.
+                .andExpect(jsonPath("$[?(@.name == 'HANDOVER_SUCCESS_RATE')].threeGppCounter").value("HO.IntraSys"))
+                .andExpect(jsonPath("$[?(@.name == 'HANDOVER_SUCCESS_RATE')].unit").value("%"))
+                // Facility telemetry has no counter: the field is omitted, so a
+                // projection of it for CPU_USAGE is empty.
+                .andExpect(jsonPath("$[?(@.name == 'CPU_USAGE')].threeGppCounter").isEmpty());
+    }
+
     @Test
     @DisplayName("POST /api/v1/metrics - Should record metric successfully")
     void recordMetric_ValidRequest_ReturnsCreated() throws Exception {

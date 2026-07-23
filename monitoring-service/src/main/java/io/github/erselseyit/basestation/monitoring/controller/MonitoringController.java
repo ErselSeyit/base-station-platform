@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import io.github.erselseyit.basestation.common.constants.ValidationMessages;
 import io.github.erselseyit.basestation.common.security.Roles;
 import io.github.erselseyit.basestation.monitoring.dto.DailyMetricAggregateDTO;
+import io.github.erselseyit.basestation.monitoring.dto.MetricCatalogEntryDTO;
 import io.github.erselseyit.basestation.monitoring.dto.MetricDataDTO;
 import io.github.erselseyit.basestation.monitoring.model.MetricType;
 import io.github.erselseyit.basestation.monitoring.service.MonitoringService;
@@ -53,6 +54,18 @@ public class MonitoringController {
 
     public MonitoringController(MonitoringService service) {
         this.service = service;
+    }
+
+    @Operation(summary = "Metric catalog",
+            description = "Lists every metric the platform records, with its unit and 3GPP TS 28.552 counter name.")
+    @ApiResponse(responseCode = "200", description = "Metric catalog")
+    @GetMapping("/catalog")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<MetricCatalogEntryDTO>> getMetricCatalog() {
+        List<MetricCatalogEntryDTO> catalog = java.util.Arrays.stream(MetricType.values())
+                .map(MetricCatalogEntryDTO::of)
+                .toList();
+        return ResponseEntity.ok(catalog);
     }
 
     @Operation(summary = "Record metric", description = "Records a single metric data point")
