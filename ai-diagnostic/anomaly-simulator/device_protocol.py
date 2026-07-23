@@ -92,17 +92,12 @@ class MetricType(IntEnum):
     UPTIME = 0x31
     ERROR_COUNT = 0x32
 
-    # 5G NR700 (n28) metrics (0x40-0x4F)
-    DL_THROUGHPUT_NR700 = 0x40
-    UL_THROUGHPUT_NR700 = 0x41
-    RSRP_NR700 = 0x42
-    SINR_NR700 = 0x43
-
-    # 5G NR3500 (n78) metrics (0x50-0x5F)
-    DL_THROUGHPUT_NR3500 = 0x50
-    UL_THROUGHPUT_NR3500 = 0x51
-    RSRP_NR3500 = 0x52
-    SINR_NR3500 = 0x53
+    # 5G NR radio metrics (0x40-0x4F). Band-neutral; the carrier travels in
+    # Metric.band, per the 3GPP model (measurement vs measured object).
+    DL_THROUGHPUT = 0x40
+    UL_THROUGHPUT = 0x41
+    RSRP = 0x42
+    SINR = 0x43
 
     # 5G Radio metrics (0x60-0x6F)
     PDCP_THROUGHPUT = 0x60
@@ -216,11 +211,19 @@ class Message:
         return self.msg_type >= 0xA0
 
 
+class Band(IntEnum):
+    """NR frequency band, a dimension of a reading rather than part of its type."""
+    NONE = 0x00
+    N28 = 0x01   # 700 MHz
+    N78 = 0x02   # 3.5 GHz
+
+
 @dataclass
 class Metric:
-    """Single metric value"""
+    """Single metric value on a given band"""
     metric_type: MetricType
     value: float
+    band: Band = Band.NONE
 
 
 @dataclass
@@ -241,10 +244,11 @@ class CommandResult:
 
 
 def encode_metrics(metrics: List[Metric]) -> bytes:
-    """Encode metrics to wire format (5 bytes per metric)"""
+    """Encode metrics to wire format (6 bytes per metric: type, band, float32)"""
     result = bytearray()
     for m in metrics:
         result.append(m.metric_type)
+        result.append(m.band)
         result.extend(struct.pack('>f', m.value))  # big-endian float32
     return bytes(result)
 
@@ -253,11 +257,12 @@ def decode_metrics(data: bytes) -> List[Metric]:
     """Decode metrics from wire format"""
     metrics = []
     offset = 0
-    while offset + 5 <= len(data):
+    while offset + 6 <= len(data):
         metric_type = MetricType(data[offset])
-        value = struct.unpack('>f', data[offset + 1:offset + 5])[0]
-        metrics.append(Metric(metric_type, value))
-        offset += 5
+        band = Band(data[offset + 1])
+        value = struct.unpack('>f', data[offset + 2:offset + 6])[0]
+        metrics.append(Metric(metric_type, value, band))
+        offset += 6
     return metrics
 
 

@@ -27,7 +27,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 
 from device_protocol import (
-    DeviceProtocolServer, MetricType, StatusCode, CommandType,
+    DeviceProtocolServer, MetricType, Band, StatusCode, CommandType,
     Metric, StatusPayload, CommandResult
 )
 
@@ -408,17 +408,17 @@ class VirtualMIPSBaseStation:
             Metric(MetricType.UPTIME, float(self.state.uptime_seconds)),
             Metric(MetricType.ERROR_COUNT, float(self.state.error_count)),
 
-            # 5G NR700 metrics
-            Metric(MetricType.DL_THROUGHPUT_NR700, self.state.dl_throughput_nr700),
-            Metric(MetricType.UL_THROUGHPUT_NR700, self.state.ul_throughput_nr700),
-            Metric(MetricType.RSRP_NR700, self.state.rsrp_nr700),
-            Metric(MetricType.SINR_NR700, self.state.sinr_nr700),
+            # 5G NR n28 (700 MHz)
+            Metric(MetricType.DL_THROUGHPUT, self.state.dl_throughput_nr700, Band.N28),
+            Metric(MetricType.UL_THROUGHPUT, self.state.ul_throughput_nr700, Band.N28),
+            Metric(MetricType.RSRP, self.state.rsrp_nr700, Band.N28),
+            Metric(MetricType.SINR, self.state.sinr_nr700, Band.N28),
 
-            # 5G NR3500 metrics
-            Metric(MetricType.DL_THROUGHPUT_NR3500, self.state.dl_throughput_nr3500),
-            Metric(MetricType.UL_THROUGHPUT_NR3500, self.state.ul_throughput_nr3500),
-            Metric(MetricType.RSRP_NR3500, self.state.rsrp_nr3500),
-            Metric(MetricType.SINR_NR3500, self.state.sinr_nr3500),
+            # 5G NR n78 (3.5 GHz)
+            Metric(MetricType.DL_THROUGHPUT, self.state.dl_throughput_nr3500, Band.N78),
+            Metric(MetricType.UL_THROUGHPUT, self.state.ul_throughput_nr3500, Band.N78),
+            Metric(MetricType.RSRP, self.state.rsrp_nr3500, Band.N78),
+            Metric(MetricType.SINR, self.state.sinr_nr3500, Band.N78),
 
             # 5G Radio metrics
             Metric(MetricType.PDCP_THROUGHPUT, self.state.pdcp_throughput),
