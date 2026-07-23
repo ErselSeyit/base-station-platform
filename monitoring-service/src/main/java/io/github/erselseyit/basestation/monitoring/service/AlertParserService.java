@@ -60,44 +60,48 @@ public class AlertParserService {
     private static final String SEVERITY_WARNING = "warning";
 
     // Problem type patterns
-    private static final Map<Pattern, String> PROBLEM_PATTERNS = new LinkedHashMap<>();
+    /** Insertion-ordered and never mutated after class initialisation. */
+    private static final Map<Pattern, String> PROBLEM_PATTERNS;
 
     static {
+        Map<Pattern, String> patterns = new LinkedHashMap<>();
         // Signal/RF issues
-        PROBLEM_PATTERNS.put(Pattern.compile("RSSI.*(?:drop|low|degraded|weak)", Pattern.CASE_INSENSITIVE), SIGNAL_DEGRADATION);
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:signal|RF).*(?:degraded|weak|poor|low)", Pattern.CASE_INSENSITIVE), SIGNAL_DEGRADATION);
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:interference|jamming)", Pattern.CASE_INSENSITIVE), "HIGH_INTERFERENCE");
+        patterns.put(Pattern.compile("RSSI.*(?:drop|low|degraded|weak)", Pattern.CASE_INSENSITIVE), SIGNAL_DEGRADATION);
+        patterns.put(Pattern.compile("(?:signal|RF).*(?:degraded|weak|poor|low)", Pattern.CASE_INSENSITIVE), SIGNAL_DEGRADATION);
+        patterns.put(Pattern.compile("(?:interference|jamming)", Pattern.CASE_INSENSITIVE), "HIGH_INTERFERENCE");
 
         // Handover issues
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:handover|HO).*(?:fail|failure|reject)", Pattern.CASE_INSENSITIVE), HANDOVER_FAILURE);
+        patterns.put(Pattern.compile("(?:handover|HO).*(?:fail|failure|reject)", Pattern.CASE_INSENSITIVE), HANDOVER_FAILURE);
 
         // Cell/Availability issues
-        PROBLEM_PATTERNS.put(Pattern.compile("cell.*(?:unavailable|down|offline|outage)", Pattern.CASE_INSENSITIVE), "CELL_UNAVAILABLE");
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:site|station).*(?:down|offline|unreachable)", Pattern.CASE_INSENSITIVE), "SITE_DOWN");
+        patterns.put(Pattern.compile("cell.*(?:unavailable|down|offline|outage)", Pattern.CASE_INSENSITIVE), "CELL_UNAVAILABLE");
+        patterns.put(Pattern.compile("(?:site|station).*(?:down|offline|unreachable)", Pattern.CASE_INSENSITIVE), "SITE_DOWN");
 
         // Hardware issues
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:CPU|processor).*(?:high|overload|100%)", Pattern.CASE_INSENSITIVE), CPU_OVERHEAT);
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:memory|RAM).*(?:high|full|exhausted)", Pattern.CASE_INSENSITIVE), MEMORY_PRESSURE);
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:temperature|temp).*(?:high|critical|overheat)", Pattern.CASE_INSENSITIVE), TEMPERATURE_ALARM);
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:fan|cooling).*(?:fail|fault)", Pattern.CASE_INSENSITIVE), "COOLING_FAILURE");
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:disk|storage).*(?:full|fail|error)", Pattern.CASE_INSENSITIVE), "STORAGE_ISSUE");
+        patterns.put(Pattern.compile("(?:CPU|processor).*(?:high|overload|100%)", Pattern.CASE_INSENSITIVE), CPU_OVERHEAT);
+        patterns.put(Pattern.compile("(?:memory|RAM).*(?:high|full|exhausted)", Pattern.CASE_INSENSITIVE), MEMORY_PRESSURE);
+        patterns.put(Pattern.compile("(?:temperature|temp).*(?:high|critical|overheat)", Pattern.CASE_INSENSITIVE), TEMPERATURE_ALARM);
+        patterns.put(Pattern.compile("(?:fan|cooling).*(?:fail|fault)", Pattern.CASE_INSENSITIVE), "COOLING_FAILURE");
+        patterns.put(Pattern.compile("(?:disk|storage).*(?:full|fail|error)", Pattern.CASE_INSENSITIVE), "STORAGE_ISSUE");
 
         // Power issues
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:power|voltage).*(?:fail|loss|low|high)", Pattern.CASE_INSENSITIVE), "POWER_ISSUE");
-        PROBLEM_PATTERNS.put(Pattern.compile("battery.*(?:low|critical|fail)", Pattern.CASE_INSENSITIVE), "LOW_BATTERY");
+        patterns.put(Pattern.compile("(?:power|voltage).*(?:fail|loss|low|high)", Pattern.CASE_INSENSITIVE), "POWER_ISSUE");
+        patterns.put(Pattern.compile("battery.*(?:low|critical|fail)", Pattern.CASE_INSENSITIVE), "LOW_BATTERY");
 
         // Antenna/Feeder issues
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:VSWR|antenna|feeder).*(?:high|fail|alarm)", Pattern.CASE_INSENSITIVE), "ANTENNA_FEEDER_ISSUE");
+        patterns.put(Pattern.compile("(?:VSWR|antenna|feeder).*(?:high|fail|alarm)", Pattern.CASE_INSENSITIVE), "ANTENNA_FEEDER_ISSUE");
 
         // Network/Connectivity issues
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:latency|delay|RTT).*(?:high|increased)", Pattern.CASE_INSENSITIVE), "HIGH_LATENCY");
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:packet.*loss|loss.*packet)", Pattern.CASE_INSENSITIVE), "PACKET_LOSS");
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:link|backhaul|transport).*(?:down|fail|loss)", Pattern.CASE_INSENSITIVE), "BACKHAUL_FAILURE");
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:throughput|bandwidth).*(?:low|degraded)", Pattern.CASE_INSENSITIVE), "LOW_THROUGHPUT");
+        patterns.put(Pattern.compile("(?:latency|delay|RTT).*(?:high|increased)", Pattern.CASE_INSENSITIVE), "HIGH_LATENCY");
+        patterns.put(Pattern.compile("(?:packet.*loss|loss.*packet)", Pattern.CASE_INSENSITIVE), "PACKET_LOSS");
+        patterns.put(Pattern.compile("(?:link|backhaul|transport).*(?:down|fail|loss)", Pattern.CASE_INSENSITIVE), "BACKHAUL_FAILURE");
+        patterns.put(Pattern.compile("(?:throughput|bandwidth).*(?:low|degraded)", Pattern.CASE_INSENSITIVE), "LOW_THROUGHPUT");
 
         // Software issues
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:process|service).*(?:crash|died|restart)", Pattern.CASE_INSENSITIVE), "PROCESS_CRASH");
-        PROBLEM_PATTERNS.put(Pattern.compile("(?:sync|synchronization).*(?:lost|fail)", Pattern.CASE_INSENSITIVE), "SYNC_FAILURE");
+        patterns.put(Pattern.compile("(?:process|service).*(?:crash|died|restart)", Pattern.CASE_INSENSITIVE), "PROCESS_CRASH");
+        patterns.put(Pattern.compile("(?:sync|synchronization).*(?:lost|fail)", Pattern.CASE_INSENSITIVE), "SYNC_FAILURE");
+
+        PROBLEM_PATTERNS = Collections.unmodifiableMap(patterns);
     }
 
     /**

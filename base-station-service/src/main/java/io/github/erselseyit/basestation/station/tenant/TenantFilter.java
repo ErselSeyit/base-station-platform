@@ -47,13 +47,11 @@ public class TenantFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
         try {
-            TenantContext.TenantInfo tenantInfo = extractTenantInfo(request);
-
-            if (tenantInfo != null) {
+            extractTenantInfo(request).ifPresent(tenantInfo -> {
                 TenantContext.setCurrentTenant(tenantInfo);
                 log.debug("Tenant context set: org={}, user={}",
                         tenantInfo.organizationSlug(), tenantInfo.username());
-            }
+            });
 
             filterChain.doFilter(request, response);
         } finally {
@@ -62,7 +60,7 @@ public class TenantFilter extends OncePerRequestFilter {
         }
     }
 
-    private TenantContext.TenantInfo extractTenantInfo(HttpServletRequest request) {
+    private Optional<TenantContext.TenantInfo> extractTenantInfo(HttpServletRequest request) {
         String username = request.getHeader(HEADER_USER_NAME);
         String role = request.getHeader(HEADER_USER_ROLE);
 
@@ -73,12 +71,12 @@ public class TenantFilter extends OncePerRequestFilter {
                 Long orgId = Long.parseLong(orgIdHeader);
                 Optional<Organization> org = organizationRepository.findById(orgId);
                 if (org.isPresent() && org.get().isActive()) {
-                    return new TenantContext.TenantInfo(
+                    return Optional.of(new TenantContext.TenantInfo(
                             org.get().getId(),
                             org.get().getSlug(),
                             username,
                             role
-                    );
+                    ));
                 }
                 log.warn("Organization not found or inactive: id={}", orgId);
             } catch (NumberFormatException e) {
@@ -91,22 +89,22 @@ public class TenantFilter extends OncePerRequestFilter {
         if (orgSlugHeader != null && !orgSlugHeader.isBlank()) {
             Optional<Organization> org = organizationRepository.findBySlug(orgSlugHeader);
             if (org.isPresent() && org.get().isActive()) {
-                return new TenantContext.TenantInfo(
+                return Optional.of(new TenantContext.TenantInfo(
                         org.get().getId(),
                         org.get().getSlug(),
                         username,
                         role
-                );
+                ));
             }
             log.warn("Organization not found or inactive: slug={}", orgSlugHeader);
         }
 
         // No organization context - return user info only (for admins or public endpoints)
         if (username != null) {
-            return new TenantContext.TenantInfo(null, null, username, role);
+            return Optional.of(new TenantContext.TenantInfo(null, null, username, role));
         }
 
-        return null;
+        return Optional.empty();
     }
 
     @Override

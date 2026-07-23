@@ -160,7 +160,7 @@ public class SecurityAuditService {
         try {
             return objectMapper.writeValueAsString(details);
         } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize audit details: {}", e.getMessage());
+            log.warn("Failed to serialize audit details; falling back to toString()", e);
             return details.toString();
         }
     }

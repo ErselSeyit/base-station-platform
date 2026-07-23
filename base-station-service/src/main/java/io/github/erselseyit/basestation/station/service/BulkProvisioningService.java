@@ -108,9 +108,9 @@ public class BulkProvisioningService {
         try {
             // Validate coordinates if enabled
             if (options.validateCoordinates()) {
-                String coordError = validateCoordinates(item.latitude(), item.longitude());
-                if (coordError != null) {
-                    return new ImportResult(stationName, ImportResult.Status.FAILED, coordError, null);
+                Optional<String> coordError = validateCoordinates(item.latitude(), item.longitude());
+                if (coordError.isPresent()) {
+                    return new ImportResult(stationName, ImportResult.Status.FAILED, coordError.get(), null);
                 }
             }
 
@@ -154,18 +154,22 @@ public class BulkProvisioningService {
         }
     }
 
-    @Nullable
-    private String validateCoordinates(@Nullable Double latitude, @Nullable Double longitude) {
+    /**
+     * Validates coordinates.
+     *
+     * @return the reason the coordinates are invalid, or empty if they are valid
+     */
+    private Optional<String> validateCoordinates(@Nullable Double latitude, @Nullable Double longitude) {
         if (latitude == null || longitude == null) {
-            return "Latitude and longitude are required";
+            return Optional.of("Latitude and longitude are required");
         }
         if (latitude < -90 || latitude > 90) {
-            return "Latitude must be between -90 and 90";
+            return Optional.of("Latitude must be between -90 and 90");
         }
         if (longitude < -180 || longitude > 180) {
-            return "Longitude must be between -180 and 180";
+            return Optional.of("Longitude must be between -180 and 180");
         }
-        return null;
+        return Optional.empty();
     }
 
     private BaseStation createStationFromItem(StationImportItem item, @Nullable Organization organization) {

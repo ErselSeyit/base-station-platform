@@ -138,7 +138,10 @@ public class DiagnosticResponse {
 
     @Nullable
     public List<String> getCommands() { return commands; }
-    public void setCommands(@Nullable List<String> commands) { this.commands = commands; }
+    /** Never stores null: a null argument is normalised to an empty list (Effective Java item 54). */
+    public void setCommands(@Nullable List<String> commands) {
+        this.commands = Objects.requireNonNullElse(commands, Collections.emptyList());
+    }
 
     @Nullable
     public String getExpectedOutcome() { return expectedOutcome; }
