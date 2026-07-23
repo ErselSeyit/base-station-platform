@@ -61,6 +61,24 @@ class PerceivedSeverityTest {
     }
 
     @Nested
+    class LenientParsing {
+
+        @Test
+        void parsesTheSameValuesAsFromString() {
+            assertThat(PerceivedSeverity.parse("critical")).contains(PerceivedSeverity.CRITICAL);
+            assertThat(PerceivedSeverity.parse(" MAJOR ")).contains(PerceivedSeverity.MAJOR);
+            assertThat(PerceivedSeverity.parse("INFO")).contains(PerceivedSeverity.INDETERMINATE);
+        }
+
+        @Test
+        void returnsEmptyRatherThanThrowingForUnknownInput() {
+            assertThat(PerceivedSeverity.parse("SEVERE")).isEmpty();
+            assertThat(PerceivedSeverity.parse(null)).isEmpty();
+            assertThat(PerceivedSeverity.parse("")).isEmpty();
+        }
+    }
+
+    @Nested
     class AlarmState {
 
         @Test

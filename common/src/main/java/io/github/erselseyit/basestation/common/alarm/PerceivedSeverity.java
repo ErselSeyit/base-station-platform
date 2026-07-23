@@ -1,6 +1,8 @@
 package io.github.erselseyit.basestation.common.alarm;
 
+import java.util.Arrays;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Alarm severity as defined by ITU-T X.733 and 3GPP TS 28.111 clause 6
@@ -45,18 +47,33 @@ public enum PerceivedSeverity {
         if (value == null) {
             throw new IllegalArgumentException("perceivedSeverity must not be null");
         }
+        return parse(value).orElseThrow(() -> new IllegalArgumentException(
+                "Unknown perceivedSeverity: '" + value + "'. Allowed values per 3GPP TS 28.111: "
+                        + "CRITICAL, MAJOR, MINOR, WARNING, INDETERMINATE, CLEARED"));
+    }
+
+    /**
+     * Lenient counterpart to {@link #fromString(String)}.
+     *
+     * <p>Use this when the input comes from a wire format and an unrecognised
+     * value is an expected outcome rather than a programming error — signalling
+     * that with an exception would be using exceptions for control flow
+     * (<em>Effective Java</em> item 69).
+     *
+     * @param value severity name; may be null
+     * @return the matching severity, or empty if null or unrecognised
+     */
+    public static Optional<PerceivedSeverity> parse(String value) {
+        if (value == null) {
+            return Optional.empty();
+        }
         String normalised = value.trim().toUpperCase(Locale.ROOT);
         if (LEGACY_INFO.equals(normalised)) {
-            return INDETERMINATE;
+            return Optional.of(INDETERMINATE);
         }
-        for (PerceivedSeverity severity : values()) {
-            if (severity.name().equals(normalised)) {
-                return severity;
-            }
-        }
-        throw new IllegalArgumentException(
-                "Unknown perceivedSeverity: '" + value + "'. Allowed values per 3GPP TS 28.111: "
-                        + "CRITICAL, MAJOR, MINOR, WARNING, INDETERMINATE, CLEARED");
+        return Arrays.stream(values())
+                .filter(severity -> severity.name().equals(normalised))
+                .findFirst();
     }
 
     /**

@@ -1,9 +1,13 @@
 package io.github.erselseyit.basestation.common.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.Objects;
+
+import io.github.erselseyit.basestation.common.alarm.PerceivedSeverity;
 
 import org.springframework.lang.Nullable;
 
@@ -207,6 +211,19 @@ public class AlertEvent {
     }
 
     @Nullable
+    /**
+     * The severity as the shared X.733 vocabulary.
+     *
+     * <p>The wire field stays a String for compatibility across services, but
+     * consumers should prefer this typed view over re-parsing the raw value
+     * (<em>Effective Java</em> item 62). Returns empty when the field is absent
+     * or carries a value outside the standard vocabulary.
+     */
+    @JsonIgnore
+    public Optional<PerceivedSeverity> perceivedSeverity() {
+        return PerceivedSeverity.parse(severity);
+    }
+
     public String getSeverity() {
         return severity;
     }
