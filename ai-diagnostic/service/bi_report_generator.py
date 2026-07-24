@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Shared RNG for reproducibility
 from .utils.rng import get_rng
+from .ssv_status import ssv_status
 _rng = get_rng()
 
 # Professional color palette
@@ -827,30 +828,19 @@ class BIReportGenerator:
         "SINR_NR700": {"min": 8, "warn": 12, "unit": "dB", "higher_better": True},
     }
 
+    # Display colour per SSV status; the pass/warn/fail decision itself lives in
+    # the pure ssv_status() so it can be tested apart from rendering.
+    _SSV_STATUS_COLORS = {
+        "PASS": "success",
+        "WARN": "warning",
+        "FAIL": "danger",
+        "N/A": "secondary",
+    }
+
     def _get_ssv_status(self, metric_type: str, value: float) -> tuple:
         """Get SSV pass/warn/fail status and color for a metric."""
-        thresh = self.SSV_THRESHOLDS.get(metric_type)
-        if not thresh:
-            return "N/A", COLORS["secondary"]
-
-        if thresh.get("higher_better", True):
-            min_val = thresh.get("min", 0)
-            warn_val = thresh.get("warn", min_val)
-            if value >= warn_val:
-                return "PASS", COLORS["success"]
-            elif value >= min_val:
-                return "WARN", COLORS["warning"]
-            else:
-                return "FAIL", COLORS["danger"]
-        else:
-            max_val = thresh.get("max", 100)
-            warn_val = thresh.get("warn", max_val)
-            if value <= warn_val:
-                return "PASS", COLORS["success"]
-            elif value <= max_val:
-                return "WARN", COLORS["warning"]
-            else:
-                return "FAIL", COLORS["danger"]
+        status = ssv_status(value, self.SSV_THRESHOLDS.get(metric_type))
+        return status, COLORS[self._SSV_STATUS_COLORS[status]]
 
     def _draw_gauge(self, ax, value: float, min_val: float, max_val: float,
                     label: str, unit: str, threshold: Optional[float] = None):
