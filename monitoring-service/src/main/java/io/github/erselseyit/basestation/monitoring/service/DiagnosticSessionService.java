@@ -47,13 +47,16 @@ public class DiagnosticSessionService {
     private final DiagnosticSessionRepository sessionRepository;
     private final LearningPatternService learningPatternService;
     private final RabbitTemplate rabbitTemplate;
+    private final DiagnosticProblemCodeMapper problemCodeMapper;
 
     public DiagnosticSessionService(DiagnosticSessionRepository sessionRepository,
                                     LearningPatternService learningPatternService,
-                                    RabbitTemplate rabbitTemplate) {
+                                    RabbitTemplate rabbitTemplate,
+                                    DiagnosticProblemCodeMapper problemCodeMapper) {
         this.sessionRepository = sessionRepository;
         this.learningPatternService = learningPatternService;
         this.rabbitTemplate = rabbitTemplate;
+        this.problemCodeMapper = problemCodeMapper;
     }
 
     private static final String DEFAULT_SEVERITY = "medium";
@@ -73,7 +76,7 @@ public class DiagnosticSessionService {
         Objects.requireNonNull(alert, "AlertEvent must not be null");
         Objects.requireNonNull(problemId, "problemId must not be null");
 
-        String problemCode = mapAlertToProblemCode(alert);
+        String problemCode = problemCodeMapper.problemCodeFor(alert.getMetricType());
         Long stationId = alert.getStationId();
 
         // Pre-processing: Check for existing active session to prevent duplicates
@@ -100,7 +103,7 @@ public class DiagnosticSessionService {
 
         // Use Optional to safely extract and transform nullable values
         String category = Optional.ofNullable(alert.getMetricType())
-                .map(this::mapMetricTypeToCategory)
+                .map(problemCodeMapper::categoryFor)
                 .orElse(DEFAULT_CATEGORY);
 
         String severity = Optional.ofNullable(alert.getSeverity())
@@ -561,53 +564,6 @@ public class DiagnosticSessionService {
     @Transactional(readOnly = true)
     public List<LearnedPattern> getAllPatterns() {
         return learningPatternService.getAllPatterns();
-    }
-
-    /**
-     * Maps metric type to problem category.
-     * Contract: metricType is guaranteed non-null by caller (using Optional).
-     */
-    private String mapMetricTypeToCategory(String metricType) {
-        // Caller guarantees non-null via Optional.map() - no defensive check needed
-        return switch (metricType.toUpperCase()) {
-            case "CPU_USAGE", "MEMORY_USAGE", "FAN_SPEED" -> "hardware";
-            case "TEMPERATURE", "POWER_CONSUMPTION" -> "power";
-            case "SIGNAL_STRENGTH", "DATA_THROUGHPUT", "CONNECTION_COUNT" -> "network";
-            default -> "software";
-        };
-    }
-
-    private static final String UNKNOWN_PROBLEM_CODE = "UNKNOWN";
-
-    /**
-     * Maps alert to a problem code that matches AI diagnostic service codes.
-     * Returns empty collections pattern: always returns a valid code, never null.
-     */
-    private String mapAlertToProblemCode(AlertEvent alert) {
-        return Objects.requireNonNull(Optional.ofNullable(alert.getMetricType())
-                .map(String::toUpperCase)
-                .map(this::metricTypeToProblemCode)
-                .orElse(UNKNOWN_PROBLEM_CODE));
-    }
-
-    /**
-     * Maps a metric type to its corresponding problem code.
-     * Contract: metricType is guaranteed non-null and uppercase by caller.
-     */
-    private String metricTypeToProblemCode(String metricType) {
-        return switch (metricType) {
-            case "CPU_USAGE", "TEMPERATURE" -> "CPU_OVERHEAT";
-            case "MEMORY_USAGE" -> "MEMORY_PRESSURE";
-            case "SIGNAL_STRENGTH" -> "SIGNAL_DEGRADATION";
-            case "POWER_CONSUMPTION" -> "HIGH_POWER_CONSUMPTION";
-            case "INITIAL_BLER" -> "HIGH_BLOCK_ERROR_RATE";
-            case "BATTERY_SOC" -> "LOW_BATTERY";
-            case "LATENCY_PING" -> "HIGH_LATENCY";
-            case "DATA_THROUGHPUT" -> "LOW_THROUGHPUT";
-            case "HANDOVER_SUCCESS_RATE" -> "HANDOVER_FAILURE";
-            case "INTERFERENCE_LEVEL" -> "HIGH_INTERFERENCE";
-            default -> metricType + "_ISSUE";
-        };
     }
 
     // ========================================
