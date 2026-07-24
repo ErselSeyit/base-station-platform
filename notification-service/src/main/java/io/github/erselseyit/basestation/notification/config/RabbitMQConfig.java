@@ -27,14 +27,38 @@ public class RabbitMQConfig {
     public static final String DIAGNOSTIC_RESOLUTION_QUEUE = MessagingConstants.DIAGNOSTIC_RESOLUTION_QUEUE;
     public static final String DIAGNOSTIC_RESOLVED_ROUTING_KEY = MessagingConstants.DIAGNOSTIC_RESOLVED_ROUTING_KEY;
 
+    /** Dead-letter exchange and queue: messages that exhaust retries land here
+     *  instead of being redelivered forever or dropped (Nygard: fail fast, keep
+     *  a record). */
+    public static final String DEAD_LETTER_EXCHANGE = "alerts.dlx";
+    public static final String DEAD_LETTER_QUEUE = "notifications.dlq";
+
     @Bean
     public Exchange alertsExchange() {
         return new TopicExchange(ALERTS_EXCHANGE, true, false);
     }
 
     @Bean
+    public org.springframework.amqp.core.FanoutExchange deadLetterExchange() {
+        return new org.springframework.amqp.core.FanoutExchange(DEAD_LETTER_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue deadLetterQueue() {
+        return new Queue(DEAD_LETTER_QUEUE, true);
+    }
+
+    @Bean
+    public Binding deadLetterBinding(Queue deadLetterQueue,
+            org.springframework.amqp.core.FanoutExchange deadLetterExchange) {
+        return BindingBuilder.bind(deadLetterQueue).to(deadLetterExchange);
+    }
+
+    @Bean
     public Queue notificationQueue() {
-        return new Queue(NOTIFICATION_QUEUE, true);
+        return org.springframework.amqp.core.QueueBuilder.durable(NOTIFICATION_QUEUE)
+                .deadLetterExchange(DEAD_LETTER_EXCHANGE)
+                .build();
     }
 
     @Bean
@@ -48,7 +72,9 @@ public class RabbitMQConfig {
 
     @Bean("diagnosticResolutionQueue")
     public Queue diagnosticResolutionQueue() {
-        return new Queue(DIAGNOSTIC_RESOLUTION_QUEUE, true);
+        return org.springframework.amqp.core.QueueBuilder.durable(DIAGNOSTIC_RESOLUTION_QUEUE)
+                .deadLetterExchange(DEAD_LETTER_EXCHANGE)
+                .build();
     }
 
     @Bean
@@ -87,6 +113,9 @@ public class RabbitMQConfig {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         configurer.configure(factory, connectionFactory);
         factory.setAdviceChain(new CorrelationIdInboundAdvice());
+        // A message that keeps failing must not be requeued forever; reject it
+        // so it is routed to the dead-letter exchange for inspection/replay.
+        factory.setDefaultRequeueRejected(false);
         return factory;
     }
 }
