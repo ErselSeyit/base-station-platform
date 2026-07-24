@@ -32,6 +32,14 @@ public final class PublicEndpoints {
      */
     public static final String ACTUATOR_HEALTH_WILDCARD = "/actuator/health/**";
 
+    /**
+     * Prometheus scrape endpoint. Exposed to the in-cluster Prometheus, which
+     * scrapes over the internal network without per-request auth; the rest of
+     * {@code /actuator/**} stays admin-only. Metrics are low-sensitivity and
+     * the services are not directly internet-facing (only the gateway is).
+     */
+    public static final String ACTUATOR_PROMETHEUS = "/actuator/prometheus";
+
     // ========================================
     // API DOCUMENTATION ENDPOINTS
     // ========================================

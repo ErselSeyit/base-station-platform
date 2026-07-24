@@ -34,6 +34,7 @@ import static io.github.erselseyit.basestation.common.constants.HttpHeaders.HEAD
 import static io.github.erselseyit.basestation.common.constants.HttpHeaders.HEADER_USER_ROLE;
 import static io.github.erselseyit.basestation.common.constants.PublicEndpoints.ACTUATOR_HEALTH;
 import static io.github.erselseyit.basestation.common.constants.PublicEndpoints.ACTUATOR_HEALTH_WILDCARD;
+import static io.github.erselseyit.basestation.common.constants.PublicEndpoints.ACTUATOR_PROMETHEUS;
 import static io.github.erselseyit.basestation.common.constants.PublicEndpoints.API_DOCS_WILDCARD;
 import static io.github.erselseyit.basestation.common.constants.PublicEndpoints.SWAGGER_UI_WILDCARD;
 import static io.github.erselseyit.basestation.common.security.Roles.ADMIN;
@@ -54,8 +55,9 @@ import static io.github.erselseyit.basestation.common.security.Roles.USER;
  * {@link org.springframework.security.core.Authentication}.
  *
  * <p>Reads are open to any authenticated role; writes require operator-level
- * roles. Only the actuator health endpoint is public. CORS origins are
- * configurable rather than a wildcard.
+ * roles. Only the actuator health and Prometheus scrape endpoints are public;
+ * the rest of actuator is admin-only. CORS origins are configurable rather
+ * than a wildcard.
  */
 @Configuration
 @EnableWebSecurity
@@ -77,7 +79,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Only health is public; the rest of actuator is admin-only.
-                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD).permitAll()
+                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD, ACTUATOR_PROMETHEUS).permitAll()
                 .requestMatchers("/actuator/**").hasRole(ADMIN)
                 .requestMatchers(SWAGGER_UI_WILDCARD, API_DOCS_WILDCARD).permitAll()
                 // TMF resources: read for any authenticated role, write for operators+.

@@ -41,7 +41,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Permit only health check publicly, secure other actuator endpoints
-                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD).permitAll()
+                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD, ACTUATOR_PROMETHEUS).permitAll()
                 .requestMatchers("/actuator/**").hasRole(ADMIN)
                 .requestMatchers(SWAGGER_UI_WILDCARD, API_DOCS_WILDCARD).permitAll()
                 // Notifications - read for all authenticated, send/manage for operators+

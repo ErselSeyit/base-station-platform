@@ -53,6 +53,16 @@ class SecurityConfigTest {
     }
 
     @Test
+    @WithAnonymousUser
+    void prometheusEndpointIsScrapeableWithoutAuth() throws Exception {
+        // The scrape endpoint must not be 403: Prometheus scrapes it without
+        // auth. It is not mapped in this controller slice, so 404 (passed
+        // authorization, no handler) is the expected "permitted" outcome.
+        mockMvc.perform(get("/actuator/prometheus"))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
     @WithMockUser(roles = "USER")
     void authenticatedUserCanRead() throws Exception {
         when(alarmService.findAlarms(any(), any(), any(), any(), any(), any(Pageable.class)))

@@ -40,7 +40,7 @@ public class SecurityConfig {
                 // Public endpoints - accessible without authentication
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 // Permit only health check publicly, secure other actuator endpoints
-                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD).permitAll()
+                .requestMatchers(ACTUATOR_HEALTH, ACTUATOR_HEALTH_WILDCARD, ACTUATOR_PROMETHEUS).permitAll()
                 .requestMatchers("/actuator/**").hasRole(ADMIN)
                 // OpenAPI / Swagger UI endpoints
                 .requestMatchers(API_DOCS_WILDCARD).permitAll()

@@ -48,6 +48,13 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Prometheus registry so /actuator/prometheus actually exists;
+             the other services already include this. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Common Module -->
         <dependency>
             <groupId>io.github.erselseyit</groupId>
