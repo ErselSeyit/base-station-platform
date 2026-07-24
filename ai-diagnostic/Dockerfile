@@ -11,6 +11,10 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 COPY service/ ./service/
 COPY virtual-basestation/ ./virtual-basestation/
 
+# The service uses absolute `service.` package imports, so /app must be on the
+# import path when diagnostic_service.py is run as a script.
+ENV PYTHONPATH=/app
+
 # Expose ports
 EXPOSE 9090 9091
 
