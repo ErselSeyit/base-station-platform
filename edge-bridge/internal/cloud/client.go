@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"time"
 )
@@ -47,13 +48,28 @@ func NewClient(config *ClientConfig, auth *Authenticator) *Client {
 	}
 }
 
+// maxBackoff caps the retry wait so exponential growth cannot stall uploads.
+const maxBackoff = 30 * time.Second
+
+// backoffWithJitter returns an exponentially growing, fully-jittered wait for
+// the given attempt (1-based). Full jitter (a uniform draw over [0, capped
+// exponential]) spreads retries so many bridges do not hammer the cloud in
+// lockstep after an outage (Nygard: avoid retry storms).
+func backoffWithJitter(base time.Duration, attempt int) time.Duration {
+	backoff := base << (attempt - 1) // base * 2^(attempt-1)
+	if backoff <= 0 || backoff > maxBackoff {
+		backoff = maxBackoff
+	}
+	return time.Duration(rand.Int63n(int64(backoff) + 1))
+}
+
 // doRequest performs an authenticated HTTP request with retries.
 func (c *Client) doRequest(method, url string, body interface{}, result interface{}) error {
 	var lastErr error
 
 	for attempt := 0; attempt <= c.config.RetryAttempts; attempt++ {
 		if attempt > 0 {
-			time.Sleep(c.config.RetryDelay)
+			time.Sleep(backoffWithJitter(c.config.RetryDelay, attempt))
 		}
 
 		err := c.doRequestOnce(method, url, body, result)
