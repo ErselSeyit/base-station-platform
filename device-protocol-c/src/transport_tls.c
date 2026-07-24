@@ -427,17 +427,14 @@ int devproto_tls_get_info(devproto_transport_t *t, devproto_tls_info_t *info) {
     info->cipher_suite = mbedtls_ssl_get_ciphersuite(&priv->ssl_ctx);
     info->server_cn = priv->server_cn;
     info->verify_result = priv->verify_result;
-    /* mbedtls_ssl_session_resumed is not exposed the same way on 3.x builds;
-     * this field is informational only, so report 0 there. */
-#if MBEDTLS_VERSION_MAJOR >= 3
+    /* Session-resumption status is informational only and is not portably
+     * exposed across mbedTLS 2.x/3.x, so report 0. */
     info->session_resumed = 0;
-#else
-    info->session_resumed = mbedtls_ssl_session_resumed(&priv->ssl_ctx);
-#endif
 
-    /* Get negotiated version */
-    int version = mbedtls_ssl_get_version_number(&priv->ssl_ctx);
-    info->version = (version == MBEDTLS_SSL_VERSION_TLS1_3) ?
+    /* Negotiated version. mbedtls_ssl_get_version returns a stable string on
+     * both 2.x and 3.x, unlike the numeric API/enums which are 3.x-only. */
+    const char *negotiated = mbedtls_ssl_get_version(&priv->ssl_ctx);
+    info->version = (negotiated && strcmp(negotiated, "TLSv1.3") == 0) ?
         DEVPROTO_TLS_VERSION_1_3 : DEVPROTO_TLS_VERSION_1_2;
 
     return DEVPROTO_TLS_OK;
