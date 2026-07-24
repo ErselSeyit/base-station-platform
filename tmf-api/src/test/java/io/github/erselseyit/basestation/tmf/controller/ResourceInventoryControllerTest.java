@@ -29,6 +29,7 @@ import java.util.*;
  * Controller tests for ResourceInventoryController.
  */
 @WebMvcTest(ResourceInventoryController.class)
+@org.springframework.test.context.ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 @SuppressWarnings("null") // Mockito stubs and MockMvc return types are validated by test framework
 class ResourceInventoryControllerTest {

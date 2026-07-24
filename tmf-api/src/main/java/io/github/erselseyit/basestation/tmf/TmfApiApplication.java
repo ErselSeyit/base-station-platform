@@ -10,8 +10,15 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * - TMF638 Service Inventory Management
  * - TMF639 Resource Inventory Management
  * - TMF642 Alarm Management
+ *
+ * <p>Scans the shared {@code common} package so the platform's
+ * {@code InternalAuthFilter} (the HMAC gate that stops X-User-Role header
+ * spoofing) is registered here as it is in the other services.
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {
+        "io.github.erselseyit.basestation.tmf",
+        "io.github.erselseyit.basestation.common"
+})
 public class TmfApiApplication {
 
     public static void main(String[] args) {
