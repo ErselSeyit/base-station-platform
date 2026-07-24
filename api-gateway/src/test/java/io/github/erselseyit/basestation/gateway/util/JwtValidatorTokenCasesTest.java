@@ -31,6 +31,7 @@ class JwtValidatorTokenCasesTest {
     private String generateToken(String subject, Date expiration, SecretKey signingKey) {
         return Jwts.builder()
                 .subject(subject)
+                .issuer("basestation-platform")
                 .expiration(expiration)
                 .signWith(signingKey)
                 .compact();
@@ -39,6 +40,7 @@ class JwtValidatorTokenCasesTest {
     private String generateTokenWithRole(String subject, String role, Date expiration, SecretKey signingKey) {
         return Jwts.builder()
                 .subject(subject)
+                .issuer("basestation-platform")
                 .claim("role", role)
                 .expiration(expiration)
                 .signWith(signingKey)
@@ -99,6 +101,7 @@ class JwtValidatorTokenCasesTest {
     void tokenWithoutSubject_ReturnsInvalid() {
         Date future = new Date(System.currentTimeMillis() + 60_000);
         String token = Jwts.builder()
+                .issuer("basestation-platform") // pass issuer so we isolate the missing-subject case
                 .expiration(future)
                 .signWith(secretKey)
                 .compact();
@@ -106,6 +109,20 @@ class JwtValidatorTokenCasesTest {
         JwtValidator.ValidationResult result = validator.validateToken(token);
         assertThat(result.isValid()).isFalse();
         assertThat(result.getErrorMessage()).containsIgnoringCase("subject");
+    }
+
+    @Test
+    @DisplayName("Token with a foreign issuer is rejected")
+    void tokenWithWrongIssuer_ReturnsInvalid() {
+        Date future = new Date(System.currentTimeMillis() + 60_000);
+        String token = Jwts.builder()
+                .subject("user1")
+                .issuer("some-other-system")
+                .expiration(future)
+                .signWith(secretKey)
+                .compact();
+
+        assertThat(validator.validateToken(token).isValid()).isFalse();
     }
 
     @Test

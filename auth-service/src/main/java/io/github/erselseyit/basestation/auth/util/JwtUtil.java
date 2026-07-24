@@ -31,10 +31,14 @@ public class JwtUtil {
         return createToken(claims, username);
     }
 
+    /** Issuer stamped on every token and required by the gateway validator. */
+    public static final String JWT_ISSUER = "basestation-platform";
+
     private String createToken(Map<String, Object> claims, String subject) {
         return Jwts.builder()
                 .claims(claims)
                 .subject(subject)
+                .issuer(JWT_ISSUER)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + jwtConfig.getExpiration()))
                 .signWith(secretKey)

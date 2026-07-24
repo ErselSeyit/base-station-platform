@@ -127,9 +127,14 @@ public class JwtValidator {
      * @return Claims object
      * @throws Exception if token is invalid
      */
+    /** Must match the issuer stamped by auth-service's JwtUtil.JWT_ISSUER. */
+    private static final String JWT_ISSUER = "basestation-platform";
+
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
                 .verifyWith(secretKey)
+                .requireIssuer(JWT_ISSUER)      // reject tokens not minted by our auth service
+                .clockSkewSeconds(30)           // tolerate small clock differences between services
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();

@@ -62,6 +62,21 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     @Value("${security.actuator.allowed-ips:127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}")
     private String actuatorAllowedIps;
 
+    /** Parsed once (lazily cached) rather than splitting the string on every request. */
+    private volatile java.util.List<String> allowedActuatorIpList;
+
+    private java.util.List<String> allowedActuatorIps() {
+        java.util.List<String> list = allowedActuatorIpList;
+        if (list == null) {
+            list = java.util.Arrays.stream(actuatorAllowedIps.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+            allowedActuatorIpList = list;
+        }
+        return list;
+    }
+
     public JwtAuthenticationFilter(JwtValidator jwtValidator) {
         super(Config.class);
         this.jwtValidator = jwtValidator;
@@ -191,8 +206,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private boolean isAllowedActuatorIp(String clientIp) {
         if (clientIp == null) return false;
 
-        for (String allowed : actuatorAllowedIps.split(",")) {
-            allowed = allowed.trim();
+        for (String allowed : allowedActuatorIps()) {
             if (allowed.contains("/")) {
                 // CIDR notation - simplified check for common ranges
                 if (isIpInCidr(clientIp, allowed)) {
