@@ -5,8 +5,7 @@ WORKDIR /app
 # Install dependencies
 RUN pip install --no-cache-dir requests flask
 
-# Copy protocol and simulator
-COPY device_protocol.py .
+# Copy simulator
 COPY anomaly_simulator.py .
 
 # Run simulator

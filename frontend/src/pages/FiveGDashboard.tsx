@@ -1,3 +1,4 @@
+import { metricDisplayKey } from '../constants/metricsConfig'
 import {
   FiveG as FiveGIcon,
   Speed as SpeedIcon,
@@ -30,6 +31,8 @@ import { useQuery } from '@tanstack/react-query'
 import ErrorDisplay from '../components/ErrorDisplay'
 import LoadingSpinner from '../components/LoadingSpinner'
 import MetricsChart from '../components/MetricsChart'
+import NR5GMetricsCard from '../components/NR5GMetricsCard'
+import NR5GQuickStatus from '../components/NR5GQuickStatus'
 import { CARD_STATUS_STYLES, CSS_VARS, POLLING_INTERVALS } from '../constants/designSystem'
 import { metricsApi, stationApi } from '../services/api'
 import { BaseStation, MetricData, StationStatus } from '../types'
@@ -111,10 +114,11 @@ function processCellMetrics(
         acc.set(m.stationId, new Map())
       }
       const stationMetrics = acc.get(m.stationId)!
-      if (!stationMetrics.has(m.metricType)) {
-        stationMetrics.set(m.metricType, [])
+      const key = metricDisplayKey(m.metricType, m.band)
+      if (!stationMetrics.has(key)) {
+        stationMetrics.set(key, [])
       }
-      stationMetrics.get(m.metricType)!.push(m.value)
+      stationMetrics.get(key)!.push(m.value)
       return acc
     },
     new Map()
@@ -144,6 +148,40 @@ function processCellMetrics(
         txImbalance: avgNumbers(stationMetrics?.get('TX_IMBALANCE')),
       }
     })
+}
+
+/** A single SSV reading in the shape the NR5G components consume. */
+interface SsvReading {
+  readonly type: string
+  readonly value: number
+  readonly band?: string
+}
+
+/**
+ * Collapses raw readings to one averaged value per (metricType, band), the
+ * shape the NR5G SSV components expect. Keeping the band-neutral type and band
+ * separate lets those components resolve the display key themselves.
+ */
+function aggregateSsvMetrics(metrics: MetricData[]): SsvReading[] {
+  const byKey = metrics.reduce<Map<string, { type: string; band?: string; values: number[] }>>(
+    (acc, m) => {
+      const key = `${m.metricType}|${m.band ?? ''}`
+      const entry = acc.get(key)
+      if (entry) {
+        entry.values.push(m.value)
+      } else {
+        acc.set(key, { type: m.metricType, band: m.band, values: [m.value] })
+      }
+      return acc
+    },
+    new Map()
+  )
+
+  return Array.from(byKey.values()).map(({ type, band, values }) => ({
+    type,
+    band,
+    value: avgNumbers(values),
+  }))
 }
 
 // ============================================================================
@@ -363,7 +401,7 @@ function CellRow({ cell, expanded, onToggle }: Readonly<CellRowProps>) {
               {cell.location}
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 2, mr: 2 }}>
+          <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 2, mr: 2 }}>
             <Box sx={{ textAlign: 'right' }}>
               <Typography sx={{ fontSize: '0.6875rem', color: 'var(--mono-400)' }}>n78 DL</Typography>
               <Typography sx={{ fontFamily: "'JetBrains Mono'", fontWeight: 600, color: 'var(--mono-950)' }}>
@@ -378,7 +416,7 @@ function CellRow({ cell, expanded, onToggle }: Readonly<CellRowProps>) {
                 {cell.n78.rsrp.toFixed(0)} dBm
               </Typography>
             </Box>
-            <Box sx={{ textAlign: 'right' }}>
+            <Box sx={{ textAlign: 'right', display: { xs: 'none', md: 'block' } }}>
               <Typography sx={{ fontSize: '0.6875rem', color: 'var(--mono-400)' }}>Latency</Typography>
               <Typography
                 sx={{ fontFamily: "'JetBrains Mono'", fontWeight: 600, color: CARD_STATUS_STYLES[latencyStatus].color }}
@@ -548,6 +586,12 @@ export default function FiveGDashboard() {
     latency: avg(activeCells, c => c.latency, 0),
   }), [activeCells])
 
+  // SSV (Single Site Verification) readings, aggregated network-wide.
+  const ssvMetrics = useMemo(
+    () => aggregateSsvMetrics(ensureArray(metricsData as MetricData[])),
+    [metricsData]
+  )
+
   if (stationsLoading || metricsLoading) {
     return <LoadingSpinner />
   }
@@ -567,7 +611,7 @@ export default function FiveGDashboard() {
         sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}
       >
         <Box>
-          <Typography variant="h1" sx={{ fontSize: { xs: '1.5rem', md: '2rem' }, fontWeight: 800, color: 'var(--mono-950)' }}>
+          <Typography variant="h1" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, fontWeight: 800, color: 'var(--mono-950)' }}>
             5G Network Dashboard
           </Typography>
           <Typography sx={{ color: 'var(--mono-500)', mt: 0.5 }}>
@@ -589,7 +633,7 @@ export default function FiveGDashboard() {
       </Box>
 
       {/* Band Summary Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={{ xs: 1.5, sm: 2, md: 3 }} sx={{ mb: 4 }}>
         <Grid item xs={12} md={6}>
           <BandSummaryCard band="n78" {...bandSummary.n78} />
         </Grid>
@@ -640,6 +684,16 @@ export default function FiveGDashboard() {
           </Grid>
         </Grid>
       </Paper>
+
+      {/* SSV Compliance */}
+      {ssvMetrics.length > 0 && (
+        <Paper sx={{ p: 3, borderRadius: 3, mb: 4, background: 'var(--surface-base)', border: '1px solid var(--surface-border)' }}>
+          <NR5GQuickStatus metrics={ssvMetrics} />
+          <Box sx={{ mt: 3 }}>
+            <NR5GMetricsCard metrics={ssvMetrics} />
+          </Box>
+        </Paper>
+      )}
 
       {/* Performance Trends */}
       <Paper sx={{ p: 3, borderRadius: 3, mb: 4, background: 'var(--surface-base)', border: '1px solid var(--surface-border)' }}>

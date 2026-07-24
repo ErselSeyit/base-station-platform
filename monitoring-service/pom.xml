@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.huawei</groupId>
+        <groupId>io.github.erselseyit</groupId>
         <artifactId>basestation-platform</artifactId>
         <version>1.0.0</version>
     </parent>
@@ -44,7 +44,7 @@
         </dependency>
         <!-- Common Module -->
         <dependency>
-            <groupId>com.huawei</groupId>
+            <groupId>io.github.erselseyit</groupId>
             <artifactId>common</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -119,6 +119,18 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mongodb</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Provides @ServiceConnection, so container connection details are
+             wired into Spring without hardcoding a URI. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
@@ -153,7 +165,7 @@
                 <configuration>
                     <testFramework>JUNIT5</testFramework>
                     <baseClassForTests>
-                        com.huawei.monitoring.contract.MonitoringContractTestBase
+                        io.github.erselseyit.basestation.monitoring.contract.MonitoringContractTestBase
                     </baseClassForTests>
                     <contractsDirectory>src/test/resources/contracts</contractsDirectory>
                 </configuration>

@@ -49,17 +49,14 @@ typedef enum {
     DEVPROTO_METRIC_UPTIME           = 0x31,
     DEVPROTO_METRIC_ERROR_COUNT      = 0x32,
 
-    /* 5G NR700 (n28 band) metrics (0x40-0x4F) */
-    DEVPROTO_METRIC_DL_THROUGHPUT_NR700 = 0x40,
-    DEVPROTO_METRIC_UL_THROUGHPUT_NR700 = 0x41,
-    DEVPROTO_METRIC_RSRP_NR700          = 0x42,
-    DEVPROTO_METRIC_SINR_NR700          = 0x43,
-
-    /* 5G NR3500 (n78 band) metrics (0x50-0x5F) */
-    DEVPROTO_METRIC_DL_THROUGHPUT_NR3500 = 0x50,
-    DEVPROTO_METRIC_UL_THROUGHPUT_NR3500 = 0x51,
-    DEVPROTO_METRIC_RSRP_NR3500          = 0x52,
-    DEVPROTO_METRIC_SINR_NR3500          = 0x53,
+    /* 5G NR radio metrics (0x40-0x4F). Band-neutral: the carrier a reading
+     * belongs to travels in the entry's band field, not the type code, per the
+     * 3GPP model where a measurement (e.g. DRB.UEThpDl) is reported against a
+     * measured object (NRCellDU) that carries the frequency. */
+    DEVPROTO_METRIC_DL_THROUGHPUT = 0x40,
+    DEVPROTO_METRIC_UL_THROUGHPUT = 0x41,
+    DEVPROTO_METRIC_RSRP          = 0x42,
+    DEVPROTO_METRIC_SINR          = 0x43,
 
     /* 5G Radio metrics (0x60-0x6F) */
     DEVPROTO_METRIC_PDCP_THROUGHPUT      = 0x60,
@@ -151,18 +148,34 @@ typedef enum {
 } devproto_metric_type_t;
 
 /**
- * Metric entry structure (5 bytes on wire: type + float)
+ * NR frequency band a metric was measured on. Carried as a dimension of the
+ * measurement rather than baked into the metric type. DEVPROTO_BAND_NONE is
+ * used for metrics with no band (CPU, temperature, transport, and so on).
+ */
+typedef enum {
+    DEVPROTO_BAND_NONE = 0x00,
+    DEVPROTO_BAND_N28  = 0x01,  /* 700 MHz  */
+    DEVPROTO_BAND_N78  = 0x02   /* 3.5 GHz  */
+} devproto_band_t;
+
+/**
+ * Metric entry structure (6 bytes on wire: type + band + float)
  */
 typedef struct __attribute__((packed)) {
     uint8_t  type;              /* Metric type */
+    uint8_t  band;              /* devproto_band_t */
     uint8_t  value_bytes[4];    /* IEEE 754 float, big-endian */
 } devproto_metric_entry_t;
+
+/** On-wire size of a single metric entry. */
+#define DEVPROTO_METRIC_ENTRY_SIZE 6
 
 /**
  * Metric value with decoded float
  */
 typedef struct {
     devproto_metric_type_t type;
+    devproto_band_t        band;
     float value;
 } devproto_metric_t;
 
@@ -175,6 +188,7 @@ typedef struct {
  */
 int devproto_metric_encode(devproto_metric_entry_t *entry,
                            devproto_metric_type_t type,
+                           devproto_band_t band,
                            float value);
 
 /**
@@ -206,6 +220,13 @@ float devproto_float_from_be(const uint8_t *bytes);
  * @return      Static string, or "UNKNOWN" if invalid
  */
 const char *devproto_metric_name(devproto_metric_type_t type);
+
+/**
+ * Get band name string (for debugging)
+ * @param band  Frequency band
+ * @return      Static string, or "UNKNOWN" if invalid
+ */
+const char *devproto_band_name(devproto_band_t band);
 
 /**
  * Parse multiple metrics from response payload

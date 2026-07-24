@@ -1,14 +1,20 @@
-import { mockAxiosResponse } from '../../test/mockHelpers'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '../../test/test-utils'
+import userEvent from '@testing-library/user-event'
+import { render, screen, waitFor } from '../../test/test-utils'
+import { mockAxiosResponse } from '../../test/mockHelpers'
 import Alerts from '../Alerts'
-import { notificationsApi } from '../../services/api'
-import { Notification, NotificationType } from '../../types'
+import { notificationsApi } from '../../services/api/notifications'
+import type {
+  Notification,
+  NotificationPage,
+  NotificationCounts,
+} from '../../services/api/notifications'
 
-// Mock the API
-vi.mock('../../services/api', () => ({
+// Alerts reads notificationsApi from services/api/notifications, not from the
+// services/api barrel, and loads through useInfiniteQuery -> getPaged with a
+// separate getCounts for the stat boxes.
+vi.mock('../../services/api/notifications', () => ({
   notificationsApi: {
-    getAll: vi.fn(),
     getPaged: vi.fn(),
     getCounts: vi.fn(),
     deleteNotification: vi.fn(),
@@ -16,307 +22,177 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
-// Helper to wait for loading to complete
-const waitForLoadingToComplete = async () => {
-  await waitFor(() => {
-    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+const notification = (over: Partial<Notification> = {}): Notification => ({
+  id: 1,
+  stationId: 1,
+  stationName: 'BS-001',
+  message: 'High CPU usage detected',
+  type: 'ALERT',
+  status: 'UNREAD',
+  createdAt: '2026-07-23T10:00:00.000Z',
+  ...over,
+})
+
+const pageOf = (items: Notification[], over: Partial<NotificationPage> = {}) =>
+  mockAxiosResponse<NotificationPage>({
+    content: items,
+    totalElements: items.length,
+    totalPages: 1,
+    number: 0,
+    size: 20,
+    last: true,
+    ...over,
   })
+
+const countsOf = (items: Notification[]) =>
+  mockAxiosResponse<NotificationCounts>({
+    total: items.length,
+    unread: items.filter((n) => n.status === 'UNREAD').length,
+    alerts: items.filter((n) => n.type === 'ALERT').length,
+    warnings: items.filter((n) => n.type === 'WARNING').length,
+  })
+
+const givenNotifications = (items: Notification[]) => {
+  vi.mocked(notificationsApi.getPaged).mockResolvedValue(pageOf(items))
+  vi.mocked(notificationsApi.getCounts).mockResolvedValue(countsOf(items))
 }
 
 describe('Alerts', () => {
-  const mockNotifications: Notification[] = [
-    {
-      id: 1,
-      stationId: 1,
-      stationName: 'BS-001',
-      message: 'High CPU usage detected',
-      type: NotificationType.ALERT,
-      status: 'UNREAD',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 2,
-      stationId: 2,
-      stationName: 'BS-002',
-      message: 'Memory usage above threshold',
-      type: NotificationType.WARNING,
-      status: 'UNREAD',
-      createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-    },
-    {
-      id: 3,
-      stationId: 1,
-      stationName: 'BS-001',
-      message: 'System maintenance completed',
-      type: NotificationType.INFO,
-      status: 'READ',
-      createdAt: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
-      readAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      id: 4,
-      stationId: 3,
-      message: 'Temperature sensor offline', // No stationName
-      type: NotificationType.ALERT,
-      status: 'UNREAD',
-      createdAt: new Date(Date.now() - 1800000).toISOString(), // 30 minutes ago
-    },
-  ]
+  const unreadAlert = notification({ id: 1, message: 'High CPU usage detected' })
+  const readWarning = notification({
+    id: 2,
+    stationId: 2,
+    stationName: 'BS-002',
+    message: 'Temperature approaching limit',
+    type: 'WARNING',
+    status: 'READ',
+  })
 
   beforeEach(() => {
     vi.clearAllMocks()
-    // Set default mock for most tests
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(mockNotifications))
-  })
-
-  it('renders loading state initially', async () => {
-    vi.mocked(notificationsApi.getAll).mockImplementation(
-      () => new Promise(() => {}) // Never resolves
+    givenNotifications([unreadAlert, readWarning])
+    vi.mocked(notificationsApi.deleteNotification).mockResolvedValue(mockAxiosResponse({}))
+    vi.mocked(notificationsApi.clearAllUnread).mockResolvedValue(
+      mockAxiosResponse({ status: 'ok', deleted: 1 })
     )
+  })
 
-    render(<Alerts />)
+  describe('header', () => {
+    it('renders the page title straight away, before data arrives', () => {
+      render(<Alerts />)
+      expect(screen.getByText('Alerts')).toBeInTheDocument()
+    })
 
-    await waitFor(() => {
-      const progress = screen.getByRole('progressbar')
-      expect(progress).toBeInTheDocument()
+    it('reports the loaded and total counts once data arrives', async () => {
+      render(<Alerts />)
+      expect(await screen.findByText(/2 total/)).toBeInTheDocument()
+      expect(screen.getByText(/2 loaded/)).toBeInTheDocument()
+    })
+
+    it('shows a loading message while the first page is in flight', () => {
+      vi.mocked(notificationsApi.getPaged).mockReturnValue(new Promise(() => {}))
+      render(<Alerts />)
+      expect(screen.getByText('Loading notifications...')).toBeInTheDocument()
     })
   })
 
-  it('renders alerts page with notifications', async () => {
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(mockNotifications))
+  describe('stat boxes', () => {
+    it('takes its figures from the counts endpoint, not from the loaded page', async () => {
+      vi.mocked(notificationsApi.getCounts).mockResolvedValue(
+        mockAxiosResponse<NotificationCounts>({ total: 99, unread: 7, alerts: 5, warnings: 3 })
+      )
+      render(<Alerts />)
 
-    render(<Alerts />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Alerts & Notifications')).toBeInTheDocument()
+      // Counts come from getCounts so the stats stay accurate without having
+      // to load every page.
+      expect(await screen.findByText('5')).toBeInTheDocument()
+      expect(screen.getByText('3')).toBeInTheDocument()
+      expect(screen.getByText('7')).toBeInTheDocument()
+      expect(screen.getByText('Critical')).toBeInTheDocument()
+      expect(screen.getByText('Warnings')).toBeInTheDocument()
+      expect(screen.getByText('Unread')).toBeInTheDocument()
     })
-
-    // Check header with unread count
-    expect(screen.getByText('3 Unread')).toBeInTheDocument()
-
-    // Check alert messages are displayed
-    expect(screen.getByText('High CPU usage detected')).toBeInTheDocument()
-    expect(screen.getByText('Memory usage above threshold')).toBeInTheDocument()
-    expect(screen.getByText('System maintenance completed')).toBeInTheDocument()
-    expect(screen.getByText('Temperature sensor offline')).toBeInTheDocument()
   })
 
-  it('displays correct severity levels for different alert types', async () => {
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(mockNotifications))
+  describe('notification rows', () => {
+    it('renders a row per notification with its message and station', async () => {
+      render(<Alerts />)
 
-    render(<Alerts />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Alerts & Notifications')).toBeInTheDocument()
-    })
-
-    // Check that alert elements with different severity classes are present
-    // The severity is applied via the MuiAlert component's severity prop
-    const alerts = screen.getAllByRole('alert')
-    expect(alerts).toHaveLength(4)
-  })
-
-  it('displays station names correctly', async () => {
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(mockNotifications))
-
-    render(<Alerts />)
-
-    await waitFor(() => {
-      // BS-001 appears twice (two notifications from the same station)
-      expect(screen.getAllByText('BS-001').length).toBeGreaterThanOrEqual(1)
+      expect(await screen.findByText('High CPU usage detected')).toBeInTheDocument()
+      expect(screen.getByText('Temperature approaching limit')).toBeInTheDocument()
+      expect(screen.getByText('BS-001')).toBeInTheDocument()
       expect(screen.getByText('BS-002')).toBeInTheDocument()
-      expect(screen.getByText('Station 3')).toBeInTheDocument() // No stationName, shows stationId
+    })
+
+    it('offers "mark as read" only for unread notifications', async () => {
+      render(<Alerts />)
+      await screen.findByText('High CPU usage detected')
+
+      // Only one of the two fixtures is unread.
+      const actions = await screen.findAllByLabelText(/mark as read/i)
+      expect(actions).toHaveLength(1)
+    })
+
+    it('shows an empty state when there is nothing to display', async () => {
+      givenNotifications([])
+      render(<Alerts />)
+
+      expect(await screen.findByText('No alerts or notifications')).toBeInTheDocument()
     })
   })
 
-  it('displays timestamps correctly', async () => {
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(mockNotifications))
+  describe('actions', () => {
+    it('marks a notification as read and refetches the list', async () => {
+      render(<Alerts />)
+      await screen.findByText('High CPU usage detected')
 
-    render(<Alerts />)
+      const [action] = await screen.findAllByLabelText(/mark as read/i)
+      await userEvent.click(action)
 
-    await waitFor(() => {
-      // Should display formatted timestamps
-      const timestampElements = screen.getAllByText(/\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2}:\d{2} (AM|PM)/)
-      expect(timestampElements.length).toBeGreaterThan(0)
+      // React Query v5 invokes mutationFn with (variables, context), so assert
+      // on the id rather than the whole argument list.
+      await waitFor(() => expect(notificationsApi.deleteNotification).toHaveBeenCalled())
+      expect(vi.mocked(notificationsApi.deleteNotification).mock.calls[0][0]).toBe(unreadAlert.id)
+      await waitFor(() =>
+        expect(vi.mocked(notificationsApi.getPaged).mock.calls.length).toBeGreaterThan(1)
+      )
+    })
+
+    it('clears all unread notifications', async () => {
+      render(<Alerts />)
+      const clearAll = await screen.findByRole('button', { name: /clear all/i })
+      // The button stays disabled until the counts query reports unread items.
+      await waitFor(() => expect(clearAll).toBeEnabled())
+
+      await userEvent.click(clearAll)
+
+      await waitFor(() => expect(notificationsApi.clearAllUnread).toHaveBeenCalled())
+    })
+
+    it('disables "clear all" when nothing is unread', async () => {
+      givenNotifications([readWarning])
+      render(<Alerts />)
+
+      const clearAll = await screen.findByRole('button', { name: /clear all/i })
+      await waitFor(() => expect(clearAll).toBeDisabled())
     })
   })
 
-  it('shows unread chip for unread notifications', async () => {
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(mockNotifications))
+  describe('failure handling', () => {
+    it('shows an error state when the page request fails', async () => {
+      vi.mocked(notificationsApi.getPaged).mockRejectedValue(new Error('API Error'))
+      render(<Alerts />)
 
-    render(<Alerts />)
-
-    await waitFor(() => {
-      const unreadChips = screen.getAllByText('Unread')
-      expect(unreadChips).toHaveLength(3) // 3 unread notifications
+      expect(await screen.findByText('Failed to load alerts')).toBeInTheDocument()
     })
   })
 
-  it('shows mark as read button only for unread notifications', async () => {
-    render(<Alerts />)
+  describe('pagination', () => {
+    it('requests the first page with the configured page size', async () => {
+      render(<Alerts />)
+      await waitFor(() => expect(notificationsApi.getPaged).toHaveBeenCalled())
 
-    await waitFor(() => {
-      expect(screen.getByText('Alerts & Notifications')).toBeInTheDocument()
+      expect(notificationsApi.getPaged).toHaveBeenCalledWith(0, expect.any(Number))
     })
-
-    // Should have 3 mark as read buttons (one for each unread notification) - find by icon test id
-    const checkCircleIcons = screen.getAllByTestId('CheckCircleIcon')
-    expect(checkCircleIcons).toHaveLength(3)
-  })
-
-  it('deletes notification when button is clicked', async () => {
-    vi.mocked(notificationsApi.deleteNotification).mockResolvedValue(mockAxiosResponse({}))
-
-    render(<Alerts />)
-
-    await waitForLoadingToComplete()
-    await waitFor(() => {
-      expect(screen.getByText('3 Unread')).toBeInTheDocument()
-    })
-
-    // Click delete button for first notification (find the icon and click its parent button)
-    const checkCircleIcons = screen.getAllByTestId('CheckCircleIcon')
-    fireEvent.click(checkCircleIcons[0].closest('button')!)
-
-    await waitFor(() => {
-      // React Query passes (id, context) - check first arg is correct
-      expect(notificationsApi.deleteNotification).toHaveBeenCalled()
-      expect(vi.mocked(notificationsApi.deleteNotification).mock.calls[0][0]).toBe(1)
-    })
-  })
-
-  it('refetches data after deleting notification', async () => {
-    vi.mocked(notificationsApi.deleteNotification).mockResolvedValue(mockAxiosResponse({}))
-
-    render(<Alerts />)
-
-    await waitForLoadingToComplete()
-    await waitFor(() => {
-      expect(notificationsApi.getAll).toHaveBeenCalledTimes(1)
-    })
-
-    // Click mark as read button (find the icon and click its parent button)
-    const checkCircleIcons = screen.getAllByTestId('CheckCircleIcon')
-    fireEvent.click(checkCircleIcons[0].closest('button')!)
-
-    await waitFor(() => {
-      expect(notificationsApi.getAll).toHaveBeenCalledTimes(2)
-    })
-  })
-
-  it('displays empty state when no notifications', async () => {
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse([]))
-
-    render(<Alerts />)
-
-    await waitFor(() => {
-      expect(screen.getByText('No alerts or notifications')).toBeInTheDocument()
-    })
-
-    // Should not show unread count chip
-    expect(screen.queryByText(/Unread/)).not.toBeInTheDocument()
-  })
-
-  it('refetches data automatically every 30 seconds', async () => {
-    // This test verifies that refetchInterval is configured
-    // We just check the initial fetch works since fake timers are tricky with React Query
-    render(<Alerts />)
-
-    await waitForLoadingToComplete()
-    expect(notificationsApi.getAll).toHaveBeenCalledTimes(1)
-    // Note: The component has refetchInterval: 30000 configured
-  })
-
-  it('handles API errors gracefully', async () => {
-    vi.mocked(notificationsApi.getAll).mockRejectedValue(new Error('API Error'))
-
-    render(<Alerts />)
-
-    // Should eventually show the page (React Query retries, then shows content)
-    await waitFor(() => {
-      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
-    }, { timeout: 3000 })
-
-    // Should show the header and empty/error state
-    expect(screen.getByText('Alerts & Notifications')).toBeInTheDocument()
-  })
-
-  it('does not show unread count chip when all notifications are read', async () => {
-    const allReadNotifications = mockNotifications.map(n => ({ ...n, status: 'READ' as const }))
-
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(allReadNotifications))
-
-    render(<Alerts />)
-
-    await waitForLoadingToComplete()
-    expect(screen.getByText('Alerts & Notifications')).toBeInTheDocument()
-
-    // Should not show unread count chip
-    expect(screen.queryByText(/Unread/)).not.toBeInTheDocument()
-
-    // Should not show any "Unread" chips on individual notifications
-    expect(screen.queryByText('Unread')).not.toBeInTheDocument()
-
-    // Should not show any mark as read buttons (no aria-label on these buttons)
-    expect(screen.queryByTestId('CheckCircleIcon')).not.toBeInTheDocument()
-  })
-
-  it('displays correct icon for different notification types', async () => {
-    render(<Alerts />)
-
-    await waitForLoadingToComplete()
-    expect(screen.getByText('Alerts & Notifications')).toBeInTheDocument()
-
-    // The icons are rendered by MUI Alert component based on severity
-    // We can check that the alert elements are rendered with correct severity
-    const alerts = screen.getAllByRole('alert')
-    expect(alerts).toHaveLength(4)
-  })
-
-  it('orders notifications by creation date (most recent first)', async () => {
-    render(<Alerts />)
-
-    await waitForLoadingToComplete()
-    expect(screen.getByText('High CPU usage detected')).toBeInTheDocument()
-
-    // The notifications are rendered in the order they appear in the array
-    // Most recent should appear first (id: 1, then id: 4, then id: 2, then id: 3)
-    const alertElements = screen.getAllByRole('alert')
-    expect(alertElements).toHaveLength(4)
-  })
-
-  it('handles notifications without timestamps', async () => {
-    const notificationsWithoutTimestamps = mockNotifications.map(n => ({
-      ...n,
-      createdAt: undefined,
-    }))
-
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(notificationsWithoutTimestamps))
-
-    render(<Alerts />)
-
-    await waitForLoadingToComplete()
-    expect(screen.getByText('Alerts & Notifications')).toBeInTheDocument()
-
-    // Should display 'N/A' for missing timestamps (one for each notification)
-    const naElements = screen.getAllByText('N/A')
-    expect(naElements.length).toBeGreaterThan(0)
-  })
-
-  it('handles undefined notification ids gracefully', async () => {
-    const notificationsWithUndefinedIds = mockNotifications.map(n => ({
-      ...n,
-      id: undefined,
-    }))
-
-    vi.mocked(notificationsApi.getAll).mockResolvedValue(mockAxiosResponse(notificationsWithUndefinedIds))
-
-    render(<Alerts />)
-
-    await waitForLoadingToComplete()
-    expect(screen.getByText('Alerts & Notifications')).toBeInTheDocument()
-
-    // Should not show mark as read buttons for notifications without ids
-    expect(screen.queryByTestId('CheckCircleIcon')).not.toBeInTheDocument()
   })
 })

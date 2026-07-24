@@ -1,0 +1,89 @@
+package io.github.erselseyit.basestation.notification.listener;
+
+import java.util.Objects;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.lang.NonNull;
+import org.springframework.stereotype.Component;
+
+import io.github.erselseyit.basestation.notification.config.RabbitMQConfig;
+import io.github.erselseyit.basestation.common.dto.AlertEvent;
+import io.github.erselseyit.basestation.notification.exception.NotificationException;
+import io.github.erselseyit.basestation.notification.model.NotificationType;
+import io.github.erselseyit.basestation.notification.service.NotificationService;
+
+/**
+ * RabbitMQ listener for alert events from monitoring service.
+ */
+@Component
+public class AlertEventListener {
+
+    private static final Logger log = LoggerFactory.getLogger(AlertEventListener.class);
+    
+    private final NotificationService notificationService;
+
+    public AlertEventListener(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
+
+    @RabbitListener(queues = RabbitMQConfig.NOTIFICATION_QUEUE)
+    public void handleAlertEvent(AlertEvent alertEvent) {
+        log.info("Received alert event: ruleId={}, stationId={}, severity={}", 
+                alertEvent.getAlertRuleId(), alertEvent.getStationId(), alertEvent.getSeverity());
+        
+        try {
+            // Map alert severity to notification type
+            NotificationType notificationType = mapSeverityToNotificationType(alertEvent.getSeverity());
+            
+            // Create notification from alert event
+            String notificationMessage = Objects.requireNonNull(
+                    String.format("[%s] %s - %s (Value: %.2f, Threshold: %.2f)",
+                            alertEvent.getAlertRuleName(),
+                            alertEvent.getMessage(),
+                            Objects.requireNonNullElseGet(alertEvent.getStationName(), () -> "Station " + alertEvent.getStationId()),
+                            alertEvent.getMetricValue(),
+                            alertEvent.getThreshold()),
+                    "Notification message cannot be null");
+            
+            // Create notification with problemId for linking to diagnostic sessions
+            String problemId = alertEvent.getProblemId();
+            if (problemId != null && !problemId.isBlank()) {
+                notificationService.createNotificationWithProblemId(
+                        Objects.requireNonNull(alertEvent.getStationId(), "Station ID cannot be null"),
+                        notificationMessage,
+                        notificationType,
+                        problemId
+                );
+            } else {
+                notificationService.createNotification(
+                        Objects.requireNonNull(alertEvent.getStationId(), "Station ID cannot be null"),
+                        notificationMessage,
+                        notificationType
+                );
+            }
+            
+            log.info("Notification created from alert event: ruleId={}, stationId={}", 
+                    alertEvent.getAlertRuleId(), alertEvent.getStationId());
+        } catch (Exception e) {
+            throw new NotificationException(
+                    String.format("Failed to process alert event for station %s (ruleId: %s)",
+                            alertEvent.getStationId(), alertEvent.getAlertRuleId()), e);
+        }
+    }
+
+    @NonNull
+    private NotificationType mapSeverityToNotificationType(String severity) {
+        if (severity == null) {
+            return NotificationType.ALERT;
+        }
+        
+        return switch (severity.toUpperCase()) {
+            case "CRITICAL" -> NotificationType.ERROR;
+            case "WARNING" -> NotificationType.WARNING;
+            case "INFO" -> NotificationType.INFO;
+            default -> NotificationType.ALERT;
+        };
+    }
+}

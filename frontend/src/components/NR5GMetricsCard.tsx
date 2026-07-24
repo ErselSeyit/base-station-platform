@@ -14,6 +14,7 @@ import {
   type MetricStatus,
   METRICS_CONFIG,
   SSV_METRIC_TYPES,
+  metricDisplayKey,
   getWorstMetricStatus,
   countMetricStatuses,
 } from '../constants/metricsConfig'
@@ -33,6 +34,8 @@ const METRIC_ICONS: Record<string, ReactNode> = {
 interface MetricValue {
   readonly type: string
   readonly value: number
+  /** NR band dimension: 'N28', 'N78', or absent/'NONE' for band-less metrics. */
+  readonly band?: string
 }
 
 interface NR5GMetricsCardProps {
@@ -202,19 +205,20 @@ const SingleMetricCard = ({ metricKey, value, delay }: Readonly<SingleMetricProp
 }
 
 export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5GMetricsCardProps) {
-  // Filter to only SSV metrics
-  const ssvMetrics = metrics.filter(m => SSV_METRIC_TYPES.has(m.type))
+  // Resolve the band-neutral (type, band) reading to the display key the config
+  // and SSV set are keyed by (e.g. DL_THROUGHPUT + N78 -> DL_THROUGHPUT_NR3500).
+  const ssvMetrics = metrics
+    .map((m) => ({ ...m, key: metricDisplayKey(m.type, m.band) }))
+    .filter((m) => SSV_METRIC_TYPES.has(m.key))
 
-  // Group metrics by band
-  const nr3500Metrics = ssvMetrics.filter((m) => m.type.includes('NR3500'))
-  const nr700Metrics = ssvMetrics.filter((m) => m.type.includes('NR700'))
-  const otherMetrics = ssvMetrics.filter(
-    (m) => !m.type.includes('NR3500') && !m.type.includes('NR700')
-  )
+  // Group metrics by band dimension.
+  const nr3500Metrics = ssvMetrics.filter((m) => m.band === 'N78')
+  const nr700Metrics = ssvMetrics.filter((m) => m.band === 'N28')
+  const otherMetrics = ssvMetrics.filter((m) => m.band !== 'N78' && m.band !== 'N28')
 
   // Calculate overall status using centralized config
   const allStatuses: MetricStatus[] = ssvMetrics.map((m) => {
-    const config = METRICS_CONFIG[m.type]
+    const config = METRICS_CONFIG[m.key]
     return config ? config.getMetricStatus(m.value) : 'pass'
   })
   const overallStatus = getWorstMetricStatus(allStatuses)
@@ -317,6 +321,7 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
       {nr3500Metrics.length > 0 && (
         <Box sx={{ mb: '24px' }}>
           <Typography
+            component="div"
             sx={{
               fontSize: '0.6875rem',
               fontWeight: 600,
@@ -344,8 +349,8 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
           >
             {nr3500Metrics.map((m, idx) => (
               <SingleMetricCard
-                key={m.type}
-                metricKey={m.type}
+                key={m.key}
+                metricKey={m.key}
                 value={m.value}
                 delay={delay + 0.05 + idx * 0.05}
               />
@@ -358,6 +363,7 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
       {nr700Metrics.length > 0 && (
         <Box sx={{ mb: '24px' }}>
           <Typography
+            component="div"
             sx={{
               fontSize: '0.6875rem',
               fontWeight: 600,
@@ -385,8 +391,8 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
           >
             {nr700Metrics.map((m, idx) => (
               <SingleMetricCard
-                key={m.type}
-                metricKey={m.type}
+                key={m.key}
+                metricKey={m.key}
                 value={m.value}
                 delay={delay + 0.15 + idx * 0.05}
               />
@@ -399,6 +405,7 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
       {otherMetrics.length > 0 && (
         <Box>
           <Typography
+            component="div"
             sx={{
               fontSize: '0.6875rem',
               fontWeight: 600,
@@ -426,8 +433,8 @@ export default function NR5GMetricsCard({ metrics, stationName, delay = 0 }: NR5
           >
             {otherMetrics.map((m, idx) => (
               <SingleMetricCard
-                key={m.type}
-                metricKey={m.type}
+                key={m.key}
+                metricKey={m.key}
                 value={m.value}
                 delay={delay + 0.25 + idx * 0.05}
               />

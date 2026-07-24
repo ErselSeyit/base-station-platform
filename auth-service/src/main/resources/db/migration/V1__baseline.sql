@@ -6,7 +6,7 @@
 
 -- ---------------------------------------------------------------------------
 -- Table: users
--- Entity: com.huawei.auth.model.User
+-- Entity: io.github.erselseyit.basestation.auth.model.User
 -- ---------------------------------------------------------------------------
 CREATE TABLE users (
     id              BIGSERIAL       PRIMARY KEY,
@@ -24,7 +24,7 @@ CREATE INDEX idx_user_created_at ON users (created_at);
 
 -- ---------------------------------------------------------------------------
 -- Table: refresh_tokens
--- Entity: com.huawei.auth.model.RefreshToken
+-- Entity: io.github.erselseyit.basestation.auth.model.RefreshToken
 -- ---------------------------------------------------------------------------
 CREATE TABLE refresh_tokens (
     id              BIGSERIAL       PRIMARY KEY,
@@ -49,7 +49,7 @@ CREATE INDEX idx_refresh_revoked ON refresh_tokens (revoked);
 
 -- ---------------------------------------------------------------------------
 -- Table: audit_logs
--- Entity: com.huawei.auth.model.AuditLog
+-- Entity: io.github.erselseyit.basestation.auth.model.AuditLog
 -- ---------------------------------------------------------------------------
 CREATE TABLE audit_logs (
     id              BIGSERIAL       PRIMARY KEY,

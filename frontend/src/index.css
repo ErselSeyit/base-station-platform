@@ -24,6 +24,7 @@
   --accent-warning: #ea580c;
   --accent-error: #dc2626;
   --accent-info: #0891b2;
+  --accent-info-hover: #0e7490;
 
   /* Extended color palette for charts/metrics */
   --color-blue-500: #3b82f6;
@@ -135,6 +136,7 @@
 /* Dark mode support - respects system preferences and manual toggle */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    --accent-info-hover: #0891b2;
     --surface-base: var(--dark-surface-base);
     --surface-elevated: var(--dark-surface-elevated);
     --surface-overlay: var(--dark-surface-overlay);
@@ -147,9 +149,9 @@
     --mono-900: #f5f5f5;
     --mono-800: #e5e5e5;
     --mono-700: #d4d4d4;
-    --mono-600: #b8b8b8;
-    --mono-500: #9ca3af;
-    --mono-400: #6b7280;
+    --mono-600: #c0c4cc;
+    --mono-500: #a8adb8;
+    --mono-400: #8b95a5;
     --mono-300: #4b5563;
     --mono-200: #374151;
     --mono-100: #1f2937;
@@ -201,6 +203,65 @@
   :root:not([data-theme="light"]) h5,
   :root:not([data-theme="light"]) h6 {
     color: var(--mono-950);
+  }
+
+  /* MUI component contrast fixes for dark mode */
+  :root:not([data-theme="light"]) .MuiInputLabel-root,
+  :root:not([data-theme="light"]) .MuiFormLabel-root {
+    color: var(--mono-600);
+  }
+
+  :root:not([data-theme="light"]) .MuiInputBase-input,
+  :root:not([data-theme="light"]) .MuiSelect-select {
+    color: var(--mono-950);
+  }
+
+  :root:not([data-theme="light"]) .MuiInputBase-input::placeholder {
+    color: var(--mono-400);
+    opacity: 1;
+  }
+
+  :root:not([data-theme="light"]) .MuiOutlinedInput-notchedOutline {
+    border-color: var(--dark-surface-border);
+  }
+
+  :root:not([data-theme="light"]) .MuiPaper-root {
+    background-color: var(--dark-surface-elevated);
+    color: var(--mono-950);
+  }
+
+  :root:not([data-theme="light"]) .MuiTableCell-head {
+    color: var(--mono-600);
+    border-color: var(--dark-surface-border);
+  }
+
+  :root:not([data-theme="light"]) .MuiTableCell-body {
+    color: var(--mono-800);
+    border-color: var(--dark-surface-border);
+  }
+
+  :root:not([data-theme="light"]) .MuiDivider-root {
+    border-color: var(--dark-surface-border);
+  }
+
+  :root:not([data-theme="light"]) .MuiTab-root {
+    color: var(--mono-500);
+  }
+
+  :root:not([data-theme="light"]) .MuiTab-root.Mui-selected {
+    color: var(--mono-950);
+  }
+
+  :root:not([data-theme="light"]) .MuiIconButton-root {
+    color: var(--mono-600);
+  }
+
+  :root:not([data-theme="light"]) .MuiChip-label {
+    color: var(--mono-800);
+  }
+
+  :root:not([data-theme="light"]) .MuiSkeleton-root {
+    background-color: var(--dark-surface-hover);
   }
 }
 
@@ -676,7 +737,11 @@ a {
 }
 
 a:hover {
-  color: var(--accent-info);
+  /* #0891b2 is only 3.68:1 on a light background, below WCAG 2.1 AA (4.5:1)
+     for normal text. This darker cyan keeps the same hue at 5.36:1. The
+     dark-theme override below restores the lighter value, which is 5.38:1
+     against the dark surface. */
+  color: var(--accent-info-hover);
 }
 
 /* Loading skeleton */

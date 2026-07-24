@@ -7,7 +7,14 @@ spring:
   security:
     enabled: false
 
+# The InternalAuthFilter (HMAC gateway gate) needs a shared secret it does not
+# have in tests, so disable it here; the controller slice tests use
+# TestSecurityConfig for authorization instead.
+security:
+  internal:
+    enabled: false
+
 logging:
   level:
-    com.huawei.tmf: DEBUG
+    io.github.erselseyit.basestation.tmf: DEBUG
     org.springframework.data.mongodb: DEBUG

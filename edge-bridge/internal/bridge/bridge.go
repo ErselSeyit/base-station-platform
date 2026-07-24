@@ -282,8 +282,13 @@ func (b *Bridge) collectAndUploadMetrics() {
 		if typeStr == "" {
 			continue // Skip unsupported metric types
 		}
+		band := ""
+		if m.Band != protocol.BandNone {
+			band = m.Band.String()
+		}
 		cloudMetrics = append(cloudMetrics, cloud.MetricData{
 			Type:      typeStr,
+			Band:      band,
 			Value:     float64(m.Value),
 			Timestamp: now,
 		})

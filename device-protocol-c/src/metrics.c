@@ -51,11 +51,13 @@ float devproto_float_from_be(const uint8_t *bytes)
  */
 int devproto_metric_encode(devproto_metric_entry_t *entry,
                            devproto_metric_type_t type,
+                           devproto_band_t band,
                            float value)
 {
     if (!entry) return -1;
 
     entry->type = (uint8_t)type;
+    entry->band = (uint8_t)band;
     devproto_float_to_be(value, entry->value_bytes);
 
     return 0;
@@ -70,6 +72,7 @@ int devproto_metric_decode(const devproto_metric_entry_t *entry,
     if (!entry || !metric) return -1;
 
     metric->type = (devproto_metric_type_t)entry->type;
+    metric->band = (devproto_band_t)entry->band;
     metric->value = devproto_float_from_be(entry->value_bytes);
 
     return 0;
@@ -111,17 +114,11 @@ const char *devproto_metric_name(devproto_metric_type_t type)
     case DEVPROTO_METRIC_UPTIME:           return "UPTIME";
     case DEVPROTO_METRIC_ERROR_COUNT:      return "ERROR_COUNT";
 
-    /* 5G NR700 (n28 band) metrics */
-    case DEVPROTO_METRIC_DL_THROUGHPUT_NR700: return "DL_THROUGHPUT_NR700";
-    case DEVPROTO_METRIC_UL_THROUGHPUT_NR700: return "UL_THROUGHPUT_NR700";
-    case DEVPROTO_METRIC_RSRP_NR700:          return "RSRP_NR700";
-    case DEVPROTO_METRIC_SINR_NR700:          return "SINR_NR700";
-
-    /* 5G NR3500 (n78 band) metrics */
-    case DEVPROTO_METRIC_DL_THROUGHPUT_NR3500: return "DL_THROUGHPUT_NR3500";
-    case DEVPROTO_METRIC_UL_THROUGHPUT_NR3500: return "UL_THROUGHPUT_NR3500";
-    case DEVPROTO_METRIC_RSRP_NR3500:          return "RSRP_NR3500";
-    case DEVPROTO_METRIC_SINR_NR3500:          return "SINR_NR3500";
+    /* 5G NR radio metrics (band-neutral; band travels alongside) */
+    case DEVPROTO_METRIC_DL_THROUGHPUT: return "DL_THROUGHPUT";
+    case DEVPROTO_METRIC_UL_THROUGHPUT: return "UL_THROUGHPUT";
+    case DEVPROTO_METRIC_RSRP:          return "RSRP";
+    case DEVPROTO_METRIC_SINR:          return "SINR";
 
     /* 5G Radio metrics */
     case DEVPROTO_METRIC_PDCP_THROUGHPUT:      return "PDCP_THROUGHPUT";
@@ -210,6 +207,16 @@ const char *devproto_metric_name(devproto_metric_type_t type)
     }
 }
 
+const char *devproto_band_name(devproto_band_t band)
+{
+    switch (band) {
+    case DEVPROTO_BAND_NONE: return "NONE";
+    case DEVPROTO_BAND_N28:  return "N28";
+    case DEVPROTO_BAND_N78:  return "N78";
+    default:                 return "UNKNOWN";
+    }
+}
+
 /**
  * Parse metrics from response payload
  */
@@ -226,16 +233,17 @@ int devproto_metrics_parse(const uint8_t *payload, size_t payload_len,
     size_t count = 0;
     size_t offset = 0;
 
-    /* Each metric entry is 5 bytes: 1 byte type + 4 bytes float */
-    while (offset + 5 <= payload_len && count < max_metrics) {
+    /* Each metric entry is 6 bytes: type + band + 4-byte float */
+    while (offset + DEVPROTO_METRIC_ENTRY_SIZE <= payload_len && count < max_metrics) {
         devproto_metric_entry_t entry;
         entry.type = payload[offset];
-        memcpy(entry.value_bytes, &payload[offset + 1], 4);
+        entry.band = payload[offset + 1];
+        memcpy(entry.value_bytes, &payload[offset + 2], 4);
 
         if (devproto_metric_decode(&entry, &metrics[count]) == 0) {
             count++;
         }
-        offset += 5;
+        offset += DEVPROTO_METRIC_ENTRY_SIZE;
     }
 
     return (int)count;
@@ -250,9 +258,9 @@ int devproto_metrics_build(const devproto_metric_t *metrics, size_t num_metrics,
     if (!metrics || !buffer) return -1;
 
     /* Prevent integer overflow: check num_metrics before multiplication */
-    if (num_metrics > SIZE_MAX / 5) return -1;
+    if (num_metrics > SIZE_MAX / DEVPROTO_METRIC_ENTRY_SIZE) return -1;
 
-    size_t needed = num_metrics * 5;
+    size_t needed = num_metrics * DEVPROTO_METRIC_ENTRY_SIZE;
     if (buf_size < needed) return -1;
 
     /* Prevent return value truncation */
@@ -261,11 +269,12 @@ int devproto_metrics_build(const devproto_metric_t *metrics, size_t num_metrics,
     size_t offset = 0;
     for (size_t i = 0; i < num_metrics; i++) {
         devproto_metric_entry_t entry;
-        devproto_metric_encode(&entry, metrics[i].type, metrics[i].value);
+        devproto_metric_encode(&entry, metrics[i].type, metrics[i].band, metrics[i].value);
 
         buffer[offset] = entry.type;
-        memcpy(&buffer[offset + 1], entry.value_bytes, 4);
-        offset += 5;
+        buffer[offset + 1] = entry.band;
+        memcpy(&buffer[offset + 2], entry.value_bytes, 4);
+        offset += DEVPROTO_METRIC_ENTRY_SIZE;
     }
 
     return (int)offset;

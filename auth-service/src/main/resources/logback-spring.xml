@@ -41,8 +41,8 @@
             <appender-ref ref="CONSOLE"/>
         </root>
         
-        <logger name="com.huawei.auth" level="DEBUG"/>
-        <logger name="com.huawei.auth.security" level="DEBUG"/>
+        <logger name="io.github.erselseyit.basestation.auth" level="DEBUG"/>
+        <logger name="io.github.erselseyit.basestation.auth.security" level="DEBUG"/>
         <logger name="org.springframework.web" level="INFO"/>
         <logger name="org.springframework.security" level="DEBUG"/>
         <logger name="org.hibernate.SQL" level="DEBUG"/>
@@ -65,10 +65,10 @@
         </root>
         
         <!-- Authentication: INFO for security auditing -->
-        <logger name="com.huawei.auth" level="INFO"/>
+        <logger name="io.github.erselseyit.basestation.auth" level="INFO"/>
         
         <!-- JWT operations: INFO for token lifecycle -->
-        <logger name="com.huawei.auth.security" level="INFO"/>
+        <logger name="io.github.erselseyit.basestation.auth.security" level="INFO"/>
         
         <!-- Spring Security: INFO for auth events -->
         <logger name="org.springframework.security" level="INFO"/>

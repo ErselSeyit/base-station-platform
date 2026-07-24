@@ -278,8 +278,15 @@ type ReportId = keyof typeof REPORT_CONFIG
  * Downloads a report file by fetching from the backend and triggering browser download.
  * Shared by both handleDownload and handleGenerate since they perform the same action.
  */
-async function downloadReport(reportId: ReportId): Promise<void> {
-  const config = REPORT_CONFIG[reportId]
+async function downloadReport(reportId: string): Promise<void> {
+  const config = REPORT_CONFIG[reportId as ReportId]
+
+  // Demo mode: show info message instead of downloading
+  if (import.meta.env.VITE_MOCK === 'true') {
+    showToast.success(`${config?.filename ?? reportId} — report generation requires live platform connection`)
+    return
+  }
+
   if (!config) return
 
   try {
@@ -320,33 +327,21 @@ export default function Reports() {
   return (
     <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-        <Box
+      <Box sx={{ mb: 4 }}>
+        <Typography
+          variant="h4"
           sx={{
-            p: 1.5,
-            borderRadius: '12px',
-            background: CSS_VARS.gradientBlue,
-            color: 'white',
+            fontWeight: 700,
+            color: 'var(--mono-950)',
+            letterSpacing: '-0.02em',
+            fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' },
           }}
         >
-          <ReportIcon sx={{ fontSize: 28 }} />
-        </Box>
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              color: 'var(--mono-950)',
-              letterSpacing: '-0.02em',
-              fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
-            }}
-          >
-            Reports
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
-            Download and generate platform reports
-          </Typography>
-        </Box>
+          Reports
+        </Typography>
+        <Typography variant="body2" sx={{ color: 'var(--mono-500)' }}>
+          Download and generate platform reports
+        </Typography>
       </Box>
 
       {/* Quick Stats - BI Report Card - matching theme */}
@@ -484,7 +479,7 @@ export default function Reports() {
         Available Reports
       </Typography>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 1.5, sm: 2, md: 3 }}>
         {STATIC_REPORTS.map(report => (
           <Grid item xs={12} sm={6} lg={3} key={report.id}>
             <ReportCard

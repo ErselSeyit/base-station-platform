@@ -69,6 +69,8 @@ export interface MetricData {
   stationId: number
   stationName: string
   metricType: MetricType
+  /** NR band for radio metrics: 'N28', 'N78', or 'NONE'/absent otherwise. */
+  band?: string
   value: number
   unit: string
   timestamp?: string

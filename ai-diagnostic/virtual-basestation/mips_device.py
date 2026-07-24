@@ -93,16 +93,11 @@ class MetricType(IntEnum):
     BATTERY_LEVEL = 0x30
     UPTIME = 0x31
     ERROR_COUNT = 0x32
-    # 5G NR700 (n28) metrics (0x40-0x4F)
-    DL_THROUGHPUT_NR700 = 0x40
-    UL_THROUGHPUT_NR700 = 0x41
-    RSRP_NR700 = 0x42
-    SINR_NR700 = 0x43
-    # 5G NR3500 (n78) metrics (0x50-0x5F)
-    DL_THROUGHPUT_NR3500 = 0x50
-    UL_THROUGHPUT_NR3500 = 0x51
-    RSRP_NR3500 = 0x52
-    SINR_NR3500 = 0x53
+    # 5G NR radio metrics (0x40-0x4F). Band-neutral; band travels alongside.
+    DL_THROUGHPUT = 0x40
+    UL_THROUGHPUT = 0x41
+    RSRP = 0x42
+    SINR = 0x43
     # 5G Radio metrics (0x60-0x6F)
     PDCP_THROUGHPUT = 0x60
     RLC_THROUGHPUT = 0x61
@@ -134,6 +129,13 @@ class MetricType(IntEnum):
     SITE_POWER_KWH = 0x8C
     # Special
     ALL = 0xFF
+
+
+class Band(IntEnum):
+    """NR frequency band, carried beside a reading rather than in its type."""
+    NONE = 0x00
+    N28 = 0x01   # 700 MHz
+    N78 = 0x02   # 3.5 GHz
 
 
 class StatusCode(IntEnum):
@@ -412,10 +414,10 @@ THRESHOLDS = {
     MetricType.CPU_USAGE: {"warning": 70, "critical": 85},
     MetricType.MEMORY_USAGE: {"warning": 75, "critical": 90},
     MetricType.TEMPERATURE: {"warning": 60, "critical": 75},
-    MetricType.RSRP_NR3500: {"warning": -90, "critical": -100},  # Lower is worse
-    MetricType.RSRP_NR700: {"warning": -95, "critical": -105},
-    MetricType.SINR_NR3500: {"warning": 8, "critical": 3},  # Lower is worse
-    MetricType.SINR_NR700: {"warning": 5, "critical": 0},
+    (MetricType.RSRP, Band.N78): {"warning": -90, "critical": -100},  # Lower is worse
+    (MetricType.RSRP, Band.N28): {"warning": -95, "critical": -105},
+    (MetricType.SINR, Band.N78): {"warning": 8, "critical": 3},  # Lower is worse
+    (MetricType.SINR, Band.N28): {"warning": 5, "critical": 0},
     MetricType.LATENCY_PING: {"warning": 20, "critical": 50},  # Higher is worse
 }
 
@@ -680,43 +682,45 @@ class MIPSDevice:
         if self.mode == DeviceMode.RESTARTING:
             return b''
 
-        # Map metric types to values
-        metrics_map = {
-            MetricType.CPU_USAGE: self.state.cpu_usage,
-            MetricType.MEMORY_USAGE: self.state.memory_usage,
-            MetricType.TEMPERATURE: self.state.temperature,
-            MetricType.POWER_CONSUMPTION: self.state.power_consumption,
-            MetricType.SIGNAL_STRENGTH: self.state.signal_strength,
-            MetricType.DL_THROUGHPUT_NR3500: self.state.dl_throughput_nr3500,
-            MetricType.UL_THROUGHPUT_NR3500: self.state.ul_throughput_nr3500,
-            MetricType.RSRP_NR3500: self.state.rsrp_nr3500,
-            MetricType.SINR_NR3500: self.state.sinr_nr3500,
-            MetricType.DL_THROUGHPUT_NR700: self.state.dl_throughput_nr700,
-            MetricType.UL_THROUGHPUT_NR700: self.state.ul_throughput_nr700,
-            MetricType.RSRP_NR700: self.state.rsrp_nr700,
-            MetricType.SINR_NR700: self.state.sinr_nr700,
-            MetricType.LATENCY_PING: self.state.latency_ping,
-            MetricType.TX_IMBALANCE: self.state.tx_imbalance,
-            MetricType.HANDOVER_SUCCESS_RATE: self.state.handover_success_rate,
-            MetricType.INTERFERENCE_LEVEL: self.state.interference_level,
-            MetricType.INITIAL_BLER: self.state.initial_bler,
-            MetricType.DATA_THROUGHPUT: self.state.data_throughput,
-            MetricType.BATTERY_SOC: self.state.battery_soc,
-            MetricType.BATTERY_DOD: self.state.battery_dod,
-        }
+        # Readings as (type, band, value). The NR metrics carry their band; the
+        # rest are band-neutral. Two carriers can share a type without colliding.
+        readings = [
+            (MetricType.CPU_USAGE, Band.NONE, self.state.cpu_usage),
+            (MetricType.MEMORY_USAGE, Band.NONE, self.state.memory_usage),
+            (MetricType.TEMPERATURE, Band.NONE, self.state.temperature),
+            (MetricType.POWER_CONSUMPTION, Band.NONE, self.state.power_consumption),
+            (MetricType.SIGNAL_STRENGTH, Band.NONE, self.state.signal_strength),
+            (MetricType.DL_THROUGHPUT, Band.N78, self.state.dl_throughput_nr3500),
+            (MetricType.UL_THROUGHPUT, Band.N78, self.state.ul_throughput_nr3500),
+            (MetricType.RSRP, Band.N78, self.state.rsrp_nr3500),
+            (MetricType.SINR, Band.N78, self.state.sinr_nr3500),
+            (MetricType.DL_THROUGHPUT, Band.N28, self.state.dl_throughput_nr700),
+            (MetricType.UL_THROUGHPUT, Band.N28, self.state.ul_throughput_nr700),
+            (MetricType.RSRP, Band.N28, self.state.rsrp_nr700),
+            (MetricType.SINR, Band.N28, self.state.sinr_nr700),
+            (MetricType.LATENCY_PING, Band.NONE, self.state.latency_ping),
+            (MetricType.TX_IMBALANCE, Band.NONE, self.state.tx_imbalance),
+            (MetricType.HANDOVER_SUCCESS_RATE, Band.NONE, self.state.handover_success_rate),
+            (MetricType.INTERFERENCE_LEVEL, Band.NONE, self.state.interference_level),
+            (MetricType.INITIAL_BLER, Band.NONE, self.state.initial_bler),
+            (MetricType.DATA_THROUGHPUT, Band.NONE, self.state.data_throughput),
+            (MetricType.BATTERY_SOC, Band.NONE, self.state.battery_soc),
+            (MetricType.BATTERY_DOD, Band.NONE, self.state.battery_dod),
+        ]
 
-        # Determine which metrics to include
+        # Determine which metrics to include (filter by type; band-neutral).
         if requested_types is None or MetricType.ALL in requested_types:
-            types_to_send = list(metrics_map.keys())
+            selected = readings
         else:
-            types_to_send = [t for t in requested_types if t in metrics_map]
+            selected = [r for r in readings if r[0] in requested_types]
 
-        # Build payload: [type (1 byte) + value (4 bytes float32 BE)] * count
-        # No count prefix - edge bridge expects raw metric entries
+        # Build payload: [type(1)][band(1)][value(4 float32 BE)] * count.
+        # No count prefix - edge bridge expects raw metric entries.
         payload = bytearray()
-        for metric_type in types_to_send:
+        for metric_type, band, value in selected:
             payload.append(metric_type)
-            payload.extend(struct.pack('>f', metrics_map[metric_type]))
+            payload.append(band)
+            payload.extend(struct.pack('>f', value))
 
         return bytes(payload)
 

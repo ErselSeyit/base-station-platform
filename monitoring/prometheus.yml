@@ -31,3 +31,12 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['api-gateway:8080']
+
+  # The AI diagnostic service is a Flask app exposing prometheus_client
+  # metrics at /metrics (not the Spring actuator path). Without this job its
+  # diagnosis-duration, model-confidence, anomaly, healing and error metrics
+  # are exposed but collected by no one.
+  - job_name: 'ai-diagnostic'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['ai-diagnostic:9091']

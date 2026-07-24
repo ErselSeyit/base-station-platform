@@ -393,7 +393,11 @@ databases:
     image: postgres:18-alpine
     port: 5432
     storage: 10Gi
-    dataPath: /var/lib/postgresql/data
+    # postgres:18+ places PGDATA in a version subdirectory
+    # (/var/lib/postgresql/18/docker), so the volume must mount one level up.
+    # Mounting .../data leaves PGDATA outside the volume and the pod crash-loops.
+    # See https://github.com/docker-library/postgres/pull/1259
+    dataPath: /var/lib/postgresql
     resources:
       requests:
         cpu: 500m

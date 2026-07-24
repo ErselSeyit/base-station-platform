@@ -39,8 +39,8 @@
             <appender-ref ref="CONSOLE"/>
         </root>
         
-        <logger name="com.huawei.monitoring" level="DEBUG"/>
-        <logger name="com.huawei.monitoring.websocket" level="DEBUG"/>
+        <logger name="io.github.erselseyit.basestation.monitoring" level="DEBUG"/>
+        <logger name="io.github.erselseyit.basestation.monitoring.websocket" level="DEBUG"/>
         <logger name="org.springframework.web" level="INFO"/>
         <logger name="org.springframework.data.mongodb" level="DEBUG"/>
     </springProfile>
@@ -62,13 +62,13 @@
         </root>
         
         <!-- Application: INFO for operational visibility -->
-        <logger name="com.huawei.monitoring" level="INFO"/>
+        <logger name="io.github.erselseyit.basestation.monitoring" level="INFO"/>
         
         <!-- WebSocket: INFO to track connections -->
-        <logger name="com.huawei.monitoring.websocket" level="INFO"/>
+        <logger name="io.github.erselseyit.basestation.monitoring.websocket" level="INFO"/>
         
         <!-- Alert engine: INFO for threshold events -->
-        <logger name="com.huawei.monitoring.service.AlertRuleEngine" level="INFO"/>
+        <logger name="io.github.erselseyit.basestation.monitoring.service.AlertRuleEngine" level="INFO"/>
         
         <!-- MongoDB: WARN to avoid query spam -->
         <logger name="org.springframework.data.mongodb" level="WARN"/>

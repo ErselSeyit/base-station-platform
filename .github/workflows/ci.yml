@@ -80,6 +80,105 @@ jobs:
           path: '**/target/site/jacoco/'
 
   # ============================================
+  # Edge bridge (Go)
+  # ============================================
+  edge-bridge:
+    name: Edge Bridge (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: edge-bridge/go.sum
+
+      - name: Vet
+        working-directory: edge-bridge
+        run: go vet ./...
+
+      - name: Test (race detector)
+        working-directory: edge-bridge
+        run: go test -race ./...
+
+  # ============================================
+  # Device protocol (C)
+  # ============================================
+  device-protocol:
+    name: Device Protocol (C)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build and test (release, hardened)
+        run: make -C device-protocol-c test
+
+      - name: Build and test (debug)
+        run: make -C device-protocol-c clean && make -C device-protocol-c DEBUG=1 test
+
+  # ============================================
+  # AI diagnostic (Python)
+  # ============================================
+  ai-diagnostic:
+    name: AI Diagnostic (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: ai-diagnostic
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Test
+        working-directory: ai-diagnostic
+        run: python -m pytest tests/ -q
+
+  # ============================================
+  # Frontend
+  # ============================================
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Lint
+        working-directory: frontend
+        run: npx eslint src --max-warnings=0
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npx vitest run
+
+  # ============================================
   # Code Quality
   # ============================================
   code-quality:
@@ -112,6 +211,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # Warm the local Maven cache so Trivy resolves POMs from ~/.m2 instead of
+      # hammering Maven Central, which rate-limits (429) and fails the scan.
+      - name: Populate Maven cache
+        run: mvn -B -q dependency:go-offline || true
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master

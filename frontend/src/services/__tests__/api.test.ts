@@ -151,7 +151,11 @@ describe('API Service', () => {
       const params = { startTime: '2024-01-01T00:00:00Z' }
       const result = await metricsApi.getAll(params)
 
-      expect(mockGet).toHaveBeenCalledWith('/metrics', { params })
+      // getAll applies a default limit so an unbounded query cannot be issued
+      // by accident.
+      expect(mockGet).toHaveBeenCalledWith('/metrics', {
+        params: { ...params, limit: 5000 },
+      })
       expect(result.data).toEqual(mockMetrics)
     })
 

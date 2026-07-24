@@ -68,7 +68,10 @@ export default function Login() {
     setLoading(true)
 
     try {
-      await authService.login({ username, password })
+      if (import.meta.env.VITE_MOCK === 'true') {
+        sessionStorage.setItem('authUser', JSON.stringify({ username: 'demo', role: 'OPERATOR' }))
+      }
+      await authService.login({ username: username || 'demo', password: password || 'demo' })
       showToast.success('Welcome back')
       setTimeout(() => {
         navigate('/')

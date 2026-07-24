@@ -31,7 +31,12 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # postgres:18+ places PGDATA in a version subdirectory
+      # (/var/lib/postgresql/18/docker). The mount must therefore be at
+      # /var/lib/postgresql, not .../data — mounting the old path leaves PGDATA
+      # outside the volume and the container refuses to start.
+      # See https://github.com/docker-library/postgres/pull/1259
+      - postgres-data:/var/lib/postgresql
       - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
     networks:
       - database-network

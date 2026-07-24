@@ -88,6 +88,7 @@ typedef struct {
     devproto_metric_type_t type;
     float min_val;
     float max_val;
+    devproto_band_t band;   /* DEVPROTO_BAND_NONE unless the metric is band-specific */
 } metric_override_t;
 
 typedef struct {
@@ -127,8 +128,8 @@ static void init_fault_table(void)
     define_fault("MEMORY_PRESSURE", DEVPROTO_STATUS_CRITICAL, o, 2);
 
     o[0] = (metric_override_t){DEVPROTO_METRIC_SIGNAL_STRENGTH, -105, -95};
-    o[1] = (metric_override_t){DEVPROTO_METRIC_RSRP_NR3500, -110, -100};
-    o[2] = (metric_override_t){DEVPROTO_METRIC_SINR_NR3500, 2, 8};
+    o[1] = (metric_override_t){DEVPROTO_METRIC_RSRP, -110, -100, DEVPROTO_BAND_N78};
+    o[2] = (metric_override_t){DEVPROTO_METRIC_SINR, 2, 8, DEVPROTO_BAND_N78};
     define_fault("SIGNAL_DEGRADATION", DEVPROTO_STATUS_WARNING, o, 3);
 
     o[0] = (metric_override_t){DEVPROTO_METRIC_LATENCY_PING, 110, 200};
@@ -140,12 +141,12 @@ static void init_fault_table(void)
     define_fault("HIGH_POWER_CONSUMPTION", DEVPROTO_STATUS_CRITICAL, o, 2);
 
     o[0] = (metric_override_t){DEVPROTO_METRIC_INTERFERENCE_LEVEL, -68, -60};
-    o[1] = (metric_override_t){DEVPROTO_METRIC_SINR_NR3500, -2, 5};
-    o[2] = (metric_override_t){DEVPROTO_METRIC_SINR_NR700, 0, 6};
+    o[1] = (metric_override_t){DEVPROTO_METRIC_SINR, -2, 5, DEVPROTO_BAND_N78};
+    o[2] = (metric_override_t){DEVPROTO_METRIC_SINR, 0, 6, DEVPROTO_BAND_N28};
     define_fault("HIGH_INTERFERENCE", DEVPROTO_STATUS_WARNING, o, 3);
 
     o[0] = (metric_override_t){DEVPROTO_METRIC_INITIAL_BLER, 32, 50};
-    o[1] = (metric_override_t){DEVPROTO_METRIC_SINR_NR3500, 3, 8};
+    o[1] = (metric_override_t){DEVPROTO_METRIC_SINR, 3, 8, DEVPROTO_BAND_N78};
     define_fault("HIGH_BLOCK_ERROR_RATE", DEVPROTO_STATUS_CRITICAL, o, 2);
 
     o[0] = (metric_override_t){DEVPROTO_METRIC_BATTERY_SOC, 5, 9};
@@ -297,7 +298,8 @@ static void apply_fault_overrides(devproto_metric_t *metrics, int count)
         for (int j = 0; j < fault_table[i].num_overrides; j++) {
             metric_override_t *ov = &fault_table[i].overrides[j];
             for (int k = 0; k < count; k++) {
-                if ((int)metrics[k].type == (int)ov->type)
+                if ((int)metrics[k].type == (int)ov->type
+                        && metrics[k].band == ov->band)
                     metrics[k].value = randf(ov->min_val, ov->max_val);
             }
         }
@@ -313,10 +315,16 @@ static void apply_cascading_effects(devproto_metric_t *metrics, int count)
     for (int i = 0; i < count; i++) {
         switch ((int)metrics[i].type) {
         case DEVPROTO_METRIC_TEMPERATURE:          temp = metrics[i].value; break;
-        case DEVPROTO_METRIC_RSRP_NR3500:          rsrp3500 = metrics[i].value; break;
+        case DEVPROTO_METRIC_RSRP:
+            if (metrics[i].band == DEVPROTO_BAND_N78) rsrp3500 = metrics[i].value;
+            break;
         case DEVPROTO_METRIC_MEMORY_USAGE:          mem = metrics[i].value; break;
-        case DEVPROTO_METRIC_DL_THROUGHPUT_NR3500: idx_dl3500 = i; break;
-        case DEVPROTO_METRIC_UL_THROUGHPUT_NR3500: idx_ul3500 = i; break;
+        case DEVPROTO_METRIC_DL_THROUGHPUT:
+            if (metrics[i].band == DEVPROTO_BAND_N78) idx_dl3500 = i;
+            break;
+        case DEVPROTO_METRIC_UL_THROUGHPUT:
+            if (metrics[i].band == DEVPROTO_BAND_N78) idx_ul3500 = i;
+            break;
         case DEVPROTO_METRIC_THROUGHPUT:           idx_data = i; break;
         case DEVPROTO_METRIC_INITIAL_BLER:         idx_bler = i; break;
         case DEVPROTO_METRIC_HANDOVER_SUCCESS:     idx_handover = i; break;
@@ -369,6 +377,10 @@ static int collect_metrics(devproto_metric_t *metrics, int max_metrics)
     if (max_metrics < 21)
         return -1;
 
+    /* Default every entry to no band; NR metrics set theirs explicitly below. */
+    for (int i = 0; i < max_metrics; i++)
+        metrics[i].band = DEVPROTO_BAND_NONE;
+
     time_t now = time(NULL);
     struct tm *lt = localtime(&now);
     int hour = lt->tm_hour;
@@ -398,36 +410,44 @@ static int collect_metrics(devproto_metric_t *metrics, int max_metrics)
     n++;
 
     /* 5G NR3500 */
-    metrics[n].type = DEVPROTO_METRIC_DL_THROUGHPUT_NR3500;
+    metrics[n].type = DEVPROTO_METRIC_DL_THROUGHPUT;
+    metrics[n].band = DEVPROTO_BAND_N78;
     metrics[n].value = clampf(1200 * load + randf(-100, 150), 500, 2000);
     n++;
 
-    metrics[n].type = DEVPROTO_METRIC_UL_THROUGHPUT_NR3500;
+    metrics[n].type = DEVPROTO_METRIC_UL_THROUGHPUT;
+    metrics[n].band = DEVPROTO_BAND_N78;
     metrics[n].value = clampf(85 * load + randf(-10, 15), 40, 150);
     n++;
 
-    metrics[n].type = DEVPROTO_METRIC_RSRP_NR3500;
+    metrics[n].type = DEVPROTO_METRIC_RSRP;
+    metrics[n].band = DEVPROTO_BAND_N78;
     metrics[n].value = clampf(-78 + randf(-5, 5), -95, -65);
     n++;
 
-    metrics[n].type = DEVPROTO_METRIC_SINR_NR3500;
+    metrics[n].type = DEVPROTO_METRIC_SINR;
+    metrics[n].band = DEVPROTO_BAND_N78;
     metrics[n].value = clampf(18 + randf(-3, 3), 5, 30);
     n++;
 
     /* 5G NR700 */
-    metrics[n].type = DEVPROTO_METRIC_DL_THROUGHPUT_NR700;
+    metrics[n].type = DEVPROTO_METRIC_DL_THROUGHPUT;
+    metrics[n].band = DEVPROTO_BAND_N28;
     metrics[n].value = clampf(65 * load + randf(-8, 10), 30, 100);
     n++;
 
-    metrics[n].type = DEVPROTO_METRIC_UL_THROUGHPUT_NR700;
+    metrics[n].type = DEVPROTO_METRIC_UL_THROUGHPUT;
+    metrics[n].band = DEVPROTO_BAND_N28;
     metrics[n].value = clampf(25 * load + randf(-3, 5), 10, 40);
     n++;
 
-    metrics[n].type = DEVPROTO_METRIC_RSRP_NR700;
+    metrics[n].type = DEVPROTO_METRIC_RSRP;
+    metrics[n].band = DEVPROTO_BAND_N28;
     metrics[n].value = clampf(-82 + randf(-4, 4), -100, -70);
     n++;
 
-    metrics[n].type = DEVPROTO_METRIC_SINR_NR700;
+    metrics[n].type = DEVPROTO_METRIC_SINR;
+    metrics[n].band = DEVPROTO_BAND_N28;
     metrics[n].value = clampf(12 + randf(-2, 2), 3, 20);
     n++;
 
@@ -855,7 +875,15 @@ static void handle_client(int client_fd)
             if (n <= 0) break;
 
             devproto_message_t msgs[4];
-            int count = devproto_frame_parse(&parser, rx_buf, (size_t)n, msgs, 4);
+            /* Payloads are copied into this pool so that every message stays
+             * valid: devproto_frame_parse() would hand back pointers into the
+             * parser's buffer, and all but the last would already have been
+             * overwritten by the following frame. One read cannot yield more
+             * payload bytes than it read. */
+            uint8_t payload_pool[sizeof(rx_buf)];
+            int count = devproto_frame_parse_into(&parser, rx_buf, (size_t)n,
+                                                  msgs, 4,
+                                                  payload_pool, sizeof(payload_pool));
             for (int i = 0; i < count; i++)
                 handle_message(client_fd, &msgs[i]);
             devproto_frame_parser_reset(&parser);

@@ -154,7 +154,7 @@ const DetailedMetricCard = ({ metric, delay }: DetailedMetricCardProps) => {
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '6px', mb: '16px' }}>
           <Typography
             sx={{
-              fontSize: '2.25rem',
+              fontSize: { xs: '1.5rem', sm: '2.25rem' },
               fontWeight: 800,
               fontFamily: "'JetBrains Mono', monospace",
               color: 'var(--mono-950)',
@@ -259,8 +259,8 @@ const CategorySection = ({ category, metrics, chartData, baseDelay, days }: Cate
       sx={{ marginBottom: '40px' }}
     >
       {/* Section Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 60%' }}>
           <Box
             sx={{
               width: 44,
@@ -285,17 +285,17 @@ const CategorySection = ({ category, metrics, chartData, baseDelay, days }: Cate
         </Box>
         <Box
           sx={{
-            padding: '6px 14px',
+            padding: { xs: '4px 8px', sm: '6px 14px' },
             borderRadius: '100px',
             background: statusStyles.bg,
             border: `1px solid ${statusStyles.border}`,
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '5px',
           }}
         >
-          <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: statusStyles.color }} />
-          <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: statusStyles.color }}>
+          <Box sx={{ width: 7, height: 7, borderRadius: '50%', background: statusStyles.color, flexShrink: 0 }} />
+          <Typography sx={{ fontSize: { xs: '0.6875rem', sm: '0.8125rem' }, fontWeight: 600, color: statusStyles.color, whiteSpace: 'nowrap' }}>
             {statusStyles.label}
           </Typography>
         </Box>
@@ -486,7 +486,7 @@ export default function Metrics() {
         }
         return point
       })
-  }, [dailyAggregates, days, dateFormat])
+  }, [dailyAggregates, dateFormat]) // days is covered by dateFormat and the query key
 
   if (isLoadingHistorical) {
     return <LoadingSpinner />
@@ -513,7 +513,7 @@ export default function Metrics() {
         <Typography
           variant="h1"
           sx={{
-            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.25rem' },
+            fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.25rem' },
             fontWeight: 700,
             letterSpacing: '-0.025em',
             color: 'var(--mono-950)',
@@ -536,8 +536,9 @@ export default function Metrics() {
         sx={{ display: 'flex', gap: '16px', marginBottom: '32px', flexWrap: 'wrap' }}
       >
         <FormControl size="small" sx={FILTER_FORM_CONTROL_SX}>
-          <InputLabel>Station</InputLabel>
+          <InputLabel id="station-filter-label">Station</InputLabel>
           <Select
+            labelId="station-filter-label"
             value={selectedStation}
             onChange={(e) => setSelectedStation(e.target.value as number | 'all')}
             label="Station"
@@ -551,8 +552,9 @@ export default function Metrics() {
         </FormControl>
 
         <FormControl size="small" sx={FILTER_FORM_CONTROL_SX}>
-          <InputLabel>Category</InputLabel>
+          <InputLabel id="category-filter-label">Category</InputLabel>
           <Select
+            labelId="category-filter-label"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             label="Category"
@@ -567,8 +569,9 @@ export default function Metrics() {
         </FormControl>
 
         <FormControl size="small" sx={FILTER_FORM_CONTROL_SX}>
-          <InputLabel>Time Range</InputLabel>
+          <InputLabel id="time-range-filter-label">Time Range</InputLabel>
           <Select
+            labelId="time-range-filter-label"
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
             label="Time Range"

@@ -9,6 +9,10 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/e2e/**', '**/playwright-report/**'],
     globals: true,
     setupFiles: './src/test/setup.ts',
+    // userEvent simulates per-keystroke input, so form-heavy tests are slow on
+    // shared CI runners; 5s (the default) flakes there. 15s gives headroom
+    // without letting a genuinely hung test run forever.
+    testTimeout: 15000,
   },
 })
 

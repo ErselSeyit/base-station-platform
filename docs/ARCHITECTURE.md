@@ -137,6 +137,22 @@ Python AI service communicates with Java services via:
 - OpenTelemetry for distributed tracing
 - Health checks via `/health` endpoint
 
+### Band-neutral Metric Model
+
+Following the 3GPP model, a metric type is band-neutral (`DL_THROUGHPUT`,
+`RSRP`, …) and the NR frequency band is a separate dimension on the reading
+(`band: N28 | N78 | NONE`) rather than baked into the type name. The wire
+protocol (C/Go/Python) encodes the band as a byte alongside each metric, and
+`GET /api/v1/metrics/catalog` lists every type with its unit and 3GPP TS 28.552
+counter. See [API.md](API.md#band-dimension-for-radio-metrics).
+
+### TMF Open APIs (tmf-api)
+
+The `tmf-api` module implements TM Forum Open APIs (TMF638/639/642) and is
+built and tested in the Maven reactor, but is **not yet wired into the default
+`docker compose`/Helm deployment** (no Dockerfile/compose entry). Its security
+is already hardened to the gateway-fronted model above for when it is deployed.
+
 ## Key Features
 
 ### Real-Time Updates
@@ -160,7 +176,13 @@ PostGIS-ready architecture for geospatial queries (stations within radius).
 
 ### Security
 - Database-backed JWT authentication
-- HMAC-SHA256 service-to-service auth
+- **Gateway-fronted trust model**: the API Gateway validates the JWT, then
+  forwards the user identity in `X-User-Name`/`X-User-Role` headers. Downstream
+  services build their `Authentication` from those headers, but only trust them
+  because `InternalAuthFilter` (in `common`) first verifies an `X-Internal-Auth`
+  HMAC-SHA256 signature — so a client cannot spoof `X-User-Role: ADMIN` by
+  calling a service directly. Services must scan the `common` package for this
+  filter to register.
 - Brute-force protection with account lockout
 - Configurable CORS policies
 
@@ -168,7 +190,7 @@ PostGIS-ready architecture for geospatial queries (stations within radius).
 
 | Component | Purpose |
 |-----------|---------|
-| **Prometheus** | Scrapes `/actuator/prometheus` endpoints |
+| **Prometheus** | Scrapes `/actuator/prometheus` (permitted for scraping; the rest of `/actuator` is admin-only) |
 | **Grafana** | Pre-configured dashboards |
 | **Zipkin** | Distributed tracing across services |
 | **Structured Logging** | JSON logs with logstash-logback-encoder |

@@ -10,6 +10,7 @@ import {
   type MetricStatus,
   METRICS_CONFIG,
   SSV_METRIC_TYPES,
+  metricDisplayKey,
   countMetricStatuses,
 } from '../constants/metricsConfig'
 
@@ -23,6 +24,13 @@ const STATUS_ICONS = {
 interface MetricValue {
   readonly type: string
   readonly value: number
+  /** NR band dimension: 'N28', 'N78', or absent/'NONE' for band-less metrics. */
+  readonly band?: string
+}
+
+/** A reading resolved to its band-suffixed display key. */
+interface ResolvedMetric extends MetricValue {
+  readonly key: string
 }
 
 interface NR5GQuickStatusProps {
@@ -33,23 +41,26 @@ interface NR5GQuickStatusProps {
 export default function NR5GQuickStatus({ metrics, delay = 0 }: NR5GQuickStatusProps) {
   if (metrics.length === 0) return null
 
-  // Filter to only SSV metrics
-  const ssvMetrics = metrics.filter(m => SSV_METRIC_TYPES.has(m.type))
+  // Resolve each band-neutral (type, band) reading to its display key, then
+  // keep only SSV metrics.
+  const ssvMetrics: ResolvedMetric[] = metrics
+    .map((m) => ({ ...m, key: metricDisplayKey(m.type, m.band) }))
+    .filter((m) => SSV_METRIC_TYPES.has(m.key))
 
-  // Group by band
-  const nr3500 = ssvMetrics.filter((m) => m.type.includes('NR3500'))
-  const nr700 = ssvMetrics.filter((m) => m.type.includes('NR700'))
-  const other = ssvMetrics.filter((m) => !m.type.includes('NR3500') && !m.type.includes('NR700'))
+  // Group by band dimension
+  const nr3500 = ssvMetrics.filter((m) => m.band === 'N78')
+  const nr700 = ssvMetrics.filter((m) => m.band === 'N28')
+  const other = ssvMetrics.filter((m) => m.band !== 'N78' && m.band !== 'N28')
 
   // Calculate summary using centralized config
   const allStatuses: MetricStatus[] = ssvMetrics.map((m) => {
-    const config = METRICS_CONFIG[m.type]
+    const config = METRICS_CONFIG[m.key]
     return config ? config.getMetricStatus(m.value) : 'pass'
   })
   const { pass: passCount, warning: warnCount, fail: failCount } = countMetricStatuses(allStatuses)
 
-  const renderMetricChip = (m: MetricValue, idx: number) => {
-    const config = METRICS_CONFIG[m.type]
+  const renderMetricChip = (m: ResolvedMetric, idx: number) => {
+    const config = METRICS_CONFIG[m.key]
     if (!config) return null
 
     const status = config.getMetricStatus(m.value) as MetricStatusType
@@ -58,7 +69,7 @@ export default function NR5GQuickStatus({ metrics, delay = 0 }: NR5GQuickStatusP
 
     return (
       <Box
-        key={m.type}
+        key={m.key}
         component={motion.div}
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}

@@ -129,6 +129,29 @@ Content-Type: application/json
 }
 ```
 
+#### Band dimension for radio metrics
+
+The metric type is band-neutral. The NR frequency band a radio metric was
+measured on is carried as a separate `band` dimension — matching the 3GPP
+model, where a measurement (e.g. `DRB.UEThpDl`) is reported against a measured
+object (an NRCellDU) that carries the frequency — rather than being baked into
+the type name. So a 700 MHz downlink-throughput reading is:
+
+```json
+{
+  "stationId": 1,
+  "metricType": "DL_THROUGHPUT",
+  "band": "N28",
+  "value": 87.0,
+  "unit": "Mbps"
+}
+```
+
+`band` is one of `N28` (700 MHz), `N78` (3.5 GHz), or `NONE`. It defaults to
+`NONE` when absent, which is correct for band-less metrics (CPU, temperature,
+transport, power, environment). The radio metrics that take a real band are
+`DL_THROUGHPUT`, `UL_THROUGHPUT`, `RSRP`, and `SINR`.
+
 ### Query Metrics
 ```bash
 # Get all metrics
@@ -147,9 +170,26 @@ Content-Type: application/json
 {"stationIds": [1, 2, 3]}
 ```
 
+### Metric Catalog
+```bash
+# Every metric the platform records, with its unit and 3GPP TS 28.552 counter
+GET /api/v1/metrics/catalog
+Authorization: Bearer <token>
+```
+
+This is the authoritative list of metric types. Each entry is:
+
+```json
+{ "name": "DL_THROUGHPUT", "unit": "Mbps", "threeGppCounter": "DRB.UEThpDl" }
+```
+
+`threeGppCounter` is omitted for metrics outside the 3GPP RAN performance model
+(facility telemetry, environment sensors).
+
 ## Metrics Validation
 
-All metrics are validated before storage:
+All metrics are validated before storage. The table below is representative;
+`GET /api/v1/metrics/catalog` returns the full, current set of types and units.
 
 | Metric Type | Valid Range | Unit |
 |------------|-------------|------|
@@ -160,6 +200,9 @@ All metrics are validated before storage:
 | SIGNAL_STRENGTH | -120 to -20 | dBm |
 | DATA_THROUGHPUT | 0-100,000 | Mbps |
 | CONNECTION_COUNT | 0-10,000 | count |
+| DL_THROUGHPUT / UL_THROUGHPUT | 0-100,000 | Mbps |
+| RSRP | -140 to -40 | dBm |
+| SINR | -20 to 40 | dB |
 
 Invalid values are rejected:
 ```json

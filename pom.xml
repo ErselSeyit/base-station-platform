@@ -5,7 +5,7 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.huawei</groupId>
+    <groupId>io.github.erselseyit</groupId>
     <artifactId>basestation-platform</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
@@ -30,7 +30,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.4.13</spring-boot.version>
         <spring-cloud.version>2024.0.0</spring-cloud.version>
-        <spring-security.version>6.5.5</spring-security.version>
+        <spring-security.version>6.5.9</spring-security.version>
         <jjwt.version>0.12.5</jjwt.version>
         <resilience4j.version>2.2.0</resilience4j.version>
         <springdoc.version>2.8.14</springdoc.version>
@@ -43,6 +43,15 @@
         <awaitility.version>4.2.2</awaitility.version>
         <flyway.version>10.22.0</flyway.version>
         <jacoco.version>0.8.12</jacoco.version>
+        <!-- Security overrides of Spring Boot-managed transitive versions.
+             Tomcat 10.1.50 -> 10.1.55 (CVE-2026-41293),
+             Bouncycastle 1.78.1 -> 1.81.1 (CVE-2025-14813).
+             Both are pinned via dependencyManagement below, not by these
+             properties alone: overriding a version property of an *imported*
+             BOM (spring-boot-dependencies) does not take effect, because Maven
+             resolves that property within the BOM's own context. -->
+        <tomcat.version>10.1.55</tomcat.version>
+        <bouncycastle.version>1.81.1</bouncycastle.version>
     </properties>
 
     <dependencyManagement>
@@ -89,6 +98,42 @@
                 <groupId>org.springframework.security</groupId>
                 <artifactId>spring-security-crypto</artifactId>
                 <version>${spring-security.version}</version>
+            </dependency>
+            <!-- Pin the Bouncycastle family to a fixed version (CVE-2025-14813).
+                 Explicit here as well as via the property, so the override holds
+                 regardless of how the transitive dependency is resolved. -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcutil-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <!-- Pin the embedded Tomcat family to a fixed version
+                 (CVE-2026-41293). The property override alone is ignored for an
+                 imported BOM, so the version is set explicitly here. -->
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>${tomcat.version}</version>
             </dependency>
             <!-- Explicitly override Mockito to latest version for better null-safety -->
             <dependency>

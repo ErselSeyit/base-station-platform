@@ -380,12 +380,12 @@ class Virtual5GStation:
         for sector_id, rf in self.rf_metrics.items():
             # Add all RF metrics for this sector
             metrics_list.extend([
-                {"type": "DL_THROUGHPUT_NR3500", "value": rf.dl_throughput_nr3500},
-                {"type": "UL_THROUGHPUT_NR3500", "value": rf.ul_throughput_nr3500},
-                {"type": "RSRP_NR3500", "value": rf.rsrp_nr3500},
-                {"type": "SINR_NR3500", "value": rf.sinr_nr3500},
-                {"type": "DL_THROUGHPUT_NR700", "value": rf.dl_throughput_nr700},
-                {"type": "UL_THROUGHPUT_NR700", "value": rf.ul_throughput_nr700},
+                {"type": "DL_THROUGHPUT", "band": "N78", "value": rf.dl_throughput_nr3500},
+                {"type": "UL_THROUGHPUT", "band": "N78", "value": rf.ul_throughput_nr3500},
+                {"type": "RSRP", "band": "N78", "value": rf.rsrp_nr3500},
+                {"type": "SINR", "band": "N78", "value": rf.sinr_nr3500},
+                {"type": "DL_THROUGHPUT", "band": "N28", "value": rf.dl_throughput_nr700},
+                {"type": "UL_THROUGHPUT", "band": "N28", "value": rf.ul_throughput_nr700},
                 {"type": "LATENCY_PING", "value": rf.latency},
                 {"type": "TX_IMBALANCE", "value": rf.tx_imbalance},
             ])

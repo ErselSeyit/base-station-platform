@@ -48,7 +48,7 @@ management:
 # Logging
 logging:
   level:
-    com.huawei.tmf: INFO
+    io.github.erselseyit.basestation.tmf: INFO
     org.springframework.data.mongodb: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

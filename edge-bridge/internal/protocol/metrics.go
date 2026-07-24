@@ -12,11 +12,12 @@ var (
 	ErrMetricBufferTooSmall = errors.New("buffer too small for metrics")
 )
 
-// MetricEntrySize is the size of a single metric entry (1 byte type + 4 bytes float32).
-const MetricEntrySize = 5
+// MetricEntrySize is the size of a single metric entry
+// (1 byte type + 1 byte band + 4 bytes float32).
+const MetricEntrySize = 6
 
 // EncodeMetrics encodes a slice of metrics into wire format.
-// Format: [type(1)][value(4 float32 big-endian)]...
+// Format: [type(1)][band(1)][value(4 float32 big-endian)]...
 func EncodeMetrics(metrics []Metric) []byte {
 	if len(metrics) == 0 {
 		return nil
@@ -27,7 +28,8 @@ func EncodeMetrics(metrics []Metric) []byte {
 
 	for _, m := range metrics {
 		buf[offset] = byte(m.Type)
-		binary.BigEndian.PutUint32(buf[offset+1:], math.Float32bits(m.Value))
+		buf[offset+1] = byte(m.Band)
+		binary.BigEndian.PutUint32(buf[offset+2:], math.Float32bits(m.Value))
 		offset += MetricEntrySize
 	}
 
@@ -50,7 +52,8 @@ func DecodeMetrics(data []byte) ([]Metric, error) {
 	for i := 0; i < count; i++ {
 		offset := i * MetricEntrySize
 		metrics[i].Type = MetricType(data[offset])
-		metrics[i].Value = math.Float32frombits(binary.BigEndian.Uint32(data[offset+1:]))
+		metrics[i].Band = Band(data[offset+1])
+		metrics[i].Value = math.Float32frombits(binary.BigEndian.Uint32(data[offset+2:]))
 	}
 
 	return metrics, nil
@@ -82,10 +85,15 @@ func DecodeStatus(data []byte) (*StatusPayload, error) {
 }
 
 // EncodeCommandResult encodes a command result into wire format.
-// Format: [success(1)][return_code(1)][output_len(2)][output...]
+// Format: [success(1)][return_code(1)][output...]
+//
+// The output is not length-prefixed: the frame header already carries the
+// payload length, and the device encodes it this way (see mips_device.c,
+// which sends payload_len = 2 + len). An earlier version wrote an extra
+// 2-byte length here, which DecodeCommandResult and the device both read as
+// the first two bytes of the output.
 func EncodeCommandResult(result *CommandResultPayload) []byte {
-	outputLen := len(result.Output)
-	buf := make([]byte, 4+outputLen)
+	buf := make([]byte, 2+len(result.Output))
 
 	if result.Success {
 		buf[0] = 0x00
@@ -93,8 +101,7 @@ func EncodeCommandResult(result *CommandResultPayload) []byte {
 		buf[0] = 0x01
 	}
 	buf[1] = result.ReturnCode
-	binary.BigEndian.PutUint16(buf[2:4], uint16(outputLen))
-	copy(buf[4:], result.Output)
+	copy(buf[2:], result.Output)
 
 	return buf
 }

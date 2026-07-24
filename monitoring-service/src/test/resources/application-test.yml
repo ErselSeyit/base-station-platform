@@ -3,8 +3,11 @@ spring:
     name: monitoring-service-test
   data:
     mongodb:
-      # Uses embedded MongoDB or Testcontainers for integration tests
-      # For unit tests with mocks, MongoDB is not needed
+      # Fallback only. Tests that need a real MongoDB import
+      # MongoTestContainerConfig, whose @ServiceConnection container overrides
+      # this URI. Do not point it at a shared or compose-managed MongoDB:
+      # doing so made the suite depend on host state and fail against the
+      # project's own docker-compose stack, which enables authentication.
       uri: mongodb://localhost:27017/test-monitoring
 
 # Disable internal authentication for tests

@@ -1,9 +1,4 @@
 spring:
-  autoconfigure:
-    exclude:
-      - io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration
-      - io.github.resilience4j.springboot3.retry.autoconfigure.RetryAutoConfiguration
-      - io.github.resilience4j.springboot3.timelimiter.autoconfigure.TimeLimiterAutoConfiguration
   datasource:
     url: jdbc:h2:mem:basestation-it;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
     driver-class-name: org.h2.Driver
@@ -26,3 +21,10 @@ server:
 monitoring:
   service:
     url: http://localhost:0
+
+# InternalAuthFilter lives in the common package, which these tests now scan
+# (matching BaseStationServiceApplication). It rejects every request unless a
+# shared secret is configured, so it must be disabled for tests.
+security:
+  internal:
+    enabled: false
