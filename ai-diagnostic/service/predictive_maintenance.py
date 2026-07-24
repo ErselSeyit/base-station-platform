@@ -14,13 +14,9 @@ Also includes:
 
 import logging
 from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
-import statistics
 import threading
-
-import numpy as np
 
 from .utils import (
     HealthStatus,
@@ -40,88 +36,16 @@ from .utils.thresholds import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class MetricDataPoint:
-    """A single metric measurement."""
-    timestamp: datetime
-    value: float
-    station_id: str
-    metric_type: str
-
-
-@dataclass
-class TrendAnalysis:
-    """Result of trend analysis on a metric."""
-    direction: str  # "increasing", "decreasing", "stable", "erratic"
-    slope: float
-    r_squared: float
-    mean: float
-    std_dev: float
-    min_value: float
-    max_value: float
-    data_points: int
-
-
-@dataclass
-class FailurePrediction:
-    """Predicted equipment failure."""
-    component: str
-    station_id: str
-    prediction: str
-    confidence: PredictionConfidence
-    probability: float
-    estimated_time_to_failure: Optional[timedelta]
-    current_health: HealthStatus
-    trend: TrendAnalysis
-    recommended_action: str
-    data_points_analyzed: int
-    analysis_window: timedelta
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "component": self.component,
-            "station_id": self.station_id,
-            "prediction": self.prediction,
-            "confidence": self.confidence.value,
-            "probability": round(self.probability, 3),
-            "estimated_hours_to_failure": self.estimated_time_to_failure.total_seconds() / 3600 if self.estimated_time_to_failure else None,
-            "current_health": self.current_health.value,
-            "trend": {
-                "direction": self.trend.direction,
-                "slope": round(self.trend.slope, 4),
-                "r_squared": round(self.trend.r_squared, 3),
-                "mean": round(self.trend.mean, 2),
-                "std_dev": round(self.trend.std_dev, 2),
-                "min": round(self.trend.min_value, 2),
-                "max": round(self.trend.max_value, 2),
-                "data_points": self.trend.data_points
-            },
-            "recommended_action": self.recommended_action,
-            "analysis_window_hours": self.analysis_window.total_seconds() / 3600
-        }
-
-
-@dataclass
-class ComponentHealth:
-    """Overall health assessment for a component."""
-    component: str
-    station_id: str
-    health_score: float  # 0-100
-    status: HealthStatus
-    metrics: Dict[str, TrendAnalysis]
-    issues: List[str]
-    predictions: List[FailurePrediction]
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "component": self.component,
-            "station_id": self.station_id,
-            "health_score": round(self.health_score, 1),
-            "status": self.status.value,
-            "issues": self.issues,
-            "prediction_count": len(self.predictions),
-            "predictions": [p.to_dict() for p in self.predictions]
-        }
+# Data models extracted to service/maintenance_models.py; re-exported so
+# existing importers (e.g. `from ...predictive_maintenance import FailurePrediction`) keep working.
+from .maintenance_models import (  # noqa: F401
+    MetricDataPoint, TrendAnalysis, FailurePrediction, ComponentHealth,
+)
+from .maintenance_analytics import (
+    analyze_trend, assess_fan_health_status, calculate_fan_failure_probability,
+    determine_confidence, fan_prediction_text, fan_recommendation,
+    temperature_recommendation, battery_recommendation, fiber_recommendation,
+)
 
 
 class PredictiveMaintenanceService:
@@ -623,43 +547,11 @@ class PredictiveMaintenanceService:
             analysis_window=analysis_window
         )
 
-    def _get_battery_recommendation(
-        self,
-        status: HealthStatus,
-        _issues: List[str],  # Reserved for issue-specific recommendations
-        cycle_count: float
-    ) -> str:
-        """Get recommended action for battery issues."""
-        if status == HealthStatus.CRITICAL:
-            return "URGENT: Battery replacement required. Risk of power failure"
-        elif status == HealthStatus.WARNING:
-            if cycle_count > BatteryThresholds.CYCLE_WARNING_MAX:
-                return "Schedule battery replacement within 30 days due to cycle degradation"
-            return "Monitor battery closely. Schedule inspection within 1 week"
-        elif status == HealthStatus.DEGRADED:
-            return "Battery showing early degradation. Plan for replacement within 3 months"
-        else:
-            return "Battery operating normally. Continue standard maintenance"
+    def _get_battery_recommendation(self, status: HealthStatus, _issues: List[str], cycle_count: float) -> str:
+        return battery_recommendation(status, _issues, cycle_count)
 
-    def _get_fiber_recommendation(
-        self,
-        status: HealthStatus,
-        has_ber_issue: bool,
-        rx_trend: TrendAnalysis
-    ) -> str:
-        """Get recommended action for fiber transport issues."""
-        if status == HealthStatus.CRITICAL:
-            return "URGENT: Fiber link at risk of failure. Inspect connectors, check for fiber damage"
-        elif status == HealthStatus.WARNING:
-            if has_ber_issue:
-                return "High error rate detected. Clean connectors, verify SFP modules"
-            return "Signal degradation detected. Schedule OTDR test within 1 week"
-        elif status == HealthStatus.DEGRADED:
-            if rx_trend.direction == "decreasing":
-                return "Gradual signal loss. Check for connector contamination or bend loss"
-            return "Monitor fiber link. Schedule preventive inspection"
-        else:
-            return "Fiber transport operating normally"
+    def _get_fiber_recommendation(self, status: HealthStatus, has_ber_issue: bool, rx_trend: TrendAnalysis) -> str:
+        return fiber_recommendation(status, has_ber_issue, rx_trend)
 
     def get_station_health_report(
         self,
@@ -743,168 +635,25 @@ class PredictiveMaintenanceService:
         return [dp for dp in data if dp.timestamp > cutoff]
 
     def _analyze_trend(self, data_points: List[MetricDataPoint]) -> TrendAnalysis:
-        """Perform trend analysis on metric data."""
-        if not data_points:
-            return TrendAnalysis(
-                direction="unknown", slope=0, r_squared=0,
-                mean=0, std_dev=0, min_value=0, max_value=0, data_points=0
-            )
-
-        values = [dp.value for dp in data_points]
-        timestamps = [(dp.timestamp - data_points[0].timestamp).total_seconds() / 3600
-                     for dp in data_points]  # Hours since first point
-
-        mean_val = statistics.mean(values)
-        std_dev = statistics.stdev(values) if len(values) > 1 else 0
-
-        # Linear regression for trend
-        if len(values) > 1:
-            coeffs = np.polyfit(timestamps, values, 1)
-            slope = coeffs[0]
-
-            # Calculate R-squared
-            predicted = np.polyval(coeffs, timestamps)
-            ss_res = np.sum((np.array(values) - predicted) ** 2)
-            ss_tot = np.sum((np.array(values) - mean_val) ** 2)
-            r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
-        else:
-            slope = 0
-            r_squared = 0
-
-        # Determine direction
-        cv = std_dev / mean_val if mean_val > 0 else 0
-        if cv > 0.2:
-            direction = "erratic"
-        elif abs(slope) < 0.1:
-            direction = "stable"
-        elif slope > 0:
-            direction = "increasing"
-        else:
-            direction = "decreasing"
-
-        return TrendAnalysis(
-            direction=direction,
-            slope=slope,
-            r_squared=float(max(0, min(1, r_squared))),
-            mean=mean_val,
-            std_dev=std_dev,
-            min_value=min(values),
-            max_value=max(values),
-            data_points=len(values)
-        )
+        return analyze_trend(data_points)
 
     def _assess_fan_health_status(self, current_rpm: float, trend: TrendAnalysis) -> HealthStatus:
-        """Assess fan health status based on RPM and trend."""
-        if current_rpm < FanThresholds.CRITICAL_RPM_MIN:
-            return HealthStatus.CRITICAL
-        elif current_rpm < FanThresholds.WARNING_RPM_MIN:
-            return HealthStatus.WARNING
-        elif current_rpm < FanThresholds.HEALTHY_RPM_MIN:
-            return HealthStatus.DEGRADED
-        elif trend.direction == "erratic":
-            return HealthStatus.WARNING
-        elif trend.direction == "decreasing" and trend.slope < FanThresholds.DEGRADATION_SLOPE:
-            return HealthStatus.DEGRADED
-        else:
-            return HealthStatus.HEALTHY
+        return assess_fan_health_status(current_rpm, trend)
 
-    def _calculate_fan_failure_probability(
-        self,
-        current_rpm: float,
-        trend: TrendAnalysis
-    ) -> Tuple[float, Optional[timedelta]]:
-        """Calculate probability of fan failure and estimated time to failure."""
-        probability = 0.0
-        ttf = None
-
-        # Base probability from current RPM
-        if current_rpm < FanThresholds.CRITICAL_RPM_MIN:
-            probability = 0.9
-        elif current_rpm < FanThresholds.WARNING_RPM_MIN:
-            probability = 0.6
-        elif current_rpm < FanThresholds.HEALTHY_RPM_MIN:
-            probability = 0.3
-
-        # Adjust for trend
-        if trend.direction == "decreasing" and trend.slope < 0:
-            # Calculate hours until critical RPM
-            hours_to_critical = (current_rpm - FanThresholds.CRITICAL_RPM_MIN) / abs(trend.slope)
-            if hours_to_critical > 0:
-                ttf = timedelta(hours=hours_to_critical)
-                # Higher probability if failure imminent
-                if hours_to_critical < 24:
-                    probability = max(probability, 0.8)
-                elif hours_to_critical < 72:
-                    probability = max(probability, 0.5)
-
-        # Adjust for erratic behavior
-        if trend.direction == "erratic":
-            probability = max(probability, 0.5)
-
-        # High variation is concerning
-        cv = trend.std_dev / trend.mean if trend.mean > 0 else 0
-        if cv > FanThresholds.VARIATION_THRESHOLD:
-            probability = max(probability, 0.4)
-
-        return min(1.0, probability), ttf
+    def _calculate_fan_failure_probability(self, current_rpm: float, trend: TrendAnalysis) -> Tuple[float, Optional[timedelta]]:
+        return calculate_fan_failure_probability(current_rpm, trend)
 
     def _determine_confidence(self, data_points: int, r_squared: float) -> PredictionConfidence:
-        """Determine prediction confidence based on data quality."""
-        if data_points >= self.PREFERRED_DATA_POINTS and r_squared > 0.7:
-            return PredictionConfidence.HIGH
-        elif data_points >= self.MIN_DATA_POINTS and r_squared > 0.4:
-            return PredictionConfidence.MEDIUM
-        else:
-            return PredictionConfidence.LOW
+        return determine_confidence(data_points, r_squared, self.MIN_DATA_POINTS, self.PREFERRED_DATA_POINTS)
 
-    def _get_fan_prediction_text(
-        self,
-        status: HealthStatus,
-        trend: TrendAnalysis,
-        _probability: float  # Reserved for future use
-    ) -> str:
-        """Generate human-readable prediction text for fan status."""
-        if status == HealthStatus.CRITICAL:
-            return f"Fan operating at critical RPM ({trend.mean:.0f}), immediate attention required"
-        elif status == HealthStatus.WARNING:
-            return f"Fan degradation detected, RPM trend: {trend.direction} ({trend.slope:.1f}/hr)"
-        elif trend.direction == "decreasing":
-            return f"Fan RPM declining at {abs(trend.slope):.1f}/hr, monitor closely"
-        elif trend.direction == "erratic":
-            return f"Erratic fan behavior detected (±{trend.std_dev:.0f} RPM variation)"
-        else:
-            return f"Fan operating normally at {trend.mean:.0f} RPM"
+    def _get_fan_prediction_text(self, status: HealthStatus, trend: TrendAnalysis, _probability: float) -> str:
+        return fan_prediction_text(status, trend, _probability)
 
-    def _get_fan_recommendation(
-        self,
-        status: HealthStatus,
-        _trend: TrendAnalysis,  # Reserved for trend-based recommendations
-        probability: float
-    ) -> str:
-        """Get recommended action for fan issues."""
-        if status == HealthStatus.CRITICAL or probability > 0.8:
-            return "URGENT: Schedule immediate fan replacement to prevent thermal shutdown"
-        elif status == HealthStatus.WARNING or probability > 0.5:
-            return "Schedule fan replacement within 1 week"
-        elif status == HealthStatus.DEGRADED:
-            return "Monitor fan closely, schedule inspection within 2 weeks"
-        else:
-            return "Continue normal monitoring"
+    def _get_fan_recommendation(self, status: HealthStatus, _trend: TrendAnalysis, probability: float) -> str:
+        return fan_recommendation(status, _trend, probability)
 
-    def _get_temperature_recommendation(
-        self,
-        status: HealthStatus,
-        trend: TrendAnalysis
-    ) -> str:
-        """Get recommended action for temperature issues."""
-        if status == HealthStatus.CRITICAL:
-            return "CRITICAL: Temperature exceeds safe limits. Check cooling system immediately"
-        elif status == HealthStatus.WARNING:
-            return "High temperature warning. Verify cooling system operation"
-        elif trend.direction == "increasing" and trend.slope > 0.5:
-            return "Rising temperature trend. Check airflow and cooling capacity"
-        else:
-            return "Temperature within normal range"
+    def _get_temperature_recommendation(self, status: HealthStatus, trend: TrendAnalysis) -> str:
+        return temperature_recommendation(status, trend)
 
 
 # Singleton instance with thread-safe initialization
