@@ -214,7 +214,7 @@ Verified inline — **module size is the headline problem** (SRP; PEP 8 readabil
 
 | path | LOC | sev | issue | fix |
 |------|-----|-----|-------|-----|
-| `service/diagnostic_service.py` | **2807** | HIGH | one module = Flask app + TCP server + routing + orchestration + wire protocol | split into `app/` (routes), `transport/` (tcp), `orchestration/` |
+| `service/diagnostic_service.py` | ~~2807~~ **2150** | HIGH → **PARTIALLY DONE** | one module = Flask app + TCP server + routing + orchestration + wire protocol | **Done, test-first:** added 20 characterisation tests over the pure seams, then extracted `models.py` (Problem/Solution/LearnedPattern), `learning_engine.py`, `backends.py` (AIBackend/RuleBased/Ollama + RULES), `cloud_client.py`; monolith re-exports all names (importers + runtime unchanged); 173 ai-diagnostic tests green in CI. **Remaining:** the Flask `HTTPAdapter` (~1400 LOC) + TCP/Serial/MQTT adapters — coupled to the optional-import flags and service-locators, so extracting them needs a Flask-route characterisation harness first (route tests with the downstream services stubbed). |
 | `service/bi_report_generator.py` | 1251 | HIGH | report generation monolith | split by report type + a shared renderer |
 | `virtual-basestation/mips_device.py` | 1158 | MEDIUM | simulator state + metrics + fault model + wire | extract fault model and metric catalogue |
 | `service/predictive_maintenance.py` | 912 | MEDIUM | model + features + serving in one | separate feature engineering from serving |
