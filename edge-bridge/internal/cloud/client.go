@@ -3,12 +3,29 @@ package cloud
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
 	"time"
 )
+
+// errResponseReceived marks an error that occurred *after* the server returned
+// a response. Retrying such a request for a non-idempotent method (POST/PATCH)
+// risks applying it twice, so doRequest does not retry those.
+var errResponseReceived = errors.New("server returned a response")
+
+// isIdempotent reports whether re-sending the method is safe if a response was
+// already received (RFC 7231 idempotent methods).
+func isIdempotent(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions:
+		return true
+	default: // POST, PATCH
+		return false
+	}
+}
 
 // ClientConfig holds cloud client configuration.
 type ClientConfig struct {
@@ -81,6 +98,12 @@ func (c *Client) doRequest(method, url string, body interface{}, result interfac
 
 		// Don't retry on auth errors
 		if err == ErrAuthFailed || err == ErrNoToken {
+			return err
+		}
+
+		// The server already responded and this is a non-idempotent method:
+		// retrying could double-apply it, so stop here (no double-record).
+		if !isIdempotent(method) && errors.Is(err, errResponseReceived) {
 			return err
 		}
 	}
@@ -159,7 +182,9 @@ func (c *Client) doRequestOnce(method, url string, body interface{}, result inte
 	}
 
 	if resp.StatusCode >= 400 {
-		return handleErrorResponse(resp.StatusCode, respBody)
+		// The server received the request; mark so a non-idempotent method is
+		// not retried into a double-apply.
+		return fmt.Errorf("%w: %w", errResponseReceived, handleErrorResponse(resp.StatusCode, respBody))
 	}
 
 	return parseResponse(respBody, result)
