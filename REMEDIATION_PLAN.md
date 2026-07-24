@@ -78,7 +78,8 @@ nullness is explicit).
 
 | path:line | sev | issue | book | fix |
 |-----------|-----|-------|------|-----|
-| `api-gateway/util/JwtValidator.java:102` | **HIGH** | leaks `e.getMessage()` into the validation result (see §5) | OAuth2iA ch.11; OWASP | generic message + server-side log |
+| `api-gateway/util/JwtValidator.java:102` | ~~HIGH~~ **FIXED** | leaked `e.getMessage()` — now generic message + server-side log | OAuth2iA ch.11; OWASP | done |
+| `api-gateway/service/TokenRevocationService.java` | **HIGH** | a complete Redis-backed JWT-revocation (blacklist) service exists but is **not wired into `JwtValidator`/the auth filter** — so logout/revocation does not actually invalidate a JWT (it stays valid until `exp`) | OAuth2iA ch.11 (token revocation) | inject it into `JwtValidator` and reject revoked tokens (fail-closed on a positive blacklist hit); add a test |
 | `api-gateway/filter/JwtAuthenticationFilter.java` (actuator IP allow-list) | MEDIUM | the CIDR allow-list is `String.split` parsed on **every request** | *Release It* (hot-path allocation) | parse the CIDR set once at startup into a matcher |
 | `api-gateway/filter/*` (reactive `Mono` chains) | MEDIUM | verify no blocking call on the event loop and every external/downstream path has a timeout + `onErrorResume` fallback | Nygard (fail fast, no unbounded waits) | add timeouts + error fallbacks; assert non-blocking |
 | `common` public methods | LOW | not every public method validates args | EJ Item 49 | add `Objects.requireNonNull`/range checks at the boundaries |
