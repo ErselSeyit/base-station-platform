@@ -60,7 +60,7 @@ class StressTestSuite:
         try:
             self.redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
             self.redis_client.ping()
-        except:
+        except Exception:
             print("⚠️  Redis not available - some metrics will be unavailable")
 
     async def make_request(self, session: aiohttp.ClientSession, request_num: int) -> RequestResult:
@@ -236,7 +236,7 @@ class StressTestSuite:
             try:
                 keys = self.redis_client.keys('request_rate_limiter*')
                 print(f"\nRedis Keys: {len(keys)} active rate limit buckets")
-            except:
+            except Exception:
                 pass
 
     async def run_all_tests(self):

@@ -252,14 +252,15 @@ pieces; React: container/presentational split):
 | `components/DashboardComponents.tsx` | 633 | MEDIUM | this is a grab-bag; split one component per file |
 | `pages/Metrics.tsx` | 609 | MEDIUM | extract chart + controls |
 
-- **MEDIUM** | `pages/Reports.tsx` | no loading/error state (`isLoading`/
-  `isError`/`ErrorDisplay`/`LoadingSpinner` absent) — a slow/failed fetch shows
-  a broken view | Laws of UX (feedback); Refactoring UI (states) | add explicit
-  loading + error UI (11 of 13 pages already do; `Login.tsx` is fine — it uses
-  its own form `loading`/`error`).
-- **LOW** | frontend | only 7 `any`/`ts-ignore`/`eslint-disable` total — tighten
-  to real types where feasible. No hardcoded API URLs found (services centralise
-  them — good).
+- **RESOLVED (false positive)** | `pages/Reports.tsx` | flagged for missing
+  loading/error state, but on inspection it is a **static** report-download page
+  (static metadata; per-download `CircularProgress` + `showToast` error already
+  present) — no page-level data fetch, so no page state is needed. `Login.tsx`
+  likewise uses its own form `loading`/`error`. No change.
+- **RESOLVED (false positive)** | `any`-typing | the scanner's `: any`/`as any`
+  hits are in **comments** (`vite-env.d.ts`, `test/mockHelpers.ts` docstrings),
+  not real code — the frontend has effectively no `any` usage. No hardcoded API
+  URLs (services centralise them). No change.
 - **UX** | apply *Refactoring UI* (spacing scale, fewer borders,
   clear hierarchy) and *Laws of UX* (Hick's law on dense dashboards; Jakob's law
   on conventional controls); a11y sweep (labels, roles, contrast ≥4.5:1,
