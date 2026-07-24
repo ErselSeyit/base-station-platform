@@ -231,7 +231,7 @@ Additional verified findings (detection scan):
 | `service/self_healing.py` (6), `son_scheduler.py` (5), `computer_vision.py`, `healing_integration.py` | MEDIUM | same broad-`except` pattern | Pythonic | narrow the catches |
 | `service/diagnostic_service.py` `_register_routes` (~128 lines) | MEDIUM | one method registers every Flask route + inline handlers | SRP | split into blueprints per resource |
 | `scripts/seed_historical_metrics.py:62`, `scripts/stress_test_comprehensive.py:63,239` | MEDIUM | **bare `except:`** — swallows everything incl. `KeyboardInterrupt`/`SystemExit` (found by the exhaustive per-file sweep) | PEP8 (never bare except) | catch specific exceptions; at minimum `except Exception` |
-| `virtual-basestation/device_protocol.py:457` | LOW | `except Exception:` in the frame-parse loop hides malformed-frame details | Pythonic | narrow to the expected parse/socket errors |
+| `virtual-basestation/device_protocol.py:457` | ~~LOW~~ **FIXED** | `client.close()` cleanup narrowed to `except OSError`. The remaining `except Exception` sites in the accept/handle **loops** (480/505/600) are a defensible catch-log-continue robustness pattern (one bad client must not kill the server) and log the specific error — left as-is. | Pythonic | done / no change |
 
 Positives (verified): no **bare** `except`, no mutable default args, no
 `print()` in `service/`, uses `logging`. Deep pass should still add: type hints

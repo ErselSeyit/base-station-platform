@@ -454,8 +454,8 @@ class DeviceProtocolServer:
             for client in self.clients:
                 try:
                     client.close()
-                except Exception:
-                    pass
+                except OSError:
+                    pass  # socket already closed / broken; nothing to do
             self.clients.clear()
         if self.server_socket:
             self.server_socket.close()
