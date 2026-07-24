@@ -20,7 +20,7 @@
 | [QUICK_START.md](QUICK_START.md) | 5-minute getting started guide |
 | [SETUP.md](SETUP.md) | Detailed setup and development guide |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture and design decisions |
-| [API.md](API.md) | REST API reference (100 metric types, RBAC) |
+| [API.md](API.md) | REST API reference (metric catalog, band dimension, RBAC) |
 
 ### Operations
 
@@ -74,7 +74,7 @@
 - No hardcoded credentials
 
 ### Monitoring
-- 100 metric types (5G NR, Power, Environmental, Transport)
+- Band-neutral metric types across 5G NR, Power, Environmental, and Transport (see `GET /api/v1/metrics/catalog`)
 - Real-time WebSocket streaming
 - Prometheus + Grafana dashboards
 - Distributed tracing (Zipkin)
