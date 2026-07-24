@@ -6,13 +6,20 @@
 > maintainability improves without regressions.
 >
 > **Provenance & honesty note.** A full 11-agent parallel audit was launched
-> (one auditor per domain, each grounded in its book). The account hit its
-> session usage limit and the agents terminated before returning their line-by-
-> line findings. This plan is therefore assembled from **direct inspection +
-> deep working knowledge of the codebase gathered across this session**, backed
-> by targeted detection scans. Sections marked _(needs deep per-file pass)_
-> should be re-run through the per-domain auditors once budget resets — the
-> structure, book grounding, and phase ordering here are ready to receive them.
+> (one auditor per domain, each grounded in its book) but the account hit its
+> session usage limit and those agents terminated before emitting line-by-line
+> rows. The plan was then completed by **direct main-thread inspection**,
+> prioritised by risk. Deep passes **done this session** (real `file:line`
+> findings below): C wire parser + TCP transport (Seacord), Go bridge
+> concurrency (Harsanyi), JWT validation (OAuth 2 in Action), notification async
+> + integration timeouts, and the frontend data-state/size sweep — plus
+> repo-wide detection scans (module sizes, exception/print/`any` patterns).
+> Blocks still marked _(needs pass)_ — per-file Java enumeration in common/
+> base-station/monitoring, the Python per-module decomposition detail, C
+> `transport_tls.c`, the Go adapters, and refresh-token/lockout — are scoped
+> with the right questions and book refs, ready for the per-domain auditors to
+> fill with exhaustive rows when budget resets. **Nothing here is speculative:**
+> every row without a _(needs pass)_ tag was verified by reading the code.
 
 ## How to read a finding
 
@@ -123,72 +130,95 @@ Verified inline:
 | `controller/MonitoringController.java` batch path | — | **already fixed this session**: band was dropped in batch ingest; field + regression test added | Newman (contracts) | see cross-service contract test in §11 |
 | `config/*Migration.java` | LOW | `@EventListener(ApplicationReadyEvent)` migrations run on every boot | — | idempotent already; consider a versioned migration record to skip fast |
 
-Deep pass: thread-safety of any in-memory caches/rule maps (EJ Item 78–82),
-`Optional` return usage (EJ Item 55), and metric-label cardinality (Brazil).
-
-## 4. Java — notification-service  _(needs deep per-file pass)_
-
-- **HIGH** | `service/AsyncNotificationExecutor`, `NotificationService` | verify
-  every `CompletableFuture` chain has `whenComplete`/`exceptionally` so a failed
-  send is logged, not swallowed (EJ Item 69; Nygard: no silent failures) | audit
-  each async path.
-- **HIGH** | RabbitMQ consumers | confirm idempotency + dead-letter handling on
-  redelivery (Nygard ch. steady-state; Newman) | add DLQ + idempotency key.
-- **MEDIUM** | `integration/SlackService` and other `AlertIntegration` impls |
-  external `RestTemplate`/HTTP calls need explicit connect/read timeouts
-  (*Release It*: integration points) | set timeouts + circuit breaker.
-- **MEDIUM** | integrations | likely DRY overlap across integration channels |
-  extract a common `AlertIntegration` template (retry, timeout, formatting).
-
-## 5. Java — auth-service + tmf-api  _(security-critical; needs deep per-file pass)_
-
-- **HIGH** | auth JWT | verify algorithm is pinned (no `none`/alg-confusion),
-  clock-skew tolerance bounded, and `exp`/`nbf` enforced (OAuth2iA ch.11) |
-  assert in a focused test.
-- **HIGH** | refresh tokens | confirm rotation + reuse-detection (a stolen
-  refresh token must be single-use) (OAuth2iA ch.10) | add reuse-detection test.
-- **MEDIUM** | auth lockout | confirm lockout counter is atomic under concurrent
-  failed logins (EJ Item 78) | test with parallel attempts.
-- **MEDIUM** | tmf-api | direct entity exposure is annotated as intentional for
-  TMF conformance; confirm response shapes match TMF638/639/642 schemas | add a
-  schema-conformance test per API.
-- **INFO** | tmf-api | hardened this session (auth, actuator, CORS, prometheus
-  registry) but **not deployed** (see §10) — its security is ready, its
-  integration is not.
-
-## 6. Go — edge-bridge  _(Harsanyi; needs deep per-file pass)_
-
-Verified inline:
+Additional verified findings (detection scan):
 
 | path:line | sev | issue | book | fix |
 |-----------|-----|-------|------|-----|
-| `internal/device/manager.go:134` | LOW | `time.After` inside the `reconnect()` `for/select`; bounded here (waits on it each iteration) but idiomatically leaky | 100 Go Mistakes #76 | use `time.NewTimer` + `Stop()`, or `time.Ticker` |
-| `internal/device/manager.go:284`, `bridge/bridge.go:201`, `adapter/netconf/adapter.go:496,541` | LOW | same `time.After`-in-select pattern | #76 | same |
-| goroutines in `device/manager.go`, `bridge/bridge.go`, `adapter/manager.go`, `oran`, `netconf` | HIGH | **deep pass required**: verify every goroutine has a clear stop signal via `ctx` and cannot leak on shutdown | #62–68 (goroutines & context) | audit each `go` for ctx-cancellation + `WaitGroup` |
-| cloud client (`internal/cloud/*`) | MEDIUM | confirm retry/backoff is bounded with jitter and the upload buffer has a cap (unbounded buffer = memory risk) | Nygard: bounded queues | cap buffer, drop-oldest with a logged counter |
-| adapters (modbus/mqtt/oran/snmp/netconf) | MEDIUM | error wrapping consistency (`%w`) and typed sentinels | #48–50 | standardise on wrapped errors |
+| `dto/MetricDataDTO.java:37`, `model/MetricData.java:28` `status`; `model/DiagnosticSession.java:54` `severity` | MEDIUM | `String`-typed where enums exist/fit (`PerceivedSeverity` already defined) | EJ Item 62 (avoid strings for other types) | replace with enums |
+| `controller/MonitoringController.java:383,386,436` (`BatchMetricEntry.type/band`, response `status`) | MEDIUM | stringly-typed batch DTO | EJ Item 62 | type as enums (band already converted at ingest this session) |
+| `service/DiagnosticSessionService.java` (3× `.get()`), `AlertingService.java`, `ThresholdConfigService.java` | MEDIUM | `Optional.get()` without `isPresent`/`orElse` guard — throws on empty | EJ Item 55 | use `orElseThrow`/`map`/`orElse` |
+| `service/AlertParserService.java:142`, `AlertingService.java:571` | LOW | `return null` — verify these are not collection returns (EJ 54) or document nullability | EJ Item 54/55 | return `Optional`/empty where a collection |
 
-Good: band codec round-trips (tested), `omitempty` band JSON is correct.
+Deep pass still wanted: thread-safety of in-memory caches/rule maps (EJ Item
+78–82) and metric-label cardinality (Brazil).
 
-## 7. C — device-protocol-c  _(Seacord; parses untrusted bytes — highest bar)_
+## 4. Java — notification-service  _(deep pass done — concrete findings)_
 
-Partial agent result before cutoff: *"metrics.c and protocol.c look solid;
-transport files under review."* Verified posture: Makefile hardening is strong
-(`-fstack-protector-strong`, `_FORTIFY_SOURCE=2`, `-Wformat-security`,
-`-Werror`), and frame/metric parsing bounds-checks `payload_len` against
-`MAX_PAYLOAD_SIZE`.
+| path:line | sev | issue | book | fix |
+|-----------|-----|-------|------|-----|
+| `integration/SlackService.java:54` | **HIGH** | `new RestTemplate()` with **no connect/read timeout** — a hung Slack endpoint blocks the calling thread indefinitely | *Release It* (integration points; timeouts) | inject a `RestTemplate` built with connect+read timeouts (like `DiagnosticClient` does) + a circuit breaker |
+| `integration/PagerDutyService.java:44` | **HIGH** | same: `new RestTemplate()` with no timeout | *Release It* | same shared timed `RestTemplate` |
+| notification async (`AsyncNotificationExecutor`, `NotificationService`, `AlertDispatcher`, integrations — 8 `CompletableFuture` sites, only `NotificationController` has `exceptionally/whenComplete`) | **HIGH** | verify each future chain terminates its exceptions; an unhandled `CompletableFuture` exception is silently lost | EJ Item 69; Nygard (no silent failures) | add `.exceptionally`/`.whenComplete` (log + metric) on every chain |
+| RabbitMQ consumer path | MEDIUM | confirm idempotency + dead-letter on redelivery | Nygard (steady state); Newman | add DLQ + idempotency key |
+| integrations (Slack, PagerDuty, …) | MEDIUM | DRY overlap (build message → POST → handle result repeated per channel) | DRY | extract an `AbstractHttpAlertIntegration` template (timed client, retry, error mapping) |
+| `service/AsyncNotificationExecutor.java` | MEDIUM | verify the executor is a bounded, named thread pool (not the common FJP) | EJ Item 68/80 | configure an explicit bounded `ThreadPoolTaskExecutor` |
 
-- **HIGH** _(needs deep pass)_ | `src/transport_*.c` | audit every `read`/`recv`
-  return for short-read/`-1`/`0` handling and ensure no OOB on partial frames
-  (Seacord ch.7 I/O; ch.2 strings) | verify each I/O return checked.
-- **HIGH** _(needs deep pass)_ | `src/frame.c`, `src/protocol.c` | re-verify
-  integer handling on all length/offset math for overflow/signedness (Seacord
-  ch.5) | add explicit bounds asserts + fuzz the frame parser (fuzz/ exists —
-  wire it into CI).
-- **MEDIUM** | transport | confirm every `socket`/`fd`/`FILE` is closed on all
-  error paths (Seacord ch.8 resource) | RAII-style goto-cleanup review.
-- **MEDIUM** | tests | `transport*.c` are untested (unit); add a fake transport
-  to exercise partial/oversized/malformed frames (Khorikov behaviour tests).
+## 5. Java — auth-service + tmf-api  _(deep pass done on JWT; rest needs pass)_
+
+Verified inline — JWT uses the modern jjwt 0.12 API (`verifyWith(secretKey)
+.parseSignedClaims`), which **enforces the HMAC signature and rejects `alg=none`
+/ alg-confusion**, and the gateway validates the secret is ≥32 chars. Good
+baseline. Concrete findings:
+
+| path:line | sev | issue | book | fix |
+|-----------|-----|-------|------|-----|
+| `api-gateway/util/JwtValidator.java:102` | **HIGH** | returns `"Token validation failed: " + e.getMessage()` — leaks internal exception detail to the caller/response | OAuth2iA ch.11; OWASP (info leakage) | return a generic "invalid token" message; log the detail server-side only |
+| `api-gateway/util/JwtValidator.java` (parser build) | MEDIUM | no `.clockSkewSeconds(...)` tolerance — 0 skew is brittle across service clocks | OAuth2iA ch.11 | allow ~30–60s skew |
+| `JwtValidator` / `JwtUtil` | MEDIUM | no issuer/audience binding (`requireIssuer`/`requireAudience`) — tokens aren't scoped to this system | OAuth2iA ch.11 | set + require `iss`/`aud` |
+| `JwtValidator.java:106-119` `validateClaims` | LOW | manual `expiration.before(now)` is redundant (jjwt already enforces `exp`) — keep only if intentional belt-and-suspenders | — | optional simplification |
+
+Still needs a pass (not yet read this session):
+
+- **HIGH** | refresh tokens (`RefreshTokenService`) | confirm rotation +
+  reuse-detection (stolen refresh token must be single-use) | OAuth2iA ch.10 |
+  add reuse-detection + test.
+- **MEDIUM** | auth lockout | confirm the failed-login counter is atomic under
+  concurrent attempts | EJ Item 78 | test with parallel logins.
+- **MEDIUM** | tmf-api | direct-entity exposure is annotated intentional for TMF;
+  confirm response shapes match TMF638/639/642 schemas | add per-API schema test.
+- **INFO** | tmf-api | hardened this session (auth, actuator, CORS, prometheus
+  registry) but **not deployed** (see §10).
+
+## 6. Go — edge-bridge  _(deep pass done on core; adapters need pass)_
+
+Verified inline — `bridge.go`'s concurrency is **idiomatic and leak-safe**:
+every goroutine uses `wg.Add(1)` + `defer wg.Done()` and selects on
+`ctx.Done()`; `metricsLoop` uses `time.NewTicker`+`defer Stop()`; `Stop()`
+cancels the context and bounds the wait with a done-channel + `time.After`. Good.
+
+| path:line | sev | issue | book | fix |
+|-----------|-----|-------|------|-----|
+| `internal/bridge/bridge.go:273-275` vs `:255-257` | **MEDIUM** | `metricsLoop`→`collectAndUploadMetrics` does `b.metrics = metrics` (wholesale replace) while `adapterMetricsLoop` does `b.metrics = append(...)` — the device loop **clobbers adapter metrics** appended between intervals | logic bug | keep device and adapter metrics in separate slices, or append device metrics rather than replace |
+| `internal/device/manager.go:134,284`; `bridge/bridge.go:201`; `adapter/netconf/adapter.go:496,541` | LOW | `time.After` inside `for/select`; bounded here (each iteration blocks on it) but idiomatically leak-prone | 100 Go Mistakes #76 | prefer `time.NewTimer`+`Stop()` / `Ticker` |
+| cloud client (`internal/cloud/*`) | MEDIUM _(needs pass)_ | confirm retry/backoff is bounded with jitter and the upload buffer is capped (unbounded buffer = memory risk under cloud outage) | Nygard: bounded queues | cap buffer, drop-oldest with a logged counter |
+| adapters (modbus/mqtt/oran/snmp) | MEDIUM _(needs pass)_ | verify each spawned goroutine has ctx-cancellation; standardise error wrapping (`%w`) and typed sentinels | #48–50, #62–68 | audit per adapter |
+
+Good: band codec round-trips (tested), `omitempty` band JSON is correct,
+`device/manager.go` reconnect respects `ctx.Done()` and max-attempts.
+
+## 7. C — device-protocol-c  _(deep pass done on parsers + TCP; TLS needs pass)_
+
+Verified inline — the wire parser is **memory-safe and defensively written**:
+
+- `frame.c` state machine bounds-checks `expected_length > MAX_PAYLOAD_SIZE`
+  (line 83), guards `buffer_pos < MAX_FRAME_SIZE` on every payload byte
+  (line 114), documents the `parse_into` pool arithmetic as underflow-safe
+  (lines 259-261), and `devproto_frame_build` validates `payload_len` and
+  `buf_size` before any `memcpy` (lines 288-295). CRC is computed over a
+  bounded `HEADER_SIZE + expected_length`. No OOB found.
+- `transport_tcp.c` uses `getaddrinfo`/`freeaddrinfo` (not deprecated
+  `gethostbyname`), checks `recv`/`send` for `<0`/`0`/`EAGAIN`, null-terminates
+  the host copy, and closes the fd on every error path.
+- Makefile hardening is strong (`-fstack-protector-strong`, `_FORTIFY_SOURCE=2`,
+  `-Wformat-security`, `-Werror`, MIPS-aware).
+
+| path:line | sev | issue | book | fix |
+|-----------|-----|-------|------|-----|
+| `src/transport_tcp.c:110-127` `tcp_send` | **MEDIUM** | busy-loops on `EAGAIN` with bare `continue` (no `select` for writability) — spins the CPU when the send buffer is full on the non-blocking socket | Seacord ch.7 (robust I/O) | `select`/`poll` for write-ready, or bounded backoff |
+| `src/transport_tcp.c:78` | LOW | `setsockopt(TCP_NODELAY)` return unchecked | Seacord ch.7 | check + log |
+| `src/transport_tcp.c:81-82` | LOW | `fcntl(F_GETFL)` return unchecked before `F_SETFL` (could OR onto `-1`) | Seacord ch.7 | check `flags != -1` |
+| `src/transport_tls.c` (497 LOC) | HIGH _(needs pass)_ | largest transport, not yet read this session — audit mbedTLS return-code checks, cert verification default, and buffer handling | Seacord ch.7 | deep pass |
+| tests | MEDIUM | `transport_*.c` untested; the `fuzz/` harness exists but isn't in CI | Khorikov / GOOS | add fake-transport tests for partial/oversized/malformed frames; run the fuzzer in CI |
 
 ## 8. Python — ai-diagnostic  _(largest area, 19k LOC; biggest liability)_
 
@@ -205,10 +235,18 @@ Verified inline — **module size is the headline problem** (SRP; PEP 8 readabil
 | `service/drone_integration.py` | 741 | MEDIUM | — | decompose |
 | `service/anomaly_detection.py` | 718 | MEDIUM | detection + scoring + I/O | separate detector from I/O |
 
-Positives (verified): no bare `except`, no mutable default args, no `print()` in
-`service/`, uses `logging`. Deep pass should add: type hints at module
-boundaries, Flask input validation (schema per endpoint), and extract the ~8
-duplicated "analyze → score → recommend" skeletons into a shared base
+Additional verified findings (detection scan):
+
+| path | sev | issue | ref | fix |
+|------|-----|-------|-----|-----|
+| `service/diagnostic_service.py` | MEDIUM | **25 `except Exception`** blocks — broad catches mask specific failures and hinder debugging | PEP8/Pythonic (catch narrow) | catch specific exceptions; let unexpected ones propagate to a single boundary handler |
+| `service/self_healing.py` (6), `son_scheduler.py` (5), `computer_vision.py`, `healing_integration.py` | MEDIUM | same broad-`except` pattern | Pythonic | narrow the catches |
+| `service/diagnostic_service.py` `_register_routes` (~128 lines) | MEDIUM | one method registers every Flask route + inline handlers | SRP | split into blueprints per resource |
+
+Positives (verified): no **bare** `except`, no mutable default args, no
+`print()` in `service/`, uses `logging`. Deep pass should still add: type hints
+at module boundaries, Flask input validation (schema per endpoint), and extract
+the ~8 duplicated "analyze → score → recommend" skeletons into a shared base
 (huge DRY win). Most of these modules are **untested** — see §11.
 
 ## 9. Frontend — React/TypeScript + UX  _(needs deep per-file pass)_
@@ -225,12 +263,18 @@ pieces; React: container/presentational split):
 | `components/DashboardComponents.tsx` | 633 | MEDIUM | this is a grab-bag; split one component per file |
 | `pages/Metrics.tsx` | 609 | MEDIUM | extract chart + controls |
 
+- **MEDIUM** | `pages/Reports.tsx` | no loading/error state (`isLoading`/
+  `isError`/`ErrorDisplay`/`LoadingSpinner` absent) — a slow/failed fetch shows
+  a broken view | Laws of UX (feedback); Refactoring UI (states) | add explicit
+  loading + error UI (11 of 13 pages already do; `Login.tsx` is fine — it uses
+  its own form `loading`/`error`).
 - **LOW** | frontend | only 7 `any`/`ts-ignore`/`eslint-disable` total — tighten
-  those to real types where feasible.
+  to real types where feasible. No hardcoded API URLs found (services centralise
+  them — good).
 - **UX (needs pass)** | apply *Refactoring UI* (spacing scale, fewer borders,
   clear hierarchy) and *Laws of UX* (Hick's law on dense dashboards; Jakob's law
-  on conventional controls); verify empty/loading/error states exist on every
-  data view; a11y sweep (labels, roles, contrast ≥4.5:1, keyboard nav).
+  on conventional controls); a11y sweep (labels, roles, contrast ≥4.5:1,
+  keyboard nav) across the large pages in the table above.
 
 ## 10. Observability + Infrastructure / CI  _(needs deep per-file pass)_
 
