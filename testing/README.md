@@ -147,7 +147,7 @@ python3 testing/live-data-simulator.py \
 - **GSM**: 2G networks (5-50 Mbps)
 - **CDMA**: Alternative 3G standard (10-40 Mbps)
 
-### Metric Types
+### Metric Types (illustrative subset)
 - **SIGNAL_STRENGTH**: dBm measurements (-120 to -40)
 - **TEMPERATURE**: Equipment temperature (20-95°C)
 - **DATA_THROUGHPUT**: Network speed (5-1200 Mbps)
@@ -155,6 +155,11 @@ python3 testing/live-data-simulator.py \
 - **CPU_USAGE**: Processing load (0-100%)
 - **MEMORY_USAGE**: Memory utilization (0-100%)
 - **UPTIME**: Operational time (0-100%)
+
+5G NR radio metrics (`DL_THROUGHPUT`, `UL_THROUGHPUT`, `RSRP`, `SINR`) are
+**band-neutral** — the band (`N28`/`N78`) travels as a separate dimension, not
+in the type name. `GET /api/v1/metrics/catalog` is the authoritative list of
+all metric types with units and 3GPP TS 28.552 counters.
 
 ---
 
