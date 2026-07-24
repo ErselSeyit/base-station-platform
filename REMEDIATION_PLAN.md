@@ -229,6 +229,8 @@ Additional verified findings (detection scan):
 | `service/diagnostic_service.py` | MEDIUM | **25 `except Exception`** blocks — broad catches mask specific failures and hinder debugging | PEP8/Pythonic (catch narrow) | catch specific exceptions; let unexpected ones propagate to a single boundary handler |
 | `service/self_healing.py` (6), `son_scheduler.py` (5), `computer_vision.py`, `healing_integration.py` | MEDIUM | same broad-`except` pattern | Pythonic | narrow the catches |
 | `service/diagnostic_service.py` `_register_routes` (~128 lines) | MEDIUM | one method registers every Flask route + inline handlers | SRP | split into blueprints per resource |
+| `scripts/seed_historical_metrics.py:62`, `scripts/stress_test_comprehensive.py:63,239` | MEDIUM | **bare `except:`** — swallows everything incl. `KeyboardInterrupt`/`SystemExit` (found by the exhaustive per-file sweep) | PEP8 (never bare except) | catch specific exceptions; at minimum `except Exception` |
+| `virtual-basestation/device_protocol.py:457` | LOW | `except Exception:` in the frame-parse loop hides malformed-frame details | Pythonic | narrow to the expected parse/socket errors |
 
 Positives (verified): no **bare** `except`, no mutable default args, no
 `print()` in `service/`, uses `logging`. Deep pass should still add: type hints
@@ -270,7 +272,7 @@ Verified by inspection:
 | path | sev | issue | book | fix |
 |------|-----|-------|------|-----|
 | all `.github/workflows/*.yml` | **HIGH** | CI runs `0` `docker build` steps — it compiles/tests but **never builds or runs the images**; this let three Dockerfile/runtime bugs ship this session (ai-diagnostic `PYTHONPATH`, edge-bridge Go 1.21-vs-1.23, and only caught live) | Nygard (test what you deploy); Newman | add a job that `docker compose build` + smoke-ups the stack and curls `/actuator/health` |
-| `*/Dockerfile` (monitoring, base-station, auth, notification, api-gateway, ai-diagnostic) | **HIGH** | **6 of 8 images run as root** (only edge-bridge + frontend add `USER`) | CIS/Newman container hardening | add a non-root `USER` to each; Java images are already multi-stage |
+| `*/Dockerfile` (all 12 except edge-bridge + frontend) | **HIGH** | **10 of 12 images run as root** — every Java service, ai-diagnostic, the two simulators, and the testing image add no `USER` | CIS/Newman container hardening | add a non-root `USER` to each; Java images are already multi-stage |
 | repo-wide | MEDIUM | only **2 `.dockerignore`** files — most build contexts ship `.git`, `target/`, `node_modules` into the daemon | — | add `.dockerignore` per build context |
 | Dockerfiles | MEDIUM | only 1 has a `HEALTHCHECK` (compose provides healthchecks, so runtime is covered, but images aren't self-describing) | Nygard | add `HEALTHCHECK` to each image |
 | `tmf-api` | **HIGH** | in the Maven reactor but **no Dockerfile, absent from compose and Helm** — not independently deployable | Newman | add Dockerfile+compose+Helm, or mark experimental |
