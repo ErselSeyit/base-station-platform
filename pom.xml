@@ -45,7 +45,11 @@
         <jacoco.version>0.8.12</jacoco.version>
         <!-- Security overrides of Spring Boot-managed transitive versions.
              Tomcat 10.1.50 -> 10.1.55 (CVE-2026-41293),
-             Bouncycastle 1.78.1 -> 1.81.1 (CVE-2025-14813). -->
+             Bouncycastle 1.78.1 -> 1.81.1 (CVE-2025-14813).
+             Both are pinned via dependencyManagement below, not by these
+             properties alone: overriding a version property of an *imported*
+             BOM (spring-boot-dependencies) does not take effect, because Maven
+             resolves that property within the BOM's own context. -->
         <tomcat.version>10.1.55</tomcat.version>
         <bouncycastle.version>1.81.1</bouncycastle.version>
     </properties>
@@ -112,6 +116,24 @@
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcutil-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
+            </dependency>
+            <!-- Pin the embedded Tomcat family to a fixed version
+                 (CVE-2026-41293). The property override alone is ignored for an
+                 imported BOM, so the version is set explicitly here. -->
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>${tomcat.version}</version>
             </dependency>
             <!-- Explicitly override Mockito to latest version for better null-safety -->
             <dependency>
