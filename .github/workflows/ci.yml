@@ -119,6 +119,11 @@ jobs:
       - name: Build and test (debug)
         run: make -C device-protocol-c clean && make -C device-protocol-c DEBUG=1 test
 
+      - name: Install mbedTLS and build with TLS enabled
+        run: |
+          sudo apt-get update && sudo apt-get install -y libmbedtls-dev
+          make -C device-protocol-c clean && make -C device-protocol-c TLS=1
+
   # ============================================
   # Container images build (test what we deploy)
   # ============================================
