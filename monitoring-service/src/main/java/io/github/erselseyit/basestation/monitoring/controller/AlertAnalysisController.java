@@ -46,7 +46,6 @@ public class AlertAnalysisController {
      * Analyze raw alert text using AI diagnostics.
      * This is the core BYOA endpoint for demo "wow moments".
      */
-    @SuppressWarnings("null") // Objects.requireNonNullElse guarantees non-null returns
     @PostMapping("/analyze")
     public ResponseEntity<AlertAnalysisResponse> analyzeAlert(
             @Valid @RequestBody AlertAnalysisRequest request) {

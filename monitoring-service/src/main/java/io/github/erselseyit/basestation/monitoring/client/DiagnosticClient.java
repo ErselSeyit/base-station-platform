@@ -39,7 +39,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * - Fallback responses when service unavailable
  */
 @Component
-@SuppressWarnings("null") // Duration.ofMillis, MediaType.APPLICATION_JSON are never null
 public class DiagnosticClient {
 
     private static final Logger log = LoggerFactory.getLogger(DiagnosticClient.class);

@@ -40,7 +40,6 @@ import io.github.erselseyit.basestation.common.security.Roles;
 @RequestMapping("/api/v1/son")
 @Tag(name = "SON Recommendations", description = "Self-Organizing Network recommendation management")
 @PreAuthorize("isAuthenticated()")
-@SuppressWarnings("null") // Spring Security and validation framework guarantee non-null
 public class SONController {
 
     private static final Logger log = LoggerFactory.getLogger(SONController.class);

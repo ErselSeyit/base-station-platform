@@ -28,7 +28,6 @@ import reactor.core.publisher.Mono;
 public class LoggingConfig implements WebFilter {
 
     @Override
-    @SuppressWarnings("null") // Mono<Void> is always non-null in reactive streams
     public Mono<Void> filter(@NonNull ServerWebExchange exchange, @NonNull WebFilterChain chain) {
         String correlationId = exchange.getRequest().getHeaders().getFirst(HttpHeaders.HEADER_CORRELATION_ID);
         if (correlationId == null || correlationId.isBlank()) {

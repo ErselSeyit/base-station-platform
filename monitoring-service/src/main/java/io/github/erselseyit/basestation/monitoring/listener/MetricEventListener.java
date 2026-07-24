@@ -58,7 +58,6 @@ public class MetricEventListener {
      */
     @Async
     @EventListener
-    @SuppressWarnings("null") // MetricRecordedEvent guarantees non-null metric
     public void handleAlertEvaluation(MetricRecordedEvent event) {
         MetricDataDTO metric = event.getMetric();
         try {

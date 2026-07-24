@@ -16,7 +16,6 @@ import io.github.erselseyit.basestation.notification.exception.NotificationExcep
  * Separated from NotificationService to avoid self-injection anti-pattern.
  */
 @Component
-@SuppressWarnings("null") // CompletableFuture.runAsync guarantees non-null return
 public class AsyncNotificationExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(AsyncNotificationExecutor.class);

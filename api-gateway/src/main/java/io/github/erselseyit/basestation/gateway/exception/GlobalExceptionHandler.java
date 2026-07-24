@@ -60,7 +60,6 @@ public class GlobalExceptionHandler extends AbstractErrorWebExceptionHandler {
         return RouterFunctions.route(RequestPredicates.all(), this::renderErrorResponse);
     }
 
-    @SuppressWarnings("null") // HttpStatus, MediaType.APPLICATION_JSON, and errorResponse are guaranteed non-null
     private Mono<ServerResponse> renderErrorResponse(ServerRequest request) {
         Throwable error = getError(request);
 

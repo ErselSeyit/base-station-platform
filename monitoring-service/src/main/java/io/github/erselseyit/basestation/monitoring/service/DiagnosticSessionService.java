@@ -40,7 +40,6 @@ import org.springframework.scheduling.annotation.Scheduled;
  * @see LearningPatternService for learning pattern management
  */
 @Service
-@SuppressWarnings("null") // Spring Data repositories and Optional operations guarantee non-null for present values
 public class DiagnosticSessionService {
 
     private static final Logger log = LoggerFactory.getLogger(DiagnosticSessionService.class);

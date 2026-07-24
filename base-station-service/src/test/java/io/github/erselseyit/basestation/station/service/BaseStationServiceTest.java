@@ -68,7 +68,6 @@ class BaseStationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null")
     void createStation_savesAndReturnsStation() {
         when(repository.findByStationName(anyString())).thenReturn(Optional.empty());
         when(repository.save(any(BaseStation.class))).thenReturn(testStation);
@@ -81,7 +80,6 @@ class BaseStationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null")
     void createStation_throwsOnDuplicateName() {
         when(repository.findByStationName(anyString())).thenReturn(Optional.of(testStation));
 
@@ -127,7 +125,6 @@ class BaseStationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null")
     void updateStation_updatesAndReturnsStation() {
         BaseStationDTO updateDTO = BaseStationDTO.builder()
                 .stationName("BS-001-Updated")

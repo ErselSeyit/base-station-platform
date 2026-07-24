@@ -21,7 +21,6 @@ import java.util.concurrent.CompletableFuture;
 @RestController
 @RequestMapping("/api/v1/integrations")
 @Tag(name = "Integrations", description = "External alert integration management")
-@SuppressWarnings("null") // Optional and CompletableFuture operations guarantee non-null
 public class IntegrationController {
 
     private final AlertDispatcher alertDispatcher;

@@ -36,10 +36,8 @@ import java.util.Objects;
  */
 @RestController
 @RequestMapping("/api/v1/thresholds")
-@SuppressWarnings({
-    "null", // Objects.requireNonNull and Optional operations guarantee non-null values
-    "java:S4684" // Using ThresholdConfig directly is acceptable - it's a simple config document, not a complex entity
-})
+// Using ThresholdConfig directly is acceptable - it's a simple config document, not a complex entity
+@SuppressWarnings("java:S4684")
 public class ThresholdConfigController {
 
     private static final String MSG_CONFIG_TYPE_NULL = "Config type cannot be null";

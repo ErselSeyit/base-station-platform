@@ -31,7 +31,6 @@ import reactor.test.StepVerifier;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("SecurityHeadersFilter Tests")
-@SuppressWarnings("null")
 class SecurityHeadersFilterTest {
 
     @Mock

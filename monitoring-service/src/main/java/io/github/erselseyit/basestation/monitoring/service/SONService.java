@@ -26,10 +26,8 @@ import java.util.Optional;
  * Service for managing SON recommendations and their approval workflow.
  */
 @Service
-@SuppressWarnings({
-    "null",       // Spring Data repository operations guarantee non-null
-    "java:S2637"  // baseStationServiceUrl initialized by Spring @Value injection
-})
+// baseStationServiceUrl initialized by Spring @Value injection
+@SuppressWarnings("java:S2637")
 public class SONService {
 
     private static final Logger log = LoggerFactory.getLogger(SONService.class);

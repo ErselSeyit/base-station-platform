@@ -38,7 +38,6 @@ import io.github.erselseyit.basestation.monitoring.service.AlertingService;
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
 @DisplayName("AlertRuleController Tests")
-@SuppressWarnings("null") // Mockito matchers return null placeholders
 class AlertRuleControllerTest {
 
     @Autowired

@@ -67,7 +67,6 @@ class MonitoringServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null")
     void recordMetric_savesAndReturnsMetric() {
         when(repository.save(any(MetricData.class))).thenReturn(testMetric);
 

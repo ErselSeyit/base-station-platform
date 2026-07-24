@@ -23,7 +23,6 @@ import io.github.erselseyit.basestation.notification.repository.NotificationRepo
 
 @Service
 @Transactional
-@SuppressWarnings("null") // Repository and CompletableFuture operations guarantee non-null values
 public class NotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);

@@ -206,7 +206,6 @@ public class AlertParserService {
         return "general";
     }
 
-    @SuppressWarnings("null") // Patterns are static final, never null
     private Map<String, Object> extractMetrics(String text) {
         Map<String, Object> metrics = new HashMap<>();
 

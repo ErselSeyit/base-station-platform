@@ -40,7 +40,6 @@ import io.github.erselseyit.basestation.monitoring.service.MonitoringService;
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
 @DisplayName("MonitoringController Tests")
-@SuppressWarnings("null") // Mockito matchers and test data return null placeholders
 class MonitoringControllerTest {
 
     @Autowired

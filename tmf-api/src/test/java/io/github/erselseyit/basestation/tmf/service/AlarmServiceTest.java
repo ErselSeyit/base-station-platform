@@ -28,7 +28,6 @@ import java.util.*;
  * Unit tests for AlarmService.
  */
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings("null") // Mockito stubs are validated by test framework
 class AlarmServiceTest {
 
     @Mock

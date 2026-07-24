@@ -25,10 +25,8 @@ import java.util.concurrent.CompletableFuture;
  * Supports Block Kit for structured, interactive messages.
  */
 @Service
-@SuppressWarnings({
-    "null",       // RestTemplate and notification fields are non-null
-    "java:S3457"  // Slack markdown requires literal \n, not platform line separator
-})
+// Slack markdown requires literal \n, not platform line separator
+@SuppressWarnings("java:S3457")
 public class SlackService implements AlertIntegration {
 
     private static final Logger log = LoggerFactory.getLogger(SlackService.class);

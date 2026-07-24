@@ -32,7 +32,6 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("SONService Tests")
-@SuppressWarnings("null") // Mockito mocks and test assertions handle null safely
 class SONServiceTest {
 
     @Mock

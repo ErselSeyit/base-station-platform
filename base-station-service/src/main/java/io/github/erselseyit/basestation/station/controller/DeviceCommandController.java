@@ -35,7 +35,6 @@ import java.util.Objects;
 @RequestMapping("/api/v1/stations/{stationId}/commands")
 @Tag(name = "Device Commands", description = "Command queue for edge devices")
 @SecurityRequirement(name = "bearerAuth")
-@SuppressWarnings("null") // Spring framework guarantees non-null for validated inputs and responses
 public class DeviceCommandController {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceCommandController.class);

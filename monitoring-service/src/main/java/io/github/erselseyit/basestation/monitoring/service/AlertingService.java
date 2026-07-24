@@ -41,7 +41,6 @@ import io.github.erselseyit.basestation.monitoring.model.MetricType;
  * - Event-driven architecture (integrates with notification service via RabbitMQ)
  */
 @Service
-@SuppressWarnings("null") // AI service responses and diagnostic fields are validated by service contracts
 public class AlertingService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertingService.class);

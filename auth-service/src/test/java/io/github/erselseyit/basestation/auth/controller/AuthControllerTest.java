@@ -43,7 +43,6 @@ import io.github.erselseyit.basestation.auth.util.JwtUtil;
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
 @DisplayName("AuthController Tests")
-@SuppressWarnings("null")
 class AuthControllerTest {
 
     @Autowired

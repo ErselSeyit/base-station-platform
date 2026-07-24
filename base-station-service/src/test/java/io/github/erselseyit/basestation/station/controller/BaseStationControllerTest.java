@@ -53,7 +53,6 @@ class BaseStationControllerTest {
     private ObjectMapper objectMapper;
 
     @Test
-    @SuppressWarnings("null")
     void createStation_returnsCreatedStation() throws Exception {
         // Verify dependencies are not null
         assertNotNull(objectMapper, "ObjectMapper should be autowired and not null");
@@ -125,7 +124,6 @@ class BaseStationControllerTest {
     }
 
     @Test
-    @SuppressWarnings("null")
     void updateStation_returnsUpdatedStation() throws Exception {
         // Verify dependencies are not null
         assertNotNull(objectMapper, "ObjectMapper should be autowired and not null");

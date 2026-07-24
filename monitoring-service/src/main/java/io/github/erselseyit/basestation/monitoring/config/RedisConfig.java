@@ -18,7 +18,6 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 @Configuration
 @EnableCaching
-@SuppressWarnings("null") // Spring cache builder methods guarantee non-null
 public class RedisConfig {
 
     /**

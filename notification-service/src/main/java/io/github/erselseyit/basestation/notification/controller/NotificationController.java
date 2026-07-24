@@ -45,7 +45,6 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/v1/notifications")
 @Tag(name = "Notifications", description = "Notification management and delivery")
 @SecurityRequirement(name = "bearerAuth")
-@SuppressWarnings("null") // @Valid ensures non-null values from validated DTOs
 public class NotificationController {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationController.class);

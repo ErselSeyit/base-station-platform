@@ -57,7 +57,6 @@ class NotificationServiceExtendedTest {
     // --- createNotificationWithProblemId tests ---
 
     @Test
-    @SuppressWarnings("null")
     void testCreateNotificationWithProblemId_SetsProblemId() {
         // Given
         String problemId = "PROB-1-CPU-12345";
@@ -84,7 +83,6 @@ class NotificationServiceExtendedTest {
     // --- resolveByProblemId tests ---
 
     @Test
-    @SuppressWarnings("null")
     void testResolveByProblemId_UpdatesStatusToResolved() {
         // Given
         String problemId = "PROB-1-CPU-12345";
@@ -105,7 +103,6 @@ class NotificationServiceExtendedTest {
     }
 
     @Test
-    @SuppressWarnings("null")
     void testResolveByProblemId_SetsResolvedAtTimestamp() {
         // Given
         String problemId = "PROB-2-TEMP-67890";
@@ -165,7 +162,6 @@ class NotificationServiceExtendedTest {
     }
 
     @Test
-    @SuppressWarnings("null")
     void testSendNotification_NotPendingStatus_SkipsSend() {
         // Given - notification already in SENT status
         Notification notification = new Notification(1L, "Already sent", NotificationType.ALERT);
@@ -182,7 +178,6 @@ class NotificationServiceExtendedTest {
     }
 
     @Test
-    @SuppressWarnings("null")
     void testSendNotification_PendingStatus_MarksSent() {
         // Given
         Notification notification = new Notification(1L, "Pending notification", NotificationType.ALERT);
@@ -220,7 +215,6 @@ class NotificationServiceExtendedTest {
     // --- getRecentNotifications tests ---
 
     @Test
-    @SuppressWarnings("null")
     void testGetRecentNotifications_ReturnsPagedResults() {
         // Given
         Notification n1 = new Notification(1L, "Recent alert", NotificationType.ALERT);

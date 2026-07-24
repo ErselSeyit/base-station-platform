@@ -27,7 +27,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/stations/bulk")
 @Tag(name = "Bulk Provisioning", description = "Bulk import and export of base stations")
-@SuppressWarnings("null") // Entity getters and helper methods guarantee non-null returns
 public class BulkProvisioningController {
 
     private final BulkProvisioningService bulkService;

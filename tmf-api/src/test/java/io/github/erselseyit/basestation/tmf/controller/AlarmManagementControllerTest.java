@@ -34,7 +34,6 @@ import java.util.*;
 @WebMvcTest(AlarmManagementController.class)
 @org.springframework.test.context.ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
-@SuppressWarnings("null") // Mockito stubs and MockMvc return types are validated by test framework
 class AlarmManagementControllerTest {
 
     @Autowired

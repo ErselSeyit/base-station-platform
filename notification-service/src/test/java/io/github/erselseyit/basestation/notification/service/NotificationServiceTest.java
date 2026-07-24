@@ -34,7 +34,6 @@ class NotificationServiceTest {
     private NotificationService service;
 
     @Test
-    @SuppressWarnings("null")
     void createNotification_savesAndReturnsNotification() {
         Notification notification = new Notification();
         notification.setId(1L);
@@ -92,7 +91,6 @@ class NotificationServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null")
     void sendNotification_updatesStatus() {
         Notification notification = new Notification();
         notification.setId(1L);

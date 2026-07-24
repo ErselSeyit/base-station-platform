@@ -24,7 +24,6 @@ import static io.github.erselseyit.basestation.common.constants.ServiceNames.SYS
  */
 @Service
 @Transactional
-@SuppressWarnings("null") // Spring Data repository methods and record accessors guarantee non-null for present values
 public class EdgeBridgeService {
 
     private static final Logger log = LoggerFactory.getLogger(EdgeBridgeService.class);

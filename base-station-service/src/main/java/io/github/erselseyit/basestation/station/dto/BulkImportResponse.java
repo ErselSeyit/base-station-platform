@@ -35,7 +35,6 @@ public record BulkImportResponse(
         }
     }
 
-    @SuppressWarnings("null") // List.of() and LocalDateTime.now() are guaranteed non-null
     public static BulkImportResponse empty(boolean dryRun) {
         return new BulkImportResponse(0, 0, 0, 0, 0, dryRun, List.of(), LocalDateTime.now());
     }

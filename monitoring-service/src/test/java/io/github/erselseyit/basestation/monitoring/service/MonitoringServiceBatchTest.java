@@ -31,7 +31,6 @@ import io.github.erselseyit.basestation.monitoring.websocket.MetricsWebSocketHan
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MonitoringService Batch Metrics Tests")
-@SuppressWarnings("null") // LocalDateTime.now() and its methods are guaranteed non-null
 class MonitoringServiceBatchTest {
 
     @Mock

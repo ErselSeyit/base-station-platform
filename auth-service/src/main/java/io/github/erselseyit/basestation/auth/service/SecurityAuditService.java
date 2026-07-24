@@ -35,7 +35,6 @@ import java.util.Map;
  * structured JSON logging for SIEM integration.
  */
 @Service
-@SuppressWarnings("null") // Spring Data repository operations guarantee non-null returns
 public class SecurityAuditService {
 
     private static final Logger auditLog = LoggerFactory.getLogger("SECURITY_AUDIT");

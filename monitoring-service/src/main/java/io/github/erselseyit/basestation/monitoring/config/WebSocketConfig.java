@@ -91,7 +91,6 @@ public class WebSocketConfig implements WebSocketConfigurer {
      * @param registry the WebSocket handler registry
      */
     @Override
-    @SuppressWarnings("null") // allowedOrigins is initialized in constructor and guaranteed non-null
     public void registerWebSocketHandlers(@NonNull WebSocketHandlerRegistry registry) {
         registry.addHandler(Objects.requireNonNull(metricsHandler, "Metrics handler cannot be null"),
                 "/ws/metrics")

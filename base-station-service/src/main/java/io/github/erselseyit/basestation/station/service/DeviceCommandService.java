@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
-@SuppressWarnings({ "null", "java:S2637" }) // Spring Data ops and @Value fields are non-null
+@SuppressWarnings("java:S2637") // Spring Data ops and @Value fields are non-null
 public class DeviceCommandService {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceCommandService.class);

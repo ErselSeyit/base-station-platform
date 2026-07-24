@@ -32,7 +32,6 @@ import org.springframework.data.mongodb.core.query.Update;
  * Tracks problem-solution effectiveness and adjusts confidence based on historical data.
  */
 @Service
-@SuppressWarnings("null") // Spring Data repositories guarantee non-null for present values
 public class LearningPatternService {
 
     private static final Logger log = LoggerFactory.getLogger(LearningPatternService.class);

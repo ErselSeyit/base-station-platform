@@ -28,7 +28,6 @@ import java.util.stream.Collectors;
  * Idempotent: safe to run on every startup — does nothing if no duplicates exist.
  */
 @Component
-@SuppressWarnings("null") // Spring Data / MongoTemplate null-safety annotations are overly strict
 public class LearnedPatternMigration {
 
     private static final Logger log = LoggerFactory.getLogger(LearnedPatternMigration.class);

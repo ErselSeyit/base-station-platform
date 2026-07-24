@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
  * - "risk.{level}" - Risk level configurations
  */
 @Service
-@SuppressWarnings("null") // Spring Data repositories and Optional operations guarantee non-null for present values
 public class ThresholdConfigService {
 
     private static final Logger log = LoggerFactory.getLogger(ThresholdConfigService.class);

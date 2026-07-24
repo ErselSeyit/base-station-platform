@@ -44,7 +44,6 @@ import reactor.test.StepVerifier;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("JwtAuthenticationFilter Tests")
-@SuppressWarnings("null")
 class JwtAuthenticationFilterTest {
 
     @Mock

@@ -37,7 +37,6 @@ import io.github.erselseyit.basestation.monitoring.model.MetricType;
 import io.github.erselseyit.basestation.monitoring.repository.MetricDataRepository;
 
 @Service
-@SuppressWarnings("null") // Repository and stream operations guarantee non-null collections
 public class MonitoringService {
 
     private static final Logger log = LoggerFactory.getLogger(MonitoringService.class);

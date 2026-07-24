@@ -31,7 +31,6 @@ import io.github.erselseyit.basestation.auth.repository.UserRepository;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("UserService Tests")
-@SuppressWarnings("null")
 class UserServiceTest {
 
     @Mock

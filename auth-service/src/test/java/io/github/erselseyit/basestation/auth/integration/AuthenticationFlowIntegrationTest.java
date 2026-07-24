@@ -44,7 +44,6 @@ import jakarta.servlet.http.Cookie;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Authentication Flow Integration Tests")
-@SuppressWarnings("null")
 class AuthenticationFlowIntegrationTest {
 
     @Autowired

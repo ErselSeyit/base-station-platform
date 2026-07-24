@@ -51,7 +51,6 @@ class MonitoringControllerBatchTest {
 
     @Test
     @DisplayName("Should return latest metrics for multiple stations")
-    @SuppressWarnings("null")
     void getLatestMetricsBatch_MultipleStations_ReturnsMetrics() throws Exception {
         // Given
         List<Long> stationIds = Arrays.asList(1L, 2L, 3L);

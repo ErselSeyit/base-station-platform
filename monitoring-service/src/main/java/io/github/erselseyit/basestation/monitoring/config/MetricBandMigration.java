@@ -27,7 +27,6 @@ import org.springframework.stereotype.Component;
  * band suffix, so re-running it is a no-op.
  */
 @Component
-@SuppressWarnings("null") // Spring Data / MongoTemplate null-safety annotations are overly strict
 public class MetricBandMigration {
 
     private static final Logger log = LoggerFactory.getLogger(MetricBandMigration.class);
