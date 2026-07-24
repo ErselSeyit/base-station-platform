@@ -6,8 +6,12 @@ spring:
     name: tmf-api
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/tmf_inventory}
-      database: tmf_inventory
+      host: ${SPRING_DATA_MONGODB_HOST:localhost}
+      port: ${SPRING_DATA_MONGODB_PORT:27017}
+      database: ${SPRING_DATA_MONGODB_DATABASE:tmf_inventory}
+      username: ${SPRING_DATA_MONGODB_USERNAME:}
+      password: ${SPRING_DATA_MONGODB_PASSWORD:}
+      authentication-database: ${SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE:admin}
 
 # OpenAPI Documentation
 springdoc:
