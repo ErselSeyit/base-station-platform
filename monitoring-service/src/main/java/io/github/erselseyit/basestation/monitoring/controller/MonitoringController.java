@@ -275,15 +275,7 @@ public class MonitoringController {
         for (int i = 0; i < metrics.size(); i++) {
             BatchMetricEntry entry = metrics.get(i);
             try {
-                MetricDataDTO dto = new MetricDataDTO();
-                dto.setStationId(parseStationId(request.getStationId()));
-                dto.setMetricType(MetricType.valueOf(entry.getType()));
-                dto.setBand(Band.fromString(entry.getBand()).orElse(Band.NONE));
-                dto.setValue(entry.getValue());
-                if (entry.getTimestamp() != null) {
-                    dto.setTimestamp(entry.getTimestamp());
-                }
-                service.recordMetric(dto);
+                service.recordMetric(toMetricDataDTO(entry, request.getStationId()));
                 recorded++;
             } catch (IllegalArgumentException e) {
                 String errorMsg = "Failed to process metric " + entry.getType() + ": " + e.getMessage();
@@ -314,6 +306,23 @@ public class MonitoringController {
             response.setStatus("OK");
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
+    }
+
+    /**
+     * Maps one batch entry to a {@link MetricDataDTO}, resolving the station id
+     * and NR band. Throws {@link IllegalArgumentException} for an unknown metric
+     * type, which the caller records as a per-entry error.
+     */
+    private MetricDataDTO toMetricDataDTO(BatchMetricEntry entry, @Nullable String stationId) {
+        MetricDataDTO dto = new MetricDataDTO();
+        dto.setStationId(parseStationId(stationId));
+        dto.setMetricType(MetricType.valueOf(entry.getType()));
+        dto.setBand(Band.fromString(entry.getBand()).orElse(Band.NONE));
+        dto.setValue(entry.getValue());
+        if (entry.getTimestamp() != null) {
+            dto.setTimestamp(entry.getTimestamp());
+        }
+        return dto;
     }
 
     @Nullable
