@@ -31,6 +31,8 @@ import { useQuery } from '@tanstack/react-query'
 import ErrorDisplay from '../components/ErrorDisplay'
 import LoadingSpinner from '../components/LoadingSpinner'
 import MetricsChart from '../components/MetricsChart'
+import NR5GMetricsCard from '../components/NR5GMetricsCard'
+import NR5GQuickStatus from '../components/NR5GQuickStatus'
 import { CARD_STATUS_STYLES, CSS_VARS, POLLING_INTERVALS } from '../constants/designSystem'
 import { metricsApi, stationApi } from '../services/api'
 import { BaseStation, MetricData, StationStatus } from '../types'
@@ -146,6 +148,40 @@ function processCellMetrics(
         txImbalance: avgNumbers(stationMetrics?.get('TX_IMBALANCE')),
       }
     })
+}
+
+/** A single SSV reading in the shape the NR5G components consume. */
+interface SsvReading {
+  readonly type: string
+  readonly value: number
+  readonly band?: string
+}
+
+/**
+ * Collapses raw readings to one averaged value per (metricType, band), the
+ * shape the NR5G SSV components expect. Keeping the band-neutral type and band
+ * separate lets those components resolve the display key themselves.
+ */
+function aggregateSsvMetrics(metrics: MetricData[]): SsvReading[] {
+  const byKey = metrics.reduce<Map<string, { type: string; band?: string; values: number[] }>>(
+    (acc, m) => {
+      const key = `${m.metricType}|${m.band ?? ''}`
+      const entry = acc.get(key)
+      if (entry) {
+        entry.values.push(m.value)
+      } else {
+        acc.set(key, { type: m.metricType, band: m.band, values: [m.value] })
+      }
+      return acc
+    },
+    new Map()
+  )
+
+  return Array.from(byKey.values()).map(({ type, band, values }) => ({
+    type,
+    band,
+    value: avgNumbers(values),
+  }))
 }
 
 // ============================================================================
@@ -550,6 +586,12 @@ export default function FiveGDashboard() {
     latency: avg(activeCells, c => c.latency, 0),
   }), [activeCells])
 
+  // SSV (Single Site Verification) readings, aggregated network-wide.
+  const ssvMetrics = useMemo(
+    () => aggregateSsvMetrics(ensureArray(metricsData as MetricData[])),
+    [metricsData]
+  )
+
   if (stationsLoading || metricsLoading) {
     return <LoadingSpinner />
   }
@@ -642,6 +684,16 @@ export default function FiveGDashboard() {
           </Grid>
         </Grid>
       </Paper>
+
+      {/* SSV Compliance */}
+      {ssvMetrics.length > 0 && (
+        <Paper sx={{ p: 3, borderRadius: 3, mb: 4, background: 'var(--surface-base)', border: '1px solid var(--surface-border)' }}>
+          <NR5GQuickStatus metrics={ssvMetrics} />
+          <Box sx={{ mt: 3 }}>
+            <NR5GMetricsCard metrics={ssvMetrics} />
+          </Box>
+        </Paper>
+      )}
 
       {/* Performance Trends */}
       <Paper sx={{ p: 3, borderRadius: 3, mb: 4, background: 'var(--surface-base)', border: '1px solid var(--surface-border)' }}>

@@ -91,14 +91,61 @@ public class RFMeasurement {
     private String comments;
 
     // Enums
+
+    /** Radio access technology a band belongs to. */
+    public enum RadioTechnology {
+        NR, LTE
+    }
+
+    /**
+     * Operating band an RF measurement was taken on.
+     *
+     * <p>This is the RF-test-record taxonomy: it spans both NR and LTE bands
+     * and is broader than the metric-pipeline {@code Band} enum in
+     * monitoring-service (which carries only the NR bands a device actually
+     * streams metrics on, plus a {@code NONE} sentinel for band-less metrics
+     * such as CPU and temperature). The two are deliberately not merged — they
+     * model different things and never exchange values. The common key between
+     * them, when a bridge is needed, is the 3GPP band designator exposed by
+     * {@link #getBandDesignator()} (e.g. {@code "n28"}).
+     *
+     * <p>The per-constant data (technology, 3GPP designator, centre frequency)
+     * is held in instance fields rather than parsed out of the constant name,
+     * per Effective Java Item 34.
+     */
     public enum FrequencyBand {
-        NR700_N28,    // 700 MHz
-        NR3500_N78,   // 3.5 GHz (can be 40MHz or 100MHz)
-        NR2600_N41,   // 2.6 GHz
-        LTE_B1,       // 2100 MHz
-        LTE_B3,       // 1800 MHz
-        LTE_B7,       // 2600 MHz
-        LTE_B20       // 800 MHz
+        NR700_N28(RadioTechnology.NR, "n28", 700),
+        NR3500_N78(RadioTechnology.NR, "n78", 3500),   // 40 MHz or 100 MHz
+        NR2600_N41(RadioTechnology.NR, "n41", 2600),
+        LTE_B1(RadioTechnology.LTE, "B1", 2100),
+        LTE_B3(RadioTechnology.LTE, "B3", 1800),
+        LTE_B7(RadioTechnology.LTE, "B7", 2600),
+        LTE_B20(RadioTechnology.LTE, "B20", 800);
+
+        private final RadioTechnology technology;
+        private final String bandDesignator;
+        private final int centreFrequencyMhz;
+
+        FrequencyBand(RadioTechnology technology, String bandDesignator, int centreFrequencyMhz) {
+            this.technology = technology;
+            this.bandDesignator = bandDesignator;
+            this.centreFrequencyMhz = centreFrequencyMhz;
+        }
+
+        /** Radio access technology (NR or LTE). */
+        public RadioTechnology getTechnology() {
+            return technology;
+        }
+
+        /** 3GPP operating-band designator, e.g. {@code "n28"} (NR) or {@code "B1"} (E-UTRA). */
+        public String getBandDesignator() {
+            return bandDesignator;
+        }
+
+        /** Approximate centre frequency in MHz, for display and sorting. */
+        public int getCentreFrequencyMhz() {
+            return centreFrequencyMhz;
+        }
     }
 
     public enum RankIndicator {

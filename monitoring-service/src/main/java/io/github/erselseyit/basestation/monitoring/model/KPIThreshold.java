@@ -26,7 +26,7 @@ public class KPIThreshold {
     private Double warningMax;     // Warning threshold (upper bound)
 
     private String unit;
-    private String frequencyBand;  // NR700, NR3500, or null for all
+    private Band frequencyBand;    // N28, N78, or null for all bands
     private Integer bandwidth;     // MHz, or null for all
 
     // Conditions
@@ -35,9 +35,7 @@ public class KPIThreshold {
 
     private boolean enabled = true;
 
-    // Constants for frequency bands and modulation schemes
-    private static final String FREQ_NR3500 = "NR3500";
-    private static final String FREQ_NR700 = "NR700";
+    // Constant for the common modulation scheme; bands use the Band enum.
     private static final String MOD_256QAM = "256QAM";
 
     // Static factory methods for common thresholds
@@ -49,7 +47,7 @@ public class KPIThreshold {
         kpi.setMinValue(1000.0);
         kpi.setWarningMin(1100.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand(FREQ_NR3500);
+        kpi.setFrequencyBand(Band.N78);
         kpi.setBandwidth(100);
         kpi.setRankIndicator("RANK4");
         kpi.setModulationScheme(MOD_256QAM);
@@ -64,7 +62,7 @@ public class KPIThreshold {
         kpi.setMinValue(400.0);
         kpi.setWarningMin(450.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand(FREQ_NR3500);
+        kpi.setFrequencyBand(Band.N78);
         kpi.setBandwidth(40);
         kpi.setRankIndicator("RANK4");
         kpi.setModulationScheme(MOD_256QAM);
@@ -79,7 +77,7 @@ public class KPIThreshold {
         kpi.setMinValue(75.0);
         kpi.setWarningMin(85.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand(FREQ_NR3500);
+        kpi.setFrequencyBand(Band.N78);
         kpi.setBandwidth(100);
         kpi.setRankIndicator("RANK1");
         kpi.setModulationScheme(MOD_256QAM);
@@ -93,7 +91,7 @@ public class KPIThreshold {
         kpi.setMinValue(50.0);
         kpi.setWarningMin(60.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand(FREQ_NR700);
+        kpi.setFrequencyBand(Band.N28);
         kpi.setBandwidth(10);
         kpi.setRankIndicator("RANK2");
         kpi.setModulationScheme(MOD_256QAM);
@@ -107,7 +105,7 @@ public class KPIThreshold {
         kpi.setMinValue(20.0);
         kpi.setWarningMin(25.0);
         kpi.setUnit("Mbps");
-        kpi.setFrequencyBand(FREQ_NR700);
+        kpi.setFrequencyBand(Band.N28);
         kpi.setBandwidth(10);
         kpi.setRankIndicator("RANK1");
         kpi.setModulationScheme(MOD_256QAM);
@@ -214,11 +212,11 @@ public class KPIThreshold {
         this.unit = unit;
     }
 
-    public String getFrequencyBand() {
+    public Band getFrequencyBand() {
         return frequencyBand;
     }
 
-    public void setFrequencyBand(String frequencyBand) {
+    public void setFrequencyBand(Band frequencyBand) {
         this.frequencyBand = frequencyBand;
     }
 
