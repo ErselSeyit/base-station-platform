@@ -22,7 +22,6 @@ scrape_configs:
     - 'monitoring-service:8082'
     - 'notification-service:8083'
     - 'api-gateway:8080'
-    - 'tmf-api:8086'
     labels:
       application: 'basestation-platform'
 

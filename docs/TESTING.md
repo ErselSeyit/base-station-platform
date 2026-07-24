@@ -4,11 +4,12 @@
 
 | Area | Framework | Count |
 | ---- | --------- | ----- |
-| Backend (Java) | JUnit 5 + Mockito + Testcontainers | 56 test classes, 881 tests |
-| Frontend | Vitest + React Testing Library | 315 unit tests (14 files) |
+| Backend (Java) | JUnit 5 + Mockito + Testcontainers | 59 test classes, 880+ tests |
+| Frontend | Vitest + React Testing Library | 318 unit tests (15 files) |
 | Frontend E2E | Playwright | 19 cases (5 specs) |
-| Edge bridge (Go) | `go test` | 6 packages under test |
-| Device protocol (C) | custom harness | 16 tests (`make -C device-protocol-c test`) |
+| Edge bridge (Go) | `go test` | 9 packages under test |
+| AI diagnostic (Python) | pytest | 153 tests (`pytest` in `ai-diagnostic/`) |
+| Device protocol (C) | custom harness | 21 tests (`make -C device-protocol-c test`) |
 
 Coverage is tracked as an indicator, not a gate. Following Khorikov's
 *Unit Testing* (ch. 1), we do not target a fixed coverage percentage:

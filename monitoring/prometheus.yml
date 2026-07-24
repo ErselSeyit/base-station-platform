@@ -32,11 +32,6 @@ scrape_configs:
     static_configs:
       - targets: ['api-gateway:8080']
 
-  - job_name: 'tmf-api'
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ['tmf-api:8086']
-
   # The AI diagnostic service is a Flask app exposing prometheus_client
   # metrics at /metrics (not the Spring actuator path). Without this job its
   # diagnosis-duration, model-confidence, anomaly, healing and error metrics

@@ -28,6 +28,7 @@
 |----------|-------------|
 | [SECRET_MANAGEMENT.md](SECRET_MANAGEMENT.md) | Secrets, rotation, best practices |
 | [TESTING.md](TESTING.md) | Test coverage and running tests |
+| [PERFORMANCE.md](PERFORMANCE.md) | Per-service latency/throughput baseline |
 | [Kubernetes](../k8s/README.md) | Kubernetes deployment (Fabric8/JKube) |
 
 ### Sub-project Documentation
