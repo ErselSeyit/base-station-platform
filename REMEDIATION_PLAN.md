@@ -221,7 +221,7 @@ Verified inline — **module size is the headline problem** (SRP; PEP 8 readabil
 | `service/self_healing.py` | ~~889~~ **799** | MEDIUM → **PARTIALLY DONE** | policy + execution + integration | **Done under the existing green suite:** extracted `healing_models.py` (action/status/risk enums + HealingAction/ExecutionResult); 22 self_healing tests stay green. Remaining: split the `_execute_*` actuators from the submit/approve policy (both exercised by the suite). |
 | `service/son_functions.py` | 752 | MEDIUM | many SON functions in one file | one module per SON function family |
 | `service/drone_integration.py` | 741 | MEDIUM | — | decompose |
-| `service/anomaly_detection.py` | 718 | MEDIUM | detection + scoring + I/O | separate detector from I/O |
+| `service/anomaly_detection.py` | ~~718~~ **565** | MEDIUM → **DONE** | detection + scoring + I/O | **Done under the existing green suite:** extracted the Isolation Forest / Isolation Tree scorer (pure numpy) into `isolation_forest.py`, separate from the `AnomalyDetector` ingestion; 16 tests (which import `IsolationForest`) stay green; dead `random`/rng imports removed. |
 
 Additional verified findings (detection scan):
 
