@@ -98,8 +98,10 @@ public class JwtValidator {
             log.warn("Malformed token: {}", e.getMessage());
             return ValidationResult.invalid("Malformed token");
         } catch (Exception e) {
-            log.error("Unexpected error validating token: {}", e.getMessage(), e);
-            return ValidationResult.invalid("Token validation failed: " + e.getMessage());
+            // Log the detail server-side only; never leak internal exception
+            // messages to the caller (OWASP information-exposure).
+            log.error("Unexpected error validating token", e);
+            return ValidationResult.invalid("Invalid token");
         }
     }
 

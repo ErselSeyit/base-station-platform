@@ -48,10 +48,21 @@ public class SlackService implements AlertIntegration {
     @Value("${alerts.slack.icon-emoji::satellite:}")
     private String iconEmoji;
 
-    private final RestTemplate restTemplate;
+    /** Connect/read timeout for Slack calls; a hung endpoint must not block the caller. */
+    @Value("${alerts.slack.timeout-ms:5000}")
+    private int timeoutMs;
 
-    public SlackService() {
-        this.restTemplate = new RestTemplate();
+    private RestTemplate restTemplate;
+
+    @jakarta.annotation.PostConstruct
+    void init() {
+        // Release It: every integration point needs an explicit timeout so a
+        // hung Slack endpoint cannot exhaust the notification threads.
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(timeoutMs);
+        factory.setReadTimeout(timeoutMs);
+        this.restTemplate = new RestTemplate(factory);
     }
 
     @Override
