@@ -1,6 +1,7 @@
 package io.github.erselseyit.basestation.monitoring.controller;
 
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -97,6 +98,28 @@ class MonitoringControllerBatchTest {
                 .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
                 .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Should carry the NR band from a batch entry through to the stored metric")
+    void recordMetricsBatch_PreservesBand() throws Exception {
+        // The edge bridge uploads banded NR metrics (e.g. RSRP on N78). Regression
+        // guard: the batch record path must not drop the band on the way to the DTO.
+        String body = objectMapper.writeValueAsString(Map.of(
+                "stationId", "1",
+                "metrics", List.of(Map.of("type", "RSRP", "band", "N78", "value", -92.0))));
+
+        mockMvc.perform(post("/api/v1/metrics/batch")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(Objects.requireNonNull(body)))
+                .andExpect(status().isCreated());
+
+        org.mockito.ArgumentCaptor<MetricDataDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(MetricDataDTO.class);
+        verify(monitoringService).recordMetric(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                io.github.erselseyit.basestation.monitoring.model.Band.N78,
+                captor.getValue().getBand());
     }
 
     private MetricDataDTO createMetricDTO(Long stationId, MetricType type, Double value) {
