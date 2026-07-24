@@ -106,7 +106,7 @@ Verified inline:
 
 | path | sev | issue | book | fix |
 |------|-----|-------|------|-----|
-| `service/AlertingService.java` (685 LOC) | MEDIUM | approaching the 800-line ceiling; many alert-rule factory methods inline | EJ Item 15 (minimise scope) | extract the default-rule catalogue into a dedicated `DefaultAlertRules` provider |
+| `service/AlertingService.java` | ~~MEDIUM~~ **DONE** | extracted the 21-rule default catalogue into `DefaultAlertRules` (thresholds from `AlertThresholdConfig`); 685 → 467 LOC, service now holds evaluation logic. Behaviour preserved (158 monitoring tests green). | EJ Item 15 | done |
 | `service/DiagnosticSessionService.java` (667) | MEDIUM | large, mixes session lifecycle + AI-call orchestration | SRP | split orchestration from persistence |
 | `validation/MetricValueValidator.java` (543) | LOW | large but cohesive (one validator) | — | acceptable; consider table-driven ranges |
 | `controller/MonitoringController.java` (526) | MEDIUM | controller holds request/response DTOs as nested classes + batch logic | EJ Item 24 (favour static member classes) is fine, but the batch record loop belongs in the service | move `recordMetricsBatch` mapping into `MonitoringService` |
