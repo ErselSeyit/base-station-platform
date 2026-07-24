@@ -11,6 +11,11 @@ import java.util.Objects;
  * Validator that ensures metric values are within realistic ranges for their type.
  * Prevents storing unrealistic or erroneous data that could indicate sensor failures
  * or data corruption.
+ *
+ * <p>Most metrics are a plain closed range, so they share the {@link #range} helper;
+ * only genuinely different rules (percentages, discrete sets, mixed-unit messages)
+ * keep dedicated methods. The {@code switch} stays exhaustive so a newly added
+ * {@link MetricType} fails to compile until it is given a rule.
  */
 public class MetricValueValidator implements ConstraintValidator<ValidMetricValue, MetricDataDTO> {
 
@@ -53,123 +58,132 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
             // Infrastructure - Percentages (0-100%)
             case CPU_USAGE, MEMORY_USAGE, UPTIME, INITIAL_BLER, HANDOVER_SUCCESS_RATE,
                  BATTERY_SOC, BATTERY_DOD, ETH_UTILIZATION, SLICE_PRB_UTIL,
-                 SLICE_SLA_COMPLIANCE, RRC_SETUP_SUCCESS, PAGING_SUCCESS ->
+                 SLICE_SLA_COMPLIANCE, RRC_SETUP_SUCCESS, PAGING_SUCCESS, GENERATOR_FUEL_LEVEL ->
                 validatePercentage(metricType, value);
 
-            // Temperature metrics
+            // Temperature: -50°C to 150°C (extreme range for safety; typical 20-60°C)
             case TEMPERATURE, BATTERY_CELL_TEMP_MIN, BATTERY_CELL_TEMP_MAX ->
-                validateTemperature(value);
+                range(value, -50, 150, "Temperature", "°C", "%.2f");
 
-            // Power metrics
-            case POWER_CONSUMPTION, SITE_POWER_KWH -> validatePowerConsumption(value);
+            // Power consumption: 0-50kW (50kW max for large macro cells; typical 500-8000W)
+            case POWER_CONSUMPTION, SITE_POWER_KWH ->
+                range(value, 0, 50000, "Power consumption", "W", "%.2f");
 
-            // Signal strength metrics (dBm)
-            case SIGNAL_STRENGTH, RSRP -> validateSignalStrength(value);
+            // Signal strength: -120 dBm (very weak) to -20 dBm (very strong)
+            case SIGNAL_STRENGTH, RSRP, MW_RSL ->
+                range(value, -120, -20, "Signal strength", " dBm", "%.2f");
 
-            // Count metrics
-            case CONNECTION_COUNT, RB_PER_SLOT, GPS_SATELLITES -> validateConnectionCount(value);
+            // Connection count: 0 to 10,000 concurrent connections
+            case CONNECTION_COUNT, RB_PER_SLOT, GPS_SATELLITES ->
+                range(value, 0, 10000, "Connection count", "", "%.0f");
 
-            // Throughput metrics (Mbps)
+            // Throughput (Mbps): 0 to 100 Gbps theoretical max
             case DATA_THROUGHPUT, DL_THROUGHPUT, UL_THROUGHPUT,
                  PDCP_THROUGHPUT, RLC_THROUGHPUT, CA_DL_THROUGHPUT, CA_UL_THROUGHPUT,
-                 GTP_THROUGHPUT, SLICE_THROUGHPUT -> validateDataThroughput(value);
+                 GTP_THROUGHPUT, SLICE_THROUGHPUT ->
+                range(value, 0, 100000, "Data throughput", " Mbps", "%.2f");
 
-            // Fan speed
-            case FAN_SPEED -> validateFanSpeed(value);
+            // Fan speed: 0 to 15,000 RPM (high-performance server fans)
+            case FAN_SPEED -> range(value, 0, 15000, "Fan speed", " RPM", "%.0f");
 
-            // SINR metrics
-            case SINR, MW_SNR -> validateSinr(value);
+            // SINR: -20 dB to 50 dB (typical good 10-30 dB)
+            case SINR, MW_SNR -> range(value, -20, 50, "SINR", " dB", "%.2f");
 
-            // Latency metrics (ms)
+            // Latency (ms): 0 to 1000 ms (5G target < 15 ms)
             case LATENCY_PING, ETH_LATENCY, PACKET_DELAY, SLICE_LATENCY, PTP_OFFSET ->
-                validateLatency(value);
+                range(value, 0, 1000, "Latency", " ms", "%.2f");
 
-            // TX/RF metrics
-            case TX_IMBALANCE, VSWR, ACLR -> validateTxImbalance(value);
+            // TX imbalance: 0 dB to 30 dB (target <= 4 dB)
+            case TX_IMBALANCE, VSWR, ACLR -> range(value, 0, 30, "TX Imbalance", " dB", "%.2f");
 
-            // MCS
-            case AVG_MCS -> validateMcs(value);
+            // MCS: 0 to 28 (5G NR)
+            case AVG_MCS -> range(value, 0, 28, "MCS", "", "%.2f");
 
-            // Rank
+            // Rank: 1, 2, or 4
             case RANK_INDICATOR, PRECODING_RANK -> validateRankIndicator(value);
 
-            // Interference
-            case INTERFERENCE_LEVEL, CO_CHANNEL_INTERFERENCE, PIM_LEVEL -> validateInterference(value);
+            // Interference level: -120 dBm to -40 dBm
+            case INTERFERENCE_LEVEL, CO_CHANNEL_INTERFERENCE, PIM_LEVEL ->
+                range(value, -120, -40, "Interference level", " dBm", "%.2f");
 
-            // Power & Energy - Voltage (0-500V)
+            // Voltage: 0V to 500V (single/three-phase and solar)
             case UTILITY_VOLTAGE_L1, UTILITY_VOLTAGE_L2, UTILITY_VOLTAGE_L3, SOLAR_PANEL_VOLTAGE ->
-                validateVoltage(value);
+                range(value, 0, 500, "Voltage", "V", "%.2f");
 
-            // Power factor (0-1)
-            case POWER_FACTOR -> validatePowerFactor(value);
+            // Power factor: 0 to 1 (unity)
+            case POWER_FACTOR -> range(value, 0, 1, "Power factor", "", "%.3f");
 
-            // Generator metrics
-            case GENERATOR_FUEL_LEVEL -> validatePercentage(metricType, value);
+            // Generator runtime: 0 to 100,000 hours (bound unit differs from value, so dedicated)
             case GENERATOR_RUNTIME -> validateRuntime(value);
 
-            // Current (0-100A)
-            case SOLAR_CHARGE_CURRENT -> validateCurrent(value);
+            // Current: 0A to 100A
+            case SOLAR_CHARGE_CURRENT -> range(value, 0, 100, "Current", "A", "%.2f");
 
             // Environmental - Wind
-            case WIND_SPEED -> validateWindSpeed(value);
+            case WIND_SPEED -> range(value, 0, 200, "Wind speed", " km/h", "%.2f");
             case WIND_DIRECTION -> validateDirection(value);
 
             // Environmental - Weather
-            case PRECIPITATION -> validatePrecipitation(value);
-            case LIGHTNING_DISTANCE -> validateDistance(value);
+            case PRECIPITATION -> range(value, 0, 500, "Precipitation", " mm/hr", "%.2f");
+            case LIGHTNING_DISTANCE -> range(value, 0, 100, "Distance", " km", "%.2f");
 
-            // Environmental - Structural
+            // Environmental - Structural (bound word "degrees" vs value symbol "°", so dedicated)
             case TILT_ANGLE -> validateAngle(value);
-            case VIBRATION_LEVEL -> validateVibration(value);
-            case WATER_LEVEL -> validateWaterLevel(value);
+            case VIBRATION_LEVEL -> range(value, 0, 100, "Vibration", " mm/s", "%.2f");
+            case WATER_LEVEL -> range(value, 0, 500, "Water level", " cm", "%.2f");
 
             // Environmental - Air quality
-            case PM25_LEVEL -> validatePM25(value);
-            case CO_LEVEL -> validateCOLevel(value);
+            case PM25_LEVEL -> range(value, 0, 1000, "PM2.5", " µg/m³", "%.2f");
+            case CO_LEVEL -> range(value, 0, 1000, "CO level", " ppm", "%.2f");
 
             // Environmental - Binary sensors (0 or 1)
             case SMOKE_DETECTED, DOOR_STATUS, MOTION_DETECTED -> validateBinary(metricType, value);
 
             // Transport - Fiber optical
-            case FIBER_RX_POWER, FIBER_TX_POWER -> validateOpticalPower(value);
-            case FIBER_BER -> validateBER(value);
-            case FIBER_OSNR -> validateOSNR(value);
+            case FIBER_RX_POWER, FIBER_TX_POWER ->
+                range(value, -40, 10, "Optical power", " dBm", "%.2f");
+            case FIBER_BER -> range(value, 0, 1, "BER", "", "%.2e");
+            case FIBER_OSNR -> range(value, 0, 50, "OSNR", " dB", "%.2f");
 
             // Transport - Microwave
-            case MW_RSL -> validateSignalStrength(value);
-            case MW_MODULATION -> validateModulation(value);
+            case MW_MODULATION -> range(value, 0, 12, "Modulation index", "", "%.0f");
 
             // Transport - Errors
-            case ETH_ERRORS -> validateErrorCount(value);
+            case ETH_ERRORS -> range(value, 0, 1000000, "Error count", "", "%.0f");
 
             // Advanced Radio
-            case BEAM_WEIGHT_MAG -> validateBeamMagnitude(value);
+            case BEAM_WEIGHT_MAG -> range(value, 0, 1, "Beam magnitude", "", "%.4f");
             case BEAM_WEIGHT_PHASE -> validateDirection(value);  // 0-360 degrees
-            case OCCUPIED_BANDWIDTH -> validateBandwidth(value);
+            case OCCUPIED_BANDWIDTH -> range(value, 0, 400, "Bandwidth", " MHz", "%.2f");
 
             // Network Slicing
             case SLICE_PACKET_LOSS -> validatePacketLoss(value);
         };
     }
 
-    private ValidationResult validateVoltage(double value) {
-        // Voltage: 0V to 500V (covers single/three-phase and solar)
-        if (value < 0 || value > 500) {
-            return ValidationResult.invalid(
-                String.format("Voltage must be between 0V and 500V, received: %.2fV", value)
-            );
+    /**
+     * Checks a value against a closed {@code [min, max]} range, formatting a
+     * message that names the metric and echoes the offending value with its unit.
+     * Bounds are rendered with {@link #num} (integer/grouped where natural); the
+     * value uses {@code valueFormat} to preserve each metric's precision.
+     */
+    private static ValidationResult range(double value, double min, double max,
+            String label, String unit, String valueFormat) {
+        if (value >= min && value <= max) {
+            return ValidationResult.valid();
         }
-        return ValidationResult.valid();
+        String template = "%s must be between %s%s and %s%s, received: " + valueFormat + "%s";
+        return ValidationResult.invalid(
+            String.format(template, label, num(min), unit, num(max), unit, value, unit));
     }
 
-    private ValidationResult validatePowerFactor(double value) {
-        // Power factor: 0 to 1 (unity)
-        if (value < 0 || value > 1) {
-            return ValidationResult.invalid(
-                String.format("Power factor must be between 0 and 1, received: %.3f", value)
-            );
+    /** Renders a bound: whole numbers as integers (grouped past 999), else plain. */
+    private static String num(double d) {
+        if (d == Math.rint(d)) {
+            long l = (long) d;
+            return Math.abs(l) >= 1000 ? String.format("%,d", l) : Long.toString(l);
         }
-        return ValidationResult.valid();
+        return Double.toString(d);
     }
 
     private ValidationResult validateRuntime(double value) {
@@ -177,26 +191,6 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
         if (value < 0 || value > 100000) {
             return ValidationResult.invalid(
                 String.format("Runtime must be between 0 and 100,000 hours, received: %.2f", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateCurrent(double value) {
-        // Current: 0 to 100A
-        if (value < 0 || value > 100) {
-            return ValidationResult.invalid(
-                String.format("Current must be between 0A and 100A, received: %.2fA", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateWindSpeed(double value) {
-        // Wind speed: 0 to 200 km/h (hurricane force)
-        if (value < 0 || value > 200) {
-            return ValidationResult.invalid(
-                String.format("Wind speed must be between 0 and 200 km/h, received: %.2f km/h", value)
             );
         }
         return ValidationResult.valid();
@@ -212,151 +206,11 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
         return ValidationResult.valid();
     }
 
-    private ValidationResult validatePrecipitation(double value) {
-        // Precipitation: 0 to 500 mm/hr (extreme rainfall)
-        if (value < 0 || value > 500) {
-            return ValidationResult.invalid(
-                String.format("Precipitation must be between 0 and 500 mm/hr, received: %.2f mm/hr", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateDistance(double value) {
-        // Distance: 0 to 100 km
-        if (value < 0 || value > 100) {
-            return ValidationResult.invalid(
-                String.format("Distance must be between 0 and 100 km, received: %.2f km", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
     private ValidationResult validateAngle(double value) {
         // Tilt angle: -90 to 90 degrees
         if (value < -90 || value > 90) {
             return ValidationResult.invalid(
                 String.format("Angle must be between -90 and 90 degrees, received: %.2f°", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateVibration(double value) {
-        // Vibration: 0 to 100 mm/s RMS
-        if (value < 0 || value > 100) {
-            return ValidationResult.invalid(
-                String.format("Vibration must be between 0 and 100 mm/s, received: %.2f mm/s", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateWaterLevel(double value) {
-        // Water level: 0 to 500 cm
-        if (value < 0 || value > 500) {
-            return ValidationResult.invalid(
-                String.format("Water level must be between 0 and 500 cm, received: %.2f cm", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validatePM25(double value) {
-        // PM2.5: 0 to 1000 µg/m³
-        if (value < 0 || value > 1000) {
-            return ValidationResult.invalid(
-                String.format("PM2.5 must be between 0 and 1000 µg/m³, received: %.2f µg/m³", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateCOLevel(double value) {
-        // CO level: 0 to 1000 ppm
-        if (value < 0 || value > 1000) {
-            return ValidationResult.invalid(
-                String.format("CO level must be between 0 and 1000 ppm, received: %.2f ppm", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateBinary(MetricType metricType, double value) {
-        // Binary: 0 or 1
-        if (value != 0 && value != 1) {
-            return ValidationResult.invalid(
-                String.format("%s must be 0 or 1, received: %.0f", metricType, value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateOpticalPower(double value) {
-        // Optical power: -40 dBm to 10 dBm
-        if (value < -40 || value > 10) {
-            return ValidationResult.invalid(
-                String.format("Optical power must be between -40 dBm and 10 dBm, received: %.2f dBm", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateBER(double value) {
-        // BER: 0 to 1 (typically very small, e.g., 1e-12)
-        if (value < 0 || value > 1) {
-            return ValidationResult.invalid(
-                String.format("BER must be between 0 and 1, received: %.2e", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateOSNR(double value) {
-        // OSNR: 0 to 50 dB
-        if (value < 0 || value > 50) {
-            return ValidationResult.invalid(
-                String.format("OSNR must be between 0 and 50 dB, received: %.2f dB", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateModulation(double value) {
-        // Modulation scheme index: 0 to 12 (BPSK to 4096-QAM)
-        if (value < 0 || value > 12) {
-            return ValidationResult.invalid(
-                String.format("Modulation index must be between 0 and 12, received: %.0f", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateErrorCount(double value) {
-        // Error count: 0 to 1,000,000
-        if (value < 0 || value > 1000000) {
-            return ValidationResult.invalid(
-                String.format("Error count must be between 0 and 1,000,000, received: %.0f", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateBeamMagnitude(double value) {
-        // Beam weight magnitude: 0 to 1 (normalized)
-        if (value < 0 || value > 1) {
-            return ValidationResult.invalid(
-                String.format("Beam magnitude must be between 0 and 1, received: %.4f", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateBandwidth(double value) {
-        // Bandwidth: 0 to 400 MHz (5G NR max)
-        if (value < 0 || value > 400) {
-            return ValidationResult.invalid(
-                String.format("Bandwidth must be between 0 and 400 MHz, received: %.2f MHz", value)
             );
         }
         return ValidationResult.valid();
@@ -372,44 +226,11 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
         return ValidationResult.valid();
     }
 
-    private ValidationResult validateSinr(double value) {
-        // SINR range: -20 dB to 50 dB
-        // Typical good: 10-30 dB
-        if (value < -20 || value > 50) {
+    private ValidationResult validateBinary(MetricType metricType, double value) {
+        // Binary: 0 or 1
+        if (value != 0 && value != 1) {
             return ValidationResult.invalid(
-                String.format("SINR must be between -20 dB and 50 dB, received: %.2f dB", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateLatency(double value) {
-        // Latency: 0 ms to 1000 ms
-        // Target for 5G: < 15 ms
-        if (value < 0 || value > 1000) {
-            return ValidationResult.invalid(
-                String.format("Latency must be between 0 ms and 1000 ms, received: %.2f ms", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateTxImbalance(double value) {
-        // TX Imbalance: 0 dB to 30 dB
-        // Target: <= 4 dB
-        if (value < 0 || value > 30) {
-            return ValidationResult.invalid(
-                String.format("TX Imbalance must be between 0 dB and 30 dB, received: %.2f dB", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateMcs(double value) {
-        // MCS: 0 to 28 (5G NR)
-        if (value < 0 || value > 28) {
-            return ValidationResult.invalid(
-                String.format("MCS must be between 0 and 28, received: %.2f", value)
+                String.format("%s must be 0 or 1, received: %.0f", metricType, value)
             );
         }
         return ValidationResult.valid();
@@ -425,88 +246,12 @@ public class MetricValueValidator implements ConstraintValidator<ValidMetricValu
         return ValidationResult.valid();
     }
 
-    private ValidationResult validateInterference(double value) {
-        // Interference level: -120 dBm to -40 dBm
-        if (value < -120 || value > -40) {
-            return ValidationResult.invalid(
-                String.format("Interference level must be between -120 dBm and -40 dBm, received: %.2f dBm", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
     private ValidationResult validatePercentage(MetricType metricType, double value) {
         // Percentages must be between 0 and 100
         if (value < 0 || value > 100) {
             return ValidationResult.invalid(
                 String.format("%s must be between 0 and 100%%, received: %.2f",
                     metricType, value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateTemperature(double value) {
-        // Temperature range: -50°C to 150°C (extreme range for safety)
-        // Typical operational: 20-60°C, alarm at 70°C
-        if (value < -50 || value > 150) {
-            return ValidationResult.invalid(
-                String.format("Temperature must be between -50°C and 150°C, received: %.2f°C", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validatePowerConsumption(double value) {
-        // Power consumption: 0W to 50,000W (50kW max for large macro cells)
-        // Typical: 500-8000W
-        if (value < 0 || value > 50000) {
-            return ValidationResult.invalid(
-                String.format("Power consumption must be between 0W and 50,000W, received: %.2fW", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateSignalStrength(double value) {
-        // Signal strength: -120 dBm (very weak) to -20 dBm (very strong)
-        // Typical: -100 to -40 dBm
-        if (value < -120 || value > -20) {
-            return ValidationResult.invalid(
-                String.format("Signal strength must be between -120 dBm and -20 dBm, received: %.2f dBm", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateConnectionCount(double value) {
-        // Connection count: 0 to 10,000 concurrent connections
-        // Typical: 5-500 connections
-        if (value < 0 || value > 10000) {
-            return ValidationResult.invalid(
-                String.format("Connection count must be between 0 and 10,000, received: %.0f", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateDataThroughput(double value) {
-        // Data throughput: 0 Mbps to 100,000 Mbps (100 Gbps theoretical max)
-        // Typical: 100-5000 Mbps
-        if (value < 0 || value > 100000) {
-            return ValidationResult.invalid(
-                String.format("Data throughput must be between 0 Mbps and 100,000 Mbps, received: %.2f Mbps", value)
-            );
-        }
-        return ValidationResult.valid();
-    }
-
-    private ValidationResult validateFanSpeed(double value) {
-        // Fan speed: 0 RPM to 15,000 RPM (high-performance server fans)
-        // Typical: 1000-5000 RPM
-        if (value < 0 || value > 15000) {
-            return ValidationResult.invalid(
-                String.format("Fan speed must be between 0 RPM and 15,000 RPM, received: %.0f RPM", value)
             );
         }
         return ValidationResult.valid();
