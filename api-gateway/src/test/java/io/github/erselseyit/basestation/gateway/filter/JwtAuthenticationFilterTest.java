@@ -50,6 +50,9 @@ class JwtAuthenticationFilterTest {
     private JwtValidator jwtValidator;
 
     @Mock
+    private io.github.erselseyit.basestation.gateway.service.TokenRevocationService tokenRevocationService;
+
+    @Mock
     private GatewayFilterChain filterChain;
 
     private JwtAuthenticationFilter filter;
@@ -60,9 +63,15 @@ class JwtAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthenticationFilter(jwtValidator);
+        filter = new JwtAuthenticationFilter(jwtValidator, tokenRevocationService);
         ReflectionTestUtils.setField(filter, "internalSecret", INTERNAL_SECRET);
         ReflectionTestUtils.setField(filter, "actuatorAllowedIps", "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16");
+        // Default: no token is revoked (per-test overrides where needed).
+        org.mockito.Mockito.lenient().when(tokenRevocationService.isRevoked(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(reactor.core.publisher.Mono.just(false));
         gatewayFilter = filter.apply(new JwtAuthenticationFilter.Config());
     }
 
@@ -127,6 +136,30 @@ class JwtAuthenticationFilterTest {
             StepVerifier.create(result).verifyComplete();
             verify(jwtValidator).validateToken(VALID_TOKEN);
             verify(filterChain).filter(org.mockito.ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should return 401 when the token has been revoked")
+        void apply_RevokedToken_Returns401() {
+            MockServerHttpRequest request = MockServerHttpRequest
+                    .get("/api/v1/stations")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + VALID_TOKEN)
+                    .build();
+            MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+            JwtValidator.ValidationResult validResult = createValidResult("testuser", "ADMIN");
+            when(jwtValidator.validateToken(VALID_TOKEN)).thenReturn(validResult);
+            when(tokenRevocationService.isRevoked(
+                    org.mockito.ArgumentMatchers.anyString(),
+                    org.mockito.ArgumentMatchers.any(),
+                    org.mockito.ArgumentMatchers.anyLong()))
+                    .thenReturn(Mono.just(true));
+
+            Mono<Void> result = gatewayFilter.filter(exchange, filterChain);
+
+            StepVerifier.create(result).verifyComplete();
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            verify(filterChain, never()).filter(org.mockito.ArgumentMatchers.any());
         }
 
         @Test
@@ -411,9 +444,11 @@ class JwtAuthenticationFilterTest {
 
     private JwtValidator.ValidationResult createValidResult(String username, String role) {
         JwtValidator.ValidationResult result = mock(JwtValidator.ValidationResult.class);
-        when(result.isValid()).thenReturn(true);
-        when(result.getUsername()).thenReturn(username);
-        when(result.getRole()).thenReturn(role);
+        // lenient: not every code path reads every accessor (e.g. a revoked
+        // token is rejected before the role/headers are used).
+        org.mockito.Mockito.lenient().when(result.isValid()).thenReturn(true);
+        org.mockito.Mockito.lenient().when(result.getUsername()).thenReturn(username);
+        org.mockito.Mockito.lenient().when(result.getRole()).thenReturn(role);
         return result;
     }
 
