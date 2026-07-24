@@ -17,5 +17,7 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/base-station-service/target/base-station-service-1.0.0.jar app.jar
 EXPOSE 8081
+RUN addgroup -S app && adduser -S app -G app
+USER app
 ENTRYPOINT ["java", "-jar", "app.jar"]
 

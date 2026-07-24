@@ -17,5 +17,7 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/monitoring-service/target/monitoring-service-1.0.0.jar app.jar
 EXPOSE 8082
+RUN addgroup -S app && adduser -S app -G app
+USER app
 ENTRYPOINT ["java", "-jar", "app.jar"]
 

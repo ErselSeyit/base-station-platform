@@ -13,4 +13,6 @@ COPY virtual_station.py .
 EXPOSE 8090
 
 # Run
+RUN useradd --create-home --shell /bin/bash app
+USER app
 CMD ["python", "virtual_station.py"]

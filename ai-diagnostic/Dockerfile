@@ -23,4 +23,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9091/health')" || exit 1
 
 # Run the service with HTTP enabled
+RUN useradd --create-home --shell /bin/bash app
+USER app
 CMD ["python", "service/diagnostic_service.py", "--tcp-port", "9090", "--http-port", "9091"]

@@ -17,5 +17,7 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/notification-service/target/notification-service-1.0.0.jar app.jar
 EXPOSE 8083
+RUN addgroup -S app && adduser -S app -G app
+USER app
 ENTRYPOINT ["java", "-jar", "app.jar"]
 
