@@ -30,7 +30,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.4.13</spring-boot.version>
         <spring-cloud.version>2024.0.0</spring-cloud.version>
-        <spring-security.version>6.5.5</spring-security.version>
+        <spring-security.version>6.5.9</spring-security.version>
         <jjwt.version>0.12.5</jjwt.version>
         <resilience4j.version>2.2.0</resilience4j.version>
         <springdoc.version>2.8.14</springdoc.version>
