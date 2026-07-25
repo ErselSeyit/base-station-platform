@@ -54,6 +54,51 @@ Include the token in the Authorization header:
 Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 ```
 
+### Refresh
+Rotate the refresh token and mint a new access token. Replaying an already-used
+refresh token is detected and revokes the whole token family (RFC 6819).
+```bash
+POST /api/v1/auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "..." }
+
+# Response (TokenResponse)
+{
+  "accessToken": "eyJ...",
+  "refreshToken": "...",
+  "expiresIn": 3600,
+  "refreshExpiresIn": 604800,
+  "username": "admin",
+  "role": "ROLE_ADMIN"
+}
+```
+
+### Validate
+```bash
+GET /api/v1/auth/validate
+Authorization: Bearer <token>
+# 200 if valid, 401 otherwise
+```
+
+### Logout
+Revokes the caller's access token. The API Gateway keeps a Redis-backed
+blocklist and rejects revoked tokens on subsequent requests (fail-open if Redis
+is unavailable).
+```bash
+POST /api/v1/auth/logout
+Authorization: Bearer <token>
+```
+
+### Revoke
+Revoke a specific refresh token.
+```bash
+POST /api/v1/auth/revoke
+Content-Type: application/json
+
+{ "refreshToken": "..." }
+```
+
 ## Stations API
 
 ### Create Station
@@ -170,6 +215,26 @@ Content-Type: application/json
 {"stationIds": [1, 2, 3]}
 ```
 
+### Batch Record Metrics
+Used by edge bridges to upload many metrics at once (roles: ADMIN, OPERATOR,
+SERVICE). Returns per-entry results; partial failures yield HTTP 201 with an
+`errors` list, all-failures yield HTTP 400.
+```bash
+POST /api/v1/metrics/batch
+Content-Type: application/json
+
+{
+  "stationId": "1",
+  "metrics": [
+    {"type": "TEMPERATURE", "value": 55.2, "band": "N78", "timestamp": "2026-01-28T12:00:00"},
+    {"type": "CPU_USAGE", "value": 25.5}
+  ]
+}
+
+# Response (BatchRecordResponse)
+{ "received": 2, "failed": 0, "status": "OK", "errors": null }
+```
+
 ### Metric Catalog
 ```bash
 # Every metric the platform records, with its unit and 3GPP TS 28.552 counter
@@ -261,6 +326,54 @@ X-HMAC-Signature: <hmac-signature>
 }
 ```
 
+## TMF Open APIs (tmf-api)
+
+The `tmf-api` service (port 8086) implements TM Forum Open APIs and is **not**
+routed through the gateway — reach it directly at `http://tmf-api:8086` (or
+`http://localhost:8086`). OpenAPI/Swagger is at `/swagger-ui.html` (`/api-docs`
+for the raw spec).
+
+### TMF638 — Service Inventory
+Base path: `/tmf-api/serviceInventoryManagement/v4`
+```bash
+GET    /service            # list (fields, offset, limit, state, category, serviceType, name, externalId, relatedPartyId) — X-Total-Count/X-Result-Count headers
+GET    /service/{id}
+POST   /service
+PUT    /service/{id}
+PATCH  /service/{id}
+DELETE /service/{id}
+POST   /service/{id}/activate | /deactivate | /terminate
+GET    /service/external/{externalId} | /byResource/{resourceId} | /stats
+POST   /hub ; DELETE /hub/{id}    # event subscriptions
+```
+
+### TMF639 — Resource Inventory
+Base path: `/tmf-api/resourceInventoryManagement/v4`
+```bash
+GET    /resource           # list (fields, offset, limit, category, resourceType, operationalState, administrativeState, name, externalId)
+GET    /resource/{id}
+POST   /resource
+PUT    /resource/{id}
+PATCH  /resource/{id}
+DELETE /resource/{id}
+GET    /resource/external/{externalId} | /resource/{id}/children | /resource/stats
+POST   /hub ; DELETE /hub/{id}
+```
+
+### TMF642 — Alarm Management
+Base path: `/tmf-api/alarmManagement/v4`
+```bash
+GET    /alarm              # list (fields, offset, limit, state, perceivedSeverity, alarmType, sourceSystemId, affectedResourceId)
+GET    /alarm/{id}
+POST   /alarm
+PATCH  /alarm/{id}
+DELETE /alarm/{id}
+POST   /alarm/{id}/ack | /unack | /clear | /comment
+POST   /alarm/groupAck | /alarm/groupClear
+GET    /alarm/stats | /alarm/active | /alarm/byResource/{resourceId} | /alarm/history/{resourceId}
+POST   /hub ; DELETE /hub/{id}
+```
+
 ## Error Responses
 
 All errors follow a consistent format:
@@ -289,5 +402,7 @@ Internal health checks (within the cluster):
 GET http://auth-service:8084/actuator/health
 GET http://base-station-service:8081/actuator/health
 GET http://monitoring-service:8082/actuator/health
+GET http://notification-service:8083/actuator/health
+GET http://tmf-api:8086/actuator/health
 GET http://ai-diagnostic:9091/health
 ```

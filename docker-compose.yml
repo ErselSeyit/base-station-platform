@@ -6,7 +6,8 @@
 #   - HMAC authentication (no Keycloak)
 #   - Distributed tracing with Zipkin
 #
-# Container count: 11 services
+# Container count: 15 default services (7 app incl. tmf-api, 4 data stores,
+#   3 observability, 1 AI); plus optional edge/simulator services behind profiles.
 # Required environment variables - copy .env.example to .env and configure
 #
 # REQUIRED VARIABLES (will fail without these):
