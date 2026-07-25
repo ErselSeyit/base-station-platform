@@ -142,7 +142,16 @@ devproto_transport_t *devproto_transport_tls_create(const devproto_tls_config_t 
         goto error;
     }
 
-    /* Set TLS version range */
+    /* Set TLS version range. mbedTLS 3.x renamed the version API and enums;
+     * keep the 2.x calls for older toolchains and use the current API on 3.x+. */
+#if MBEDTLS_VERSION_MAJOR >= 3
+    mbedtls_ssl_conf_min_tls_version(&priv->ssl_conf,
+        (cfg->min_version == DEVPROTO_TLS_VERSION_1_3) ?
+            MBEDTLS_SSL_VERSION_TLS1_3 : MBEDTLS_SSL_VERSION_TLS1_2);
+    mbedtls_ssl_conf_max_tls_version(&priv->ssl_conf,
+        (cfg->max_version == DEVPROTO_TLS_VERSION_1_3) ?
+            MBEDTLS_SSL_VERSION_TLS1_3 : MBEDTLS_SSL_VERSION_TLS1_2);
+#else
     mbedtls_ssl_conf_min_version(&priv->ssl_conf,
         MBEDTLS_SSL_MAJOR_VERSION_3,
         (cfg->min_version == DEVPROTO_TLS_VERSION_1_3) ?
@@ -151,6 +160,7 @@ devproto_transport_t *devproto_transport_tls_create(const devproto_tls_config_t 
         MBEDTLS_SSL_MAJOR_VERSION_3,
         (cfg->max_version == DEVPROTO_TLS_VERSION_1_3) ?
             MBEDTLS_SSL_MINOR_VERSION_4 : MBEDTLS_SSL_MINOR_VERSION_3);
+#endif
 
     /* Configure RNG */
     mbedtls_ssl_conf_rng(&priv->ssl_conf, mbedtls_ctr_drbg_random, &priv->ctr_drbg);
@@ -184,7 +194,13 @@ devproto_transport_t *devproto_transport_tls_create(const devproto_tls_config_t 
             goto error;
         }
 
+        /* mbedTLS 3.x added RNG parameters to key parsing. */
+#if MBEDTLS_VERSION_MAJOR >= 3
+        ret = mbedtls_pk_parse_keyfile(&priv->client_key, cfg->client_key_path, NULL,
+                                       mbedtls_ctr_drbg_random, &priv->ctr_drbg);
+#else
         ret = mbedtls_pk_parse_keyfile(&priv->client_key, cfg->client_key_path, NULL);
+#endif
         if (ret != 0) {
             priv->last_error = DEVPROTO_TLS_ERR_KEY_LOAD;
             goto error;
@@ -195,6 +211,14 @@ devproto_transport_t *devproto_transport_tls_create(const devproto_tls_config_t 
 
     /* Configure certificate verification */
     mbedtls_ssl_conf_ca_chain(&priv->ssl_conf, &priv->ca_cert, NULL);
+    if (!cfg->verify_server) {
+        /* Disabling server verification defeats TLS authentication and must
+         * never be used outside controlled testing (Seacord: fail loudly on
+         * insecure configuration). */
+        fprintf(stderr,
+            "devproto TLS WARNING: server certificate verification is DISABLED "
+            "(verify_server=0) - the connection is not authenticated\n");
+    }
     mbedtls_ssl_conf_authmode(&priv->ssl_conf,
         cfg->verify_server ? MBEDTLS_SSL_VERIFY_REQUIRED : MBEDTLS_SSL_VERIFY_NONE);
 
@@ -403,11 +427,14 @@ int devproto_tls_get_info(devproto_transport_t *t, devproto_tls_info_t *info) {
     info->cipher_suite = mbedtls_ssl_get_ciphersuite(&priv->ssl_ctx);
     info->server_cn = priv->server_cn;
     info->verify_result = priv->verify_result;
-    info->session_resumed = mbedtls_ssl_session_resumed(&priv->ssl_ctx);
+    /* Session-resumption status is informational only and is not portably
+     * exposed across mbedTLS 2.x/3.x, so report 0. */
+    info->session_resumed = 0;
 
-    /* Get negotiated version */
-    int version = mbedtls_ssl_get_version_number(&priv->ssl_ctx);
-    info->version = (version == MBEDTLS_SSL_VERSION_TLS1_3) ?
+    /* Negotiated version. mbedtls_ssl_get_version returns a stable string on
+     * both 2.x and 3.x, unlike the numeric API/enums which are 3.x-only. */
+    const char *negotiated = mbedtls_ssl_get_version(&priv->ssl_ctx);
+    info->version = (negotiated && strcmp(negotiated, "TLSv1.3") == 0) ?
         DEVPROTO_TLS_VERSION_1_3 : DEVPROTO_TLS_VERSION_1_2;
 
     return DEVPROTO_TLS_OK;

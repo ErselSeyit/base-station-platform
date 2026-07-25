@@ -118,7 +118,7 @@ See [docs/QUICK_START.md](docs/QUICK_START.md) for setup details.
 | **SON** | MLB, MRO, CCO, Energy Saving with approval workflows |
 | **Edge** | Go bridge for MIPS, C protocol library, SNMP/MQTT/NETCONF adapters |
 | **Enterprise** | Multi-tenancy, TMF APIs (638/639/642), PagerDuty/Slack integrations |
-| **Security** | JWT + RBAC, HMAC service auth, rate limiting, audit logging |
+| **Security** | JWT + RBAC with Redis-backed token revocation, refresh-token reuse detection, HMAC service auth, rate limiting, audit logging |
 
 ---
 
@@ -127,11 +127,12 @@ See [docs/QUICK_START.md](docs/QUICK_START.md) for setup details.
 | Service | Port | Description |
 |---------|------|-------------|
 | Frontend | 3000 | React dashboard |
-| API Gateway | 8080 | Routing, rate limiting, JWT |
-| Auth Service | 8084 | Authentication, RBAC |
+| API Gateway | 8080 | Routing, rate limiting, JWT (with token revocation) |
+| Auth Service | 8084 | Authentication, RBAC, refresh-token reuse detection |
 | Base Station | 8081 | Station CRUD, geospatial |
 | Monitoring | 8082 | Metrics, WebSocket, SON |
-| Notification | 8083 | Alerts via RabbitMQ |
+| Notification | 8083 | Alerts via RabbitMQ (dead-letter queue for failures) |
+| TMF API | 8086 | TM Forum Open APIs (638/639/642), independently deployable |
 | AI Diagnostic | 9091 | Python ML service |
 | Edge Bridge | - | Go bridge for MIPS devices |
 

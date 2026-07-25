@@ -55,6 +55,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private static final int CLASS_B_PRIVATE_OCTET_MAX = 31;
 
     private final JwtValidator jwtValidator;
+    private final io.github.erselseyit.basestation.gateway.service.TokenRevocationService tokenRevocationService;
 
     @Value("${security.internal.secret:}")
     private String internalSecret;
@@ -62,9 +63,26 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     @Value("${security.actuator.allowed-ips:127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}")
     private String actuatorAllowedIps;
 
-    public JwtAuthenticationFilter(JwtValidator jwtValidator) {
+    /** Parsed once (lazily cached) rather than splitting the string on every request. */
+    private volatile java.util.List<String> allowedActuatorIpList;
+
+    private java.util.List<String> allowedActuatorIps() {
+        java.util.List<String> list = allowedActuatorIpList;
+        if (list == null) {
+            list = java.util.Arrays.stream(actuatorAllowedIps.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+            allowedActuatorIpList = list;
+        }
+        return list;
+    }
+
+    public JwtAuthenticationFilter(JwtValidator jwtValidator,
+            io.github.erselseyit.basestation.gateway.service.TokenRevocationService tokenRevocationService) {
         super(Config.class);
         this.jwtValidator = jwtValidator;
+        this.tokenRevocationService = tokenRevocationService;
     }
 
     @Override
@@ -96,11 +114,37 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
                 return unauthorizedResponse(exchange, "Invalid token: " + validationResult.getErrorMessage());
             }
 
-            // Add user context to request
-            ServerWebExchange modifiedExchange = addUserHeaders(exchange, request, validationResult);
-            log.debug("Token validated successfully for path: {}, user: {}", path, validationResult.getUsername());
-            return chain.filter(modifiedExchange);
+            // Reject revoked tokens (logout / password change). Checks both the
+            // specific token and any user-wide revocation issued after the token.
+            // Fail-open on a Redis error so a revocation-store outage cannot lock
+            // every user out (availability over the revocation guarantee).
+            String username = validationResult.getUsername();
+            return tokenRevocationService
+                    .isRevoked(tokenKey(token.get()), username, validationResult.getIssuedAt())
+                    .onErrorResume(e -> {
+                        log.warn("Revocation check failed (failing open): {}", e.getMessage());
+                        return Mono.just(false);
+                    })
+                    .flatMap(revoked -> {
+                        if (Boolean.TRUE.equals(revoked)) {
+                            log.info("Rejected revoked token for user {} on path {}", username, path);
+                            return unauthorizedResponse(exchange, "Token has been revoked");
+                        }
+                        ServerWebExchange modifiedExchange = addUserHeaders(exchange, request, validationResult);
+                        log.debug("Token validated successfully for path: {}, user: {}", path, username);
+                        return chain.filter(modifiedExchange);
+                    });
         };
+    }
+
+    /** Stable per-token key for the revocation store (SHA-256 hex of the token). */
+    static String tokenKey(String token) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(md.digest(token.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 
     /**
@@ -191,8 +235,7 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private boolean isAllowedActuatorIp(String clientIp) {
         if (clientIp == null) return false;
 
-        for (String allowed : actuatorAllowedIps.split(",")) {
-            allowed = allowed.trim();
+        for (String allowed : allowedActuatorIps()) {
             if (allowed.contains("/")) {
                 // CIDR notation - simplified check for common ranges
                 if (isIpInCidr(clientIp, allowed)) {

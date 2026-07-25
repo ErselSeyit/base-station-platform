@@ -17,5 +17,10 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/notification-service/target/notification-service-1.0.0.jar app.jar
 EXPOSE 8083
+# Container-level health check (busybox wget on the alpine base)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD wget -q -O /dev/null http://localhost:8083/actuator/health || exit 1
+RUN addgroup -S app && adduser -S app -G app
+USER app
 ENTRYPOINT ["java", "-jar", "app.jar"]
 

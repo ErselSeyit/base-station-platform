@@ -18,6 +18,7 @@ graph LR
     GW --> BS[Base Station<br/>:8081]
     GW --> MS[Monitoring<br/>:8082]
     GW --> NS[Notifications<br/>:8083]
+    GW --> TMF[TMF API<br/>:8086]
 
     MS --> AI[AI Diagnostic<br/>:9091]
 
@@ -25,6 +26,7 @@ graph LR
     AS --> PG
     NS --> PG
     MS --> MDB[(MongoDB)]
+    TMF --> MDB
 
     GW --> Redis[(Redis)]
     MS -.-> RMQ[RabbitMQ]
@@ -38,6 +40,7 @@ graph LR
     style NS fill:#00bcd4,color:#fff
     style AS fill:#ff9800,color:#fff
     style AI fill:#667eea,color:#fff
+    style TMF fill:#795548,color:#fff
 ```
 
 ## Services
@@ -50,6 +53,7 @@ graph LR
 | **Base Station** | 8081 | PostgreSQL | Station CRUD, geospatial search |
 | **Monitoring** | 8082 | MongoDB, Redis | Real-time metrics, WebSocket streaming |
 | **Notification** | 8083 | PostgreSQL | Alerts, event-driven notifications |
+| **TMF API** | 8086 | MongoDB | TM Forum Open APIs (TMF638/639/642): service/resource inventory, alarms |
 | **AI Diagnostic** | 9091 | - | Python AI engine for problem detection |
 
 ## Networking & Ingress
@@ -148,10 +152,11 @@ counter. See [API.md](API.md#band-dimension-for-radio-metrics).
 
 ### TMF Open APIs (tmf-api)
 
-The `tmf-api` module implements TM Forum Open APIs (TMF638/639/642) and is
-built and tested in the Maven reactor, but is **not yet wired into the default
-`docker compose`/Helm deployment** (no Dockerfile/compose entry). Its security
-is already hardened to the gateway-fronted model above for when it is deployed.
+The `tmf-api` service (port 8086) implements TM Forum Open APIs (TMF638 Service
+Inventory, TMF639 Resource Inventory, TMF642 Alarm Management) backed by MongoDB
+(`tmf_inventory`). It is independently deployable via its own Dockerfile and is
+wired into both the `docker compose` stack and the Helm chart. Its security
+follows the gateway-fronted trust model above.
 
 ## Key Features
 
@@ -184,7 +189,20 @@ PostGIS-ready architecture for geospatial queries (stations within radius).
   calling a service directly. Services must scan the `common` package for this
   filter to register.
 - Brute-force protection with account lockout
+- **Token revocation**: the gateway checks a Redis-backed blocklist on every
+  request and rejects revoked tokens; `POST /api/v1/auth/logout` revokes the
+  caller's token (fail-open if Redis is unavailable).
+- **Refresh-token reuse detection**: replaying an already-rotated refresh token
+  revokes the whole token family (RFC 6819).
 - Configurable CORS policies
+
+### Messaging resilience
+
+- Alert/diagnostic messages that exhaust their retries are routed to a
+  dead-letter exchange (`alerts.dlx` → `notifications.dlq`) instead of being
+  dropped or redelivered forever.
+- The edge bridge does not retry non-idempotent requests (POST/PATCH) once the
+  server has responded, so a failed write is never silently double-applied.
 
 ## Observability
 
@@ -201,8 +219,8 @@ PostGIS-ready architecture for geospatial queries (stations within radius).
 Deployed on Kubernetes (minikube) via Helm:
 
 ```
-19 pods total:
-- 6 application services (gateway, auth, base-station, monitoring, notification, frontend)
+20 pods total:
+- 7 application services (gateway, auth, base-station, monitoring, notification, tmf-api, frontend)
 - 1 AI service (ai-diagnostic)
 - 2 simulators (anomaly-simulator, device-simulator)
 - 1 edge bridge (Go)

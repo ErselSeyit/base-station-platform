@@ -27,6 +27,7 @@ import io.github.erselseyit.basestation.common.security.Roles;
 import io.github.erselseyit.basestation.monitoring.dto.DailyMetricAggregateDTO;
 import io.github.erselseyit.basestation.monitoring.dto.MetricCatalogEntryDTO;
 import io.github.erselseyit.basestation.monitoring.dto.MetricDataDTO;
+import io.github.erselseyit.basestation.monitoring.model.Band;
 import io.github.erselseyit.basestation.monitoring.model.MetricType;
 import io.github.erselseyit.basestation.monitoring.service.MonitoringService;
 
@@ -274,14 +275,7 @@ public class MonitoringController {
         for (int i = 0; i < metrics.size(); i++) {
             BatchMetricEntry entry = metrics.get(i);
             try {
-                MetricDataDTO dto = new MetricDataDTO();
-                dto.setStationId(parseStationId(request.getStationId()));
-                dto.setMetricType(MetricType.valueOf(entry.getType()));
-                dto.setValue(entry.getValue());
-                if (entry.getTimestamp() != null) {
-                    dto.setTimestamp(entry.getTimestamp());
-                }
-                service.recordMetric(dto);
+                service.recordMetric(toMetricDataDTO(entry, request.getStationId()));
                 recorded++;
             } catch (IllegalArgumentException e) {
                 String errorMsg = "Failed to process metric " + entry.getType() + ": " + e.getMessage();
@@ -312,6 +306,23 @@ public class MonitoringController {
             response.setStatus("OK");
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
+    }
+
+    /**
+     * Maps one batch entry to a {@link MetricDataDTO}, resolving the station id
+     * and NR band. Throws {@link IllegalArgumentException} for an unknown metric
+     * type, which the caller records as a per-entry error.
+     */
+    private MetricDataDTO toMetricDataDTO(BatchMetricEntry entry, @Nullable String stationId) {
+        MetricDataDTO dto = new MetricDataDTO();
+        dto.setStationId(parseStationId(stationId));
+        dto.setMetricType(MetricType.valueOf(entry.getType()));
+        dto.setBand(Band.fromString(entry.getBand()).orElse(Band.NONE));
+        dto.setValue(entry.getValue());
+        if (entry.getTimestamp() != null) {
+            dto.setTimestamp(entry.getTimestamp());
+        }
+        return dto;
     }
 
     @Nullable
@@ -380,6 +391,9 @@ public class MonitoringController {
         @jakarta.validation.constraints.NotNull(message = "Metric type is required")
         private String type;
 
+        /** NR band for radio metrics ("N28"/"N78"); absent/"NONE" otherwise. */
+        private String band;
+
         @jakarta.validation.constraints.NotNull(message = "Value is required")
         private Double value;
 
@@ -392,6 +406,15 @@ public class MonitoringController {
 
         public void setType(@Nullable String type) {
             this.type = type;
+        }
+
+        @Nullable
+        public String getBand() {
+            return band;
+        }
+
+        public void setBand(@Nullable String band) {
+            this.band = band;
         }
 
         @Nullable

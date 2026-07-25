@@ -119,6 +119,37 @@ jobs:
       - name: Build and test (debug)
         run: make -C device-protocol-c clean && make -C device-protocol-c DEBUG=1 test
 
+      - name: Install mbedTLS and build with TLS enabled
+        run: |
+          sudo apt-get update && sudo apt-get install -y libmbedtls-dev
+          make -C device-protocol-c clean && make -C device-protocol-c TLS=1
+
+  # ============================================
+  # Container images build (test what we deploy)
+  # ============================================
+  image-build:
+    name: Image Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Build the images whose Dockerfiles have historically broken (Go
+      # toolchain version, Python import path, Java multi-stage). Direct
+      # `docker build` with the repo root as context avoids the compose
+      # variable interpolation that a bare `docker compose build` would trip.
+      - name: Build edge-bridge image (Go)
+        run: docker build -f edge-bridge/Dockerfile -t ci/edge-bridge edge-bridge
+
+      - name: Build ai-diagnostic image (Python)
+        run: docker build -f ai-diagnostic/Dockerfile -t ci/ai-diagnostic ai-diagnostic
+
+      - name: Build monitoring-service image (Java multi-stage)
+        run: docker build -f monitoring-service/Dockerfile -t ci/monitoring-service .
+
+      - name: Build tmf-api image (Java multi-stage)
+        run: docker build -f tmf-api/Dockerfile -t ci/tmf-api .
+
   # ============================================
   # AI diagnostic (Python)
   # ============================================

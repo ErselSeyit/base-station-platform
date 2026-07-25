@@ -82,8 +82,13 @@ public class RefreshTokenService {
 
     /**
      * Verify and return a refresh token.
+     *
+     * <p>Replay of an already-revoked (typically already-rotated) token is
+     * treated as a theft signal: the entire token family for the user is
+     * revoked, forcing re-authentication (OAuth 2 refresh-token reuse
+     * detection, RFC 6819). This is a write path, so it is not read-only.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public Optional<RefreshToken> verifyRefreshToken(String token) {
         Optional<RefreshToken> refreshTokenOpt = refreshTokenRepository.findByToken(token);
 
@@ -95,13 +100,17 @@ public class RefreshTokenService {
         RefreshToken refreshToken = refreshTokenOpt.get();
 
         if (refreshToken.isRevoked()) {
-            log.warn("Attempt to use revoked refresh token for user '{}'",
-                    refreshToken.getUser().getUsername());
+            String username = refreshToken.getUser().getUsername();
+            log.warn("Reuse of a revoked refresh token detected for user '{}' — "
+                    + "revoking all of the user's tokens", username);
             auditService.logRefreshTokenRevoked(
-                    refreshToken.getUser().getUsername(),
+                    username,
                     refreshToken.getClientIp(),
-                    "Token was already revoked"
+                    "Reuse of a revoked token detected (possible theft)"
             );
+            // Reuse detection: revoke the whole family so a stolen, already-
+            // rotated token cannot be traded for fresh access.
+            revokeAllUserTokens(refreshToken.getUser(), "Refresh token reuse detected");
             return Optional.empty();
         }
 

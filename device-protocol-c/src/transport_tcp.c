@@ -73,13 +73,19 @@ static int tcp_open(devproto_transport_t *t)
         return -1;
     }
 
-    /* Set TCP_NODELAY for low latency */
+    /* Set TCP_NODELAY for low latency (non-fatal if it fails) */
     int flag = 1;
-    setsockopt(t->fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+    if (setsockopt(t->fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) < 0) {
+        /* Latency hint only; log via errno is left to the caller. */
+    }
 
-    /* Set non-blocking */
+    /* Set non-blocking; if F_GETFL fails, do not OR onto -1 */
     int flags = fcntl(t->fd, F_GETFL, 0);
-    fcntl(t->fd, F_SETFL, flags | O_NONBLOCK);
+    if (flags < 0 || fcntl(t->fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        close(t->fd);
+        t->fd = -1;
+        return -1;
+    }
 
     t->is_open = 1;
     return 0;
@@ -112,7 +118,14 @@ static int tcp_send(devproto_transport_t *t, const uint8_t *data, size_t len)
 
         if (sent < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                /* Would block, try again */
+                /* Send buffer full on the non-blocking socket: wait for the
+                 * socket to become writable instead of spinning the CPU. */
+                fd_set writefds;
+                FD_ZERO(&writefds);
+                FD_SET(t->fd, &writefds);
+                if (select(t->fd + 1, NULL, &writefds, NULL, NULL) < 0) {
+                    return -1;
+                }
                 continue;
             }
             return -1;

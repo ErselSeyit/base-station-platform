@@ -59,7 +59,7 @@ def get_stations():
                     all_stations.extend(data)
                 elif isinstance(data, dict) and 'data' in data:
                     all_stations.extend(data['data'])
-        except:
+        except Exception:
             pass
     
     return all_stations

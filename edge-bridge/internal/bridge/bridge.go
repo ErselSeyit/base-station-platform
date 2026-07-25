@@ -32,8 +32,9 @@ type Bridge struct {
 	adapterMgr  *adapter.Manager // Multi-protocol adapter manager
 
 	stationDBID   int64 // Database ID of registered station
-	metrics       []protocol.Metric
-	metricsLock   sync.RWMutex
+	metrics        []protocol.Metric // latest device snapshot
+	adapterMetrics []protocol.Metric // pending adapter metrics, drained on upload
+	metricsLock    sync.RWMutex
 	metricBuffer  *MetricBuffer // Buffered metrics for offline resilience
 	cloudBackoff  *Backoff      // Exponential backoff for cloud reconnection
 
@@ -251,9 +252,12 @@ func (b *Bridge) adapterMetricsLoop() {
 			if !ok {
 				return
 			}
-			// Add adapter metrics to local store
+			// Queue adapter metrics for the next upload. Kept separate from
+			// the device snapshot so the periodic device collection cannot
+			// clobber them (they used to be appended to b.metrics and then
+			// overwritten, so they were never uploaded).
 			b.metricsLock.Lock()
-			b.metrics = append(b.metrics, metric)
+			b.adapterMetrics = append(b.adapterMetrics, metric)
 			b.metricsLock.Unlock()
 		}
 	}
@@ -269,10 +273,15 @@ func (b *Bridge) collectAndUploadMetrics() {
 
 	log.Printf("Collected %d metrics from device", len(metrics))
 
-	// Store locally
+	// Store the device snapshot and drain any pending adapter metrics so they
+	// are uploaded in the same batch (previously they were dropped).
 	b.metricsLock.Lock()
 	b.metrics = metrics
+	pendingAdapter := b.adapterMetrics
+	b.adapterMetrics = nil
 	b.metricsLock.Unlock()
+
+	metrics = append(metrics, pendingAdapter...)
 
 	// Filter and convert metrics to cloud format
 	now := time.Now()

@@ -4,11 +4,11 @@
 
 | Area | Framework | Count |
 | ---- | --------- | ----- |
-| Backend (Java) | JUnit 5 + Mockito + Testcontainers | 59 test classes, 880+ tests |
+| Backend (Java) | JUnit 5 + Mockito + Testcontainers | 62 test classes, 700+ tests |
 | Frontend | Vitest + React Testing Library | 318 unit tests (15 files) |
 | Frontend E2E | Playwright | 19 cases (5 specs) |
 | Edge bridge (Go) | `go test` | 9 packages under test |
-| AI diagnostic (Python) | pytest | 153 tests (`pytest` in `ai-diagnostic/`) |
+| AI diagnostic (Python) | pytest | 224 tests (`pytest` in `ai-diagnostic/`) |
 | Device protocol (C) | custom harness | 21 tests (`make -C device-protocol-c test`) |
 
 Coverage is tracked as an indicator, not a gate. Following Khorikov's
@@ -101,7 +101,7 @@ Omit the property/variable to run full integration tests when Docker is availabl
 ## CI/CD
 
 All tests run automatically on every push via GitHub Actions:
-- Matrix builds for parallel execution
+- Parallel jobs per language/component (Java, Go, C incl. `TLS=1`, Python, frontend)
 - Testcontainers for real database tests
 - Frontend tests enforce failures (no silent passes)
 

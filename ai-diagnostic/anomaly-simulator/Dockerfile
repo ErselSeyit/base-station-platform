@@ -9,4 +9,6 @@ RUN pip install --no-cache-dir requests flask
 COPY anomaly_simulator.py .
 
 # Run simulator
+RUN useradd --create-home --shell /bin/bash app
+USER app
 CMD ["python", "-u", "anomaly_simulator.py"]

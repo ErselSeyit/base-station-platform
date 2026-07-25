@@ -11,6 +11,10 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 COPY service/ ./service/
 COPY virtual-basestation/ ./virtual-basestation/
 
+# The service uses absolute `service.` package imports, so /app must be on the
+# import path when diagnostic_service.py is run as a script.
+ENV PYTHONPATH=/app
+
 # Expose ports
 EXPOSE 9090 9091
 
@@ -19,4 +23,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9091/health')" || exit 1
 
 # Run the service with HTTP enabled
+RUN useradd --create-home --shell /bin/bash app
+USER app
 CMD ["python", "service/diagnostic_service.py", "--tcp-port", "9090", "--http-port", "9091"]

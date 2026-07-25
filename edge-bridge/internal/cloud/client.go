@@ -3,11 +3,29 @@ package cloud
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"time"
 )
+
+// errResponseReceived marks an error that occurred *after* the server returned
+// a response. Retrying such a request for a non-idempotent method (POST/PATCH)
+// risks applying it twice, so doRequest does not retry those.
+var errResponseReceived = errors.New("server returned a response")
+
+// isIdempotent reports whether re-sending the method is safe if a response was
+// already received (RFC 7231 idempotent methods).
+func isIdempotent(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions:
+		return true
+	default: // POST, PATCH
+		return false
+	}
+}
 
 // ClientConfig holds cloud client configuration.
 type ClientConfig struct {
@@ -47,13 +65,28 @@ func NewClient(config *ClientConfig, auth *Authenticator) *Client {
 	}
 }
 
+// maxBackoff caps the retry wait so exponential growth cannot stall uploads.
+const maxBackoff = 30 * time.Second
+
+// backoffWithJitter returns an exponentially growing, fully-jittered wait for
+// the given attempt (1-based). Full jitter (a uniform draw over [0, capped
+// exponential]) spreads retries so many bridges do not hammer the cloud in
+// lockstep after an outage (Nygard: avoid retry storms).
+func backoffWithJitter(base time.Duration, attempt int) time.Duration {
+	backoff := base << (attempt - 1) // base * 2^(attempt-1)
+	if backoff <= 0 || backoff > maxBackoff {
+		backoff = maxBackoff
+	}
+	return time.Duration(rand.Int63n(int64(backoff) + 1))
+}
+
 // doRequest performs an authenticated HTTP request with retries.
 func (c *Client) doRequest(method, url string, body interface{}, result interface{}) error {
 	var lastErr error
 
 	for attempt := 0; attempt <= c.config.RetryAttempts; attempt++ {
 		if attempt > 0 {
-			time.Sleep(c.config.RetryDelay)
+			time.Sleep(backoffWithJitter(c.config.RetryDelay, attempt))
 		}
 
 		err := c.doRequestOnce(method, url, body, result)
@@ -65,6 +98,12 @@ func (c *Client) doRequest(method, url string, body interface{}, result interfac
 
 		// Don't retry on auth errors
 		if err == ErrAuthFailed || err == ErrNoToken {
+			return err
+		}
+
+		// The server already responded and this is a non-idempotent method:
+		// retrying could double-apply it, so stop here (no double-record).
+		if !isIdempotent(method) && errors.Is(err, errResponseReceived) {
 			return err
 		}
 	}
@@ -143,7 +182,9 @@ func (c *Client) doRequestOnce(method, url string, body interface{}, result inte
 	}
 
 	if resp.StatusCode >= 400 {
-		return handleErrorResponse(resp.StatusCode, respBody)
+		// The server received the request; mark so a non-idempotent method is
+		// not retried into a double-apply.
+		return fmt.Errorf("%w: %w", errResponseReceived, handleErrorResponse(resp.StatusCode, respBody))
 	}
 
 	return parseResponse(respBody, result)

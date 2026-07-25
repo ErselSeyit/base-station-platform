@@ -1,0 +1,25 @@
+FROM maven:3.9.12-eclipse-temurin-21 AS build
+WORKDIR /app
+COPY pom.xml .
+COPY common/pom.xml ./common/
+COPY base-station-service/pom.xml ./base-station-service/
+COPY monitoring-service/pom.xml ./monitoring-service/
+COPY notification-service/pom.xml ./notification-service/
+COPY api-gateway/pom.xml ./api-gateway/
+COPY auth-service/pom.xml ./auth-service/
+COPY tmf-api/pom.xml ./tmf-api/
+RUN mvn dependency:go-offline -B
+COPY common/src ./common/src
+COPY tmf-api ./tmf-api
+RUN mvn clean package -DskipTests -pl tmf-api -am
+
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=build /app/tmf-api/target/tmf-api-1.0.0.jar app.jar
+EXPOSE 8086
+# Container-level health check (busybox wget on the alpine base)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD wget -q -O /dev/null http://localhost:8086/actuator/health || exit 1
+RUN addgroup -S app && adduser -S app -G app
+USER app
+ENTRYPOINT ["java", "-jar", "app.jar"]

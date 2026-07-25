@@ -33,5 +33,7 @@ ENV TLS_CA=""
 
 # Run the device simulator with proper protocol server
 # Shell form to expand environment variables; TLS args omitted when empty
+RUN useradd --create-home --shell /bin/bash app
+USER app
 CMD python -u mips_device.py --station-id "$STATION_ID" --port "$DEVICE_PORT" --control-port "$CONTROL_PORT" \
     ${TLS_CERT:+--tls-cert "$TLS_CERT"} ${TLS_KEY:+--tls-key "$TLS_KEY"} ${TLS_CA:+--tls-ca "$TLS_CA"}

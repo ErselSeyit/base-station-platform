@@ -38,10 +38,20 @@ public class PagerDutyService implements AlertIntegration {
     @Value("${alerts.pagerduty.source:basestation-platform}")
     private String source;
 
-    private final RestTemplate restTemplate;
+    /** Connect/read timeout for PagerDuty calls; a hung endpoint must not block the caller. */
+    @Value("${alerts.pagerduty.timeout-ms:5000}")
+    private int timeoutMs;
 
-    public PagerDutyService() {
-        this.restTemplate = new RestTemplate();
+    private RestTemplate restTemplate;
+
+    @jakarta.annotation.PostConstruct
+    void init() {
+        // Release It: every integration point needs an explicit timeout.
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(timeoutMs);
+        factory.setReadTimeout(timeoutMs);
+        this.restTemplate = new RestTemplate(factory);
     }
 
     @Override

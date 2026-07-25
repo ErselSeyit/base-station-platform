@@ -1,0 +1,6 @@
+{{- $svc := index .Values.services "tmf-api" }}
+{{- if $svc.enabled }}
+{{ include "basestation.deployment" (dict "root" . "name" "tmf-api" "svc" $svc) }}
+---
+{{ include "basestation.service" (dict "root" . "name" "tmf-api" "svc" $svc) }}
+{{- end }}

@@ -117,6 +117,7 @@ The platform uses **Kubernetes DNS** for service discovery. Services reference e
 - `http://base-station-service:8081`
 - `http://monitoring-service:8082`
 - `http://notification-service:8083`
+- `http://tmf-api:8086`
 - `http://ai-diagnostic:9091`
 
 External access is handled by **NGINX Ingress**, which routes:

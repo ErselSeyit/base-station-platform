@@ -216,6 +216,40 @@ services:
         type: emptyDir
         mountPath: /tmp
 
+  tmf-api:
+    enabled: true
+    imageTag: "1.0.0"
+    replicas: 1
+    port: 8086
+    tier: backend
+    component: tmf
+    resourcePreset: high
+    securityPreset: secure
+    probes:
+      liveness:
+        path: /actuator/health/liveness
+        initialDelay: 60
+      readiness:
+        path: /actuator/health/readiness
+        initialDelay: 20
+    env:
+      SPRING_PROFILES_ACTIVE: kubernetes
+      SPRING_DATA_MONGODB_DATABASE: tmf_inventory
+    envFromSecrets:
+      SPRING_DATA_MONGODB_USERNAME:
+        secret: mongodb-secret
+        key: username
+      SPRING_DATA_MONGODB_PASSWORD:
+        secret: mongodb-secret
+        key: password
+      SECURITY_INTERNAL_SECRET:
+        secret: security-internal-secret
+        key: secret
+    volumes:
+      - name: tmp-vol
+        type: emptyDir
+        mountPath: /tmp
+
   api-gateway:
     enabled: true
     imageTag: "1.0.1"
