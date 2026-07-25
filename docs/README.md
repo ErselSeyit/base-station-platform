@@ -1,7 +1,7 @@
 # Base Station Platform Documentation
 
 **Version:** 2.2
-**Last Updated:** 2026-02-20
+**Last Updated:** 2026-07-25
 
 ## Quick Navigation
 
@@ -90,7 +90,7 @@
 ### Edge Integration
 - Go bridge with SNMP/MQTT protocol adapters
 - C library for MIPS devices (with new metric categories)
-- Binary protocol with CRC-16 + TLS support (planned)
+- Binary protocol with CRC-16 + TLS (mbedTLS 2.28/3.x, built in CI)
 - Serial and TCP transport
 
 ## Getting Help

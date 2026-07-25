@@ -217,7 +217,12 @@ void send_problem(int sock, const char* code, float cpu_temp) {
 }
 ```
 
-## Files
+## Module Structure
+
+The larger services are decomposed into cohesive modules (models / pure
+analytics / orchestration), each extracted under a characterisation-test suite
+so behaviour is preserved. The original module re-exports every name, so imports
+and the runtime entrypoint are unchanged.
 
 ```
 ai-diagnostic/
@@ -226,47 +231,88 @@ ai-diagnostic/
 ├── pyproject.toml                      # Project config (linting, testing)
 ├── requirements-dev.txt                # Dev/test dependencies
 ├── service/
-│   ├── diagnostic_service.py           # Main Flask service (port 9091)
-│   ├── internal_auth.py                # HMAC authentication
-│   ├── logging_config.py               # Structured logging
-│   ├── metrics.py                      # Prometheus metrics
+│   │  # --- Diagnostic engine (decomposed from diagnostic_service.py) ---
+│   ├── diagnostic_service.py           # Orchestration + main (re-exports below)
+│   ├── models.py                       # Problem, Solution, LearnedPattern
+│   ├── learning_engine.py              # Feedback-driven confidence learning
+│   ├── backends.py                     # AIBackend, RuleBased, Ollama + RULES
+│   ├── cloud_client.py                 # Post solutions back to the cloud
+│   ├── transport_adapters.py           # ProtocolAdapter, TCP/Serial/MQTT
+│   ├── http_adapter.py                 # Flask HTTP API (~50 routes, port 9091)
+│   ├── optional_services.py            # Optional AI-subsystem imports + flags
+│   │
+│   │  # --- Predictive maintenance (decomposed) ---
+│   ├── predictive_maintenance.py       # Service orchestration (delegates)
+│   ├── maintenance_models.py           # MetricDataPoint, TrendAnalysis, ...
+│   ├── maintenance_analytics.py        # Pure trend/regression, failure prob.
+│   │
+│   │  # --- Anomaly detection (decomposed) ---
+│   ├── anomaly_detection.py            # AnomalyDetector ingestion
+│   ├── isolation_forest.py             # Isolation Forest / Tree (pure numpy)
+│   │
+│   │  # --- Self-healing (decomposed) ---
+│   ├── self_healing.py                 # Automated remediation workflow
+│   ├── healing_models.py               # Action/status/risk enums + records
+│   │
+│   │  # --- SON functions (decomposed) ---
+│   ├── son_functions.py                # SONEngine orchestration + API
+│   ├── son_models.py                   # Enums + CellMetrics, SONRecommendation
+│   ├── son_optimizers.py               # MLB, MRO, CCO, Energy Saving
+│   ├── son_scheduler.py                # SON optimization scheduler
+│   │
+│   │  # --- Drone inspection (decomposed) ---
+│   ├── drone_integration.py            # DroneController + service
+│   ├── drone_models.py                 # Geo/mission/capture value types
+│   ├── flight_path_planner.py          # Orbit/spiral/grid geometry (pure)
+│   │
+│   │  # --- Reporting ---
+│   ├── bi_report_generator.py          # Business intelligence PDF reports
+│   ├── ssv_status.py                   # Pure SSV pass/warn/fail acceptance
+│   │
+│   │  # --- Other AI subsystems ---
 │   ├── alarm_correlation.py            # Multi-alarm correlation engine
-│   ├── anomaly_detection.py            # Isolation Forest anomaly detection
-│   ├── bi_report_generator.py          # Business intelligence reports
 │   ├── computer_vision.py              # Tower image analysis
 │   ├── config_drift_detection.py       # Configuration drift detection
 │   ├── digital_twin.py                 # Digital twin simulation
-│   ├── drone_integration.py            # Drone inspection integration
-│   ├── generative_ai.py               # LLM-based diagnostics (Ollama)
-│   ├── healing_integration.py          # Self-healing orchestration
-│   ├── predictive_maintenance.py       # Fan/battery failure prediction
+│   ├── generative_ai.py                # LLM-based diagnostics (Ollama)
+│   ├── healing_integration.py          # Self-healing orchestration bridge
 │   ├── root_cause_analysis.py          # Root cause analysis engine
-│   ├── self_healing.py                 # Automated remediation
-│   ├── son_functions.py                # SON: MLB, MRO, CCO, Energy Saving
-│   ├── son_scheduler.py                # SON optimization scheduler
 │   ├── traffic_prediction.py           # LSTM traffic forecasting
 │   ├── vision_service.py               # Computer vision service layer
+│   │
+│   │  # --- Infrastructure ---
+│   ├── internal_auth.py                # HMAC authentication
+│   ├── logging_config.py               # Structured logging
+│   ├── metrics.py                      # Prometheus metrics
 │   └── utils/                          # Shared utilities
 │       ├── confidence.py               # Confidence scoring
 │       ├── enums.py                    # Shared enums
 │       ├── health.py                   # Health check helpers
-│       ├── rng.py                      # Random number generation
+│       ├── rng.py                      # Seeded random number generation
 │       ├── serialization.py            # JSON serialization
 │       ├── singleton.py                # Singleton pattern
 │       ├── threshold_client.py         # Threshold config client
 │       ├── thresholds.py               # Threshold evaluation
 │       └── validation.py               # Input validation
-├── tests/                              # Pytest test suite
+├── tests/                              # Pytest suite (224 tests)
 │   ├── conftest.py
-│   ├── test_anomaly_detection.py
-│   ├── test_self_healing.py
-│   ├── test_threshold_client.py
-│   └── test_validation.py
+│   ├── test_diagnostic_service_core.py # models/backends/learning/cloud client
+│   ├── test_transport_adapters.py      # TCP/Serial via fake sockets
+│   ├── test_http_adapter.py            # Flask routes via test client
+│   ├── test_maintenance_analytics.py   # trend/regression/failure probability
+│   ├── test_anomaly_detection.py       # Isolation Forest + detector
+│   ├── test_self_healing.py            # remediation workflow
+│   ├── test_son_functions.py           # MLB scenarios + engine
+│   ├── test_drone_integration.py       # haversine + flight-path geometry
+│   ├── test_ssv_status.py              # SSV acceptance thresholds
+│   ├── test_alarm_x733.py              # X.733 alarm correlation
+│   ├── test_confidence.py, test_health.py, test_rng.py
+│   ├── test_serialization.py, test_threshold_client.py, test_validation.py
 ├── anomaly-simulator/                  # Anomaly injection tool
 │   └── Dockerfile
 └── virtual-basestation/                # Virtual device simulators
     ├── device_protocol.py              # Binary protocol implementation
-    ├── mips_device.py                  # MIPS device emulator
+    ├── mips_device.py                  # MIPS device emulator (single-file image)
     ├── mips_simulator.py               # Multi-device simulator
     └── Dockerfile
 ```
